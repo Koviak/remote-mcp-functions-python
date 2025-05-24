@@ -2,6 +2,10 @@
     "IsEncrypted": false,
     "Values": {
       "FUNCTIONS_WORKER_RUNTIME": "python",
-      "AzureWebJobsStorage": "UseDevelopmentStorage=true"
+      "AzureWebJobsSecretStorageType": "Files",
+      "AzureWebJobsStorage": "",
+      "TENANT_ID": "cb629dfe-9f7b-497f-b0d2-502dd53d8227",
+      "CLIENT_ID": "fd79a94d-f572-4439-bba2-6465e0c40122", 
+      "CLIENT_SECRET": "UbN8Q~t7KKLtSrBT2BKmypXrpqGM2HslF9KN.bKz"
     }
   }
