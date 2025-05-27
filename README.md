@@ -339,3 +339,16 @@ Note that the `host.json` file also includes a reference to the experimental bun
 - Add [built-in auth](https://learn.microsoft.com/en-us/azure/app-service/overview-authentication-authorization) to your MCP server
 - Enable VNET using VNET_ENABLED=true flag
 - Learn more about [related MCP efforts from Microsoft](https://github.com/microsoft/mcp/tree/main/Resources)
+
+## Delegated access using On-Behalf-Of
+
+Once built-in authentication is enabled, each incoming request carries a user token. The sample now exchanges this token using `OnBehalfOfCredential`. Configure the following settings in your environment:
+
+```
+AZURE_CLIENT_ID
+AZURE_CLIENT_SECRET
+AZURE_TENANT_ID
+DOWNSTREAM_API_SCOPE
+```
+
+The header `X-MS-TOKEN-AAD-ACCESS-TOKEN` is provided by built-in auth and is used for the exchange.
