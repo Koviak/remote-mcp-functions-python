@@ -1,9 +1,11 @@
 import json
 import logging
+import os
 
 import azure.functions as func
+from azure.identity import OnBehalfOfCredential
 
-app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
+app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
 # Constants for the Azure Blob Storage container, file, and blob path
 _SNIPPET_NAME_PROPERTY_NAME = "snippetname"
@@ -36,6 +38,41 @@ tool_properties_get_snippets_object = [ToolProperty(_SNIPPET_NAME_PROPERTY_NAME,
 # Convert the tool properties to JSON
 tool_properties_save_snippets_json = json.dumps([prop.to_dict() for prop in tool_properties_save_snippets_object])
 tool_properties_get_snippets_json = json.dumps([prop.to_dict() for prop in tool_properties_get_snippets_object])
+
+
+def _acquire_downstream_token() -> str | None:
+    """Acquire a delegated access token using OBO.
+
+    The incoming user token is provided by built-in auth via the
+    ``X-MS-TOKEN-AAD-ACCESS-TOKEN`` request header.  This helper exchanges that
+    token for a new one with the scopes defined in ``DOWNSTREAM_API_SCOPE``.
+
+    Returns ``None`` if no access token is available.
+    """
+
+    user_assertion = os.environ.get("X_MS_TOKEN_AAD_ACCESS_TOKEN")
+    if not user_assertion:
+        logging.warning("User access token not found for OBO flow")
+        return None
+
+    tenant_id = os.getenv("AZURE_TENANT_ID")
+    client_id = os.getenv("AZURE_CLIENT_ID")
+    client_secret = os.getenv("AZURE_CLIENT_SECRET")
+    scope = os.getenv("DOWNSTREAM_API_SCOPE")
+
+    if not all([tenant_id, client_id, client_secret, scope]):
+        logging.warning("OBO settings are incomplete")
+        return None
+
+    credential = OnBehalfOfCredential(
+        tenant_id=tenant_id,
+        client_id=client_id,
+        client_secret=client_secret,
+        user_assertion=user_assertion,
+    )
+
+    token = credential.get_token(scope)
+    return token.token
 
 
 @app.generic_trigger(
@@ -78,6 +115,12 @@ def get_snippet(file: func.InputStream, context) -> str:
         str: The content of the snippet or an error message.
     """
     snippet_content = file.read().decode("utf-8")
+
+    # Attempt to acquire a delegated token using OBO
+    token = _acquire_downstream_token()
+    if token:
+        logging.info("Obtained delegated token for downstream call")
+
     logging.info(f"Retrieved snippet: {snippet_content}")
     return snippet_content
 
