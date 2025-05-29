@@ -10,7 +10,8 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 
 
 class ToolProperty:
-    def __init__(self, property_name: str, property_type: str, description: str):
+    def __init__(self, property_name: str, property_type: str,
+                 description: str):
         self.propertyName = property_name
         self.propertyType = property_type
         self.description = description
@@ -94,7 +95,7 @@ def list_groups(context) -> str:
         response = requests.get(
             f"{GRAPH_API_ENDPOINT}/groups"
             "?$filter=groupTypes/any(c:c eq 'Unified')"
-            "&$select=id,displayName,description,mail",
+            "&$select=id,displayName,description,mail,hasPlanner",
             headers=headers,
             timeout=10
         )
@@ -105,7 +106,8 @@ def list_groups(context) -> str:
                 "id": g["id"],
                 "displayName": g["displayName"],
                 "description": g.get("description", ""),
-                "mail": g.get("mail", "")
+                "mail": g.get("mail", ""),
+                "hasPlanner": g.get("hasPlanner", False)
             } for g in groups])
         else:
             return f"Error: {response.status_code} - {response.text}"
@@ -160,6 +162,135 @@ def list_users(context) -> str:
     except Exception as e:
         logging.error(f"Error listing users: {str(e)}")
         return f"Error listing users: {str(e)}"
+
+
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="list_groups_with_planner",
+    description=(
+        "List only Microsoft 365 groups that have at least one Planner plan"
+    ),
+    toolProperties="[]"
+)
+def list_groups_with_planner(context) -> str:
+    """List only groups that have Planner plans"""
+    try:
+        token = get_access_token()
+        if not token:
+            return (
+                "Authentication failed. "
+                "Please check your Azure AD credentials."
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Get only groups that have Planner plans
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/groups"
+            "?$filter=groupTypes/any(c:c eq 'Unified')"
+            "&$select=id,displayName,description,mail",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            groups = response.json()["value"]
+            return json.dumps([{
+                "id": g["id"],
+                "displayName": g["displayName"],
+                "description": g.get("description", ""),
+                "mail": g.get("mail", ""),
+                "hasPlanner": g.get("hasPlanner", False)
+            } for g in groups])
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+            
+    except Exception as e:
+        logging.error(f"Error listing groups with planner: {str(e)}")
+        return f"Error listing groups with planner: {str(e)}"
+
+
+tool_properties_check_group_planner_object = [
+    ToolProperty(
+        "groupDisplayName", "string", "The display name of the group to check"
+    )
+]
+tool_properties_check_group_planner_json = json.dumps(
+    [prop.to_dict() for prop in tool_properties_check_group_planner_object]
+)
+
+
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="check_group_planner_status",
+    description="Check if a specific group has Planner enabled and list its plans",
+    toolProperties=tool_properties_check_group_planner_json
+)
+def check_group_planner_status(context) -> str:
+    """Check if a group has Planner and list its plans"""
+    try:
+        content = json.loads(context)
+        group_name = content["arguments"]["groupDisplayName"]
+        
+        token = get_access_token()
+        if not token:
+            return ("Authentication failed. "
+                   "Please check your Azure AD credentials.")
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Find the group by display name
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/groups"
+            f"?$filter=displayName eq '{group_name}'"
+            "&$select=id,displayName,hasPlanner",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            return f"Error finding group: {response.status_code} - {response.text}"
+        
+        groups = response.json()["value"]
+        if not groups:
+            return f"No group found with display name: {group_name}"
+        
+        group = groups[0]
+        result = {
+            "groupId": group["id"],
+            "displayName": group["displayName"],
+            "hasPlanner": group.get("hasPlanner", False)
+        }
+        
+        # Try to get plans for this group
+        plans_response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/groups/{group['id']}/planner/plans",
+            headers=headers,
+            timeout=10
+        )
+        
+        if plans_response.status_code == 200:
+            plans = plans_response.json()["value"]
+            result["plans"] = [{"id": p["id"], "title": p["title"]} for p in plans]
+            result["planCount"] = len(plans)
+        else:
+            result["plansError"] = (
+                f"{plans_response.status_code} - {plans_response.text}"
+            )
+        
+        return json.dumps(result)
+        
+    except Exception as e:
+        logging.error(f"Error checking group planner status: {str(e)}")
+        return f"Error checking group planner status: {str(e)}"
 
 
 # Define tool properties for Planner tools
@@ -232,7 +363,8 @@ def list_plans(context) -> str:
         
         response = requests.get(
             f"{GRAPH_API_ENDPOINT}/groups/{group_id}/planner/plans",
-            headers=headers
+            headers=headers,
+            timeout=10
         )
         
         if response.status_code == 200:
@@ -279,7 +411,8 @@ def create_plan(context) -> str:
         response = requests.post(
             f"{GRAPH_API_ENDPOINT}/planner/plans",
             headers=headers,
-            json=data
+            json=data,
+            timeout=10
         )
         
         if response.status_code == 201:
@@ -317,7 +450,8 @@ def list_tasks(context) -> str:
         
         response = requests.get(
             f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/tasks",
-            headers=headers
+            headers=headers,
+            timeout=10
         )
         
         if response.status_code == 200:
@@ -370,7 +504,8 @@ def create_task(context) -> str:
         response = requests.post(
             f"{GRAPH_API_ENDPOINT}/planner/tasks",
             headers=headers,
-            json=data
+            json=data,
+            timeout=10
         )
         
         if response.status_code == 201:
@@ -952,7 +1087,10 @@ def list_user_tasks(context) -> str:
             "Content-Type": "application/json"
         }
         
-        endpoint = f"{GRAPH_API_ENDPOINT}/users/{user_id}/planner/tasks" if user_id != "me" else f"{GRAPH_API_ENDPOINT}/me/planner/tasks"
+        if user_id != "me":
+            endpoint = f"{GRAPH_API_ENDPOINT}/users/{user_id}/planner/tasks"
+        else:
+            endpoint = f"{GRAPH_API_ENDPOINT}/me/planner/tasks"
         
         response = requests.get(
             endpoint,
@@ -1195,19 +1333,58 @@ def delete_bucket(context) -> str:
         return f"Error deleting bucket: {str(e)}"
 
 
-# HTTP Endpoints - Direct API Access
-# These provide the same functionality as MCP tools but via direct HTTP calls
+# Register HTTP endpoints from separate module
+from http_endpoints import register_http_endpoints
 
-@app.route(route="groups", methods=["GET"])
-def list_groups_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to list Microsoft 365 groups"""
+# Additional User & Group Management Tools
+
+# Tool properties for new endpoints
+tool_properties_get_user_object = [
+    ToolProperty("userId", "string", "Azure AD user ID")
+]
+tool_properties_get_user_json = json.dumps(
+    [prop.to_dict() for prop in tool_properties_get_user_object]
+)
+
+tool_properties_list_group_members_object = [
+    ToolProperty("groupId", "string", "The ID of the group")
+]
+tool_properties_list_group_members_json = json.dumps(
+    [prop.to_dict() for prop in tool_properties_list_group_members_object]
+)
+
+tool_properties_add_user_to_group_object = [
+    ToolProperty("groupId", "string", "The ID of the group"),
+    ToolProperty("userId", "string", "The ID of the user to add")
+]
+tool_properties_add_user_to_group_json = json.dumps(
+    [prop.to_dict() for prop in tool_properties_add_user_to_group_object]
+)
+
+tool_properties_reset_password_object = [
+    ToolProperty("userId", "string", "The ID of the user"),
+    ToolProperty("temporaryPassword", "string", "The temporary password to set")
+]
+tool_properties_reset_password_json = json.dumps(
+    [prop.to_dict() for prop in tool_properties_reset_password_object]
+)
+
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="get_user",
+    description="Get full profile for a user by ID",
+    toolProperties=tool_properties_get_user_json
+)
+def get_user(context) -> str:
+    """Get a specific user by ID"""
     try:
+        content = json.loads(context)
+        user_id = content["arguments"]["userId"]
+        
         token = get_access_token()
         if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
+            return "Authentication failed. Please check your Azure AD credentials."
         
         headers = {
             "Authorization": f"Bearer {token}",
@@ -1215,93 +1392,34 @@ def list_groups_http(req: func.HttpRequest) -> func.HttpResponse:
         }
         
         response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/groups"
-            "?$filter=groupTypes/any(c:c eq 'Unified')"
-            "&$select=id,displayName,description,mail",
+            f"{GRAPH_API_ENDPOINT}/users/{user_id}",
             headers=headers,
             timeout=10
         )
         
         if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
+            return response.text
         else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
+            return f"Error: {response.status_code} - {response.text}"
             
     except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
+        logging.error(f"Error getting user: {str(e)}")
+        return f"Error getting user: {str(e)}"
 
 
-@app.route(route="users", methods=["GET"])
-def list_users_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to list all users in the organization"""
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="list_deleted_users",
+    description="List all deleted users in the organization",
+    toolProperties="[]"
+)
+def list_deleted_users(context) -> str:
+    """List all deleted users"""
     try:
         token = get_access_token()
         if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        # Get all users with their basic information
-        response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/users"
-            "?$select=id,displayName,userPrincipalName,mail"
-            "&$orderby=displayName",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="plans", methods=["GET"])
-def list_plans_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to list plans for a group"""
-    try:
-        group_id = req.params.get('groupId')
-        if not group_id:
-            return func.HttpResponse(
-                "Missing required parameter: groupId",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
+            return "Authentication failed. Please check your Azure AD credentials."
         
         headers = {
             "Authorization": f"Bearer {token}",
@@ -1309,56 +1427,76 @@ def list_plans_http(req: func.HttpRequest) -> func.HttpResponse:
         }
         
         response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/groups/{group_id}/planner/plans",
+            f"{GRAPH_API_ENDPOINT}/directory/deletedItems/microsoft.graph.user",
             headers=headers,
             timeout=10
         )
         
         if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
+            return response.text
         else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
+            return f"Error: {response.status_code} - {response.text}"
             
     except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
+        logging.error(f"Error listing deleted users: {str(e)}")
+        return f"Error listing deleted users: {str(e)}"
 
 
-@app.route(route="plans", methods=["POST"])
-def create_plan_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to create a new plan"""
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="list_group_members",
+    description="List all members of a specific group",
+    toolProperties=tool_properties_list_group_members_json
+)
+def list_group_members(context) -> str:
+    """List all members of a group"""
     try:
-        req_body = req.get_json()
-        if not req_body:
-            return func.HttpResponse(
-                "Request body required",
-                status_code=400
-            )
-        
-        title = req_body.get('title')
-        group_id = req_body.get('groupId')
-        
-        if not title or not group_id:
-            return func.HttpResponse(
-                "Missing required fields: title and groupId",
-                status_code=400
-            )
+        content = json.loads(context)
+        group_id = content["arguments"]["groupId"]
         
         token = get_access_token()
         if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
+            return "Authentication failed. Please check your Azure AD credentials."
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/groups/{group_id}/members",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return response.text
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+            
+    except Exception as e:
+        logging.error(f"Error listing group members: {str(e)}")
+        return f"Error listing group members: {str(e)}"
+
+
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="add_user_to_group",
+    description="Add a user to a group",
+    toolProperties=tool_properties_add_user_to_group_json
+)
+def add_user_to_group(context) -> str:
+    """Add a user to a group"""
+    try:
+        content = json.loads(context)
+        group_id = content["arguments"]["groupId"]
+        user_id = content["arguments"]["userId"]
+        
+        token = get_access_token()
+        if not token:
+            return "Authentication failed. Please check your Azure AD credentials."
         
         headers = {
             "Authorization": f"Bearer {token}",
@@ -1366,53 +1504,271 @@ def create_plan_http(req: func.HttpRequest) -> func.HttpResponse:
         }
         
         data = {
-            "owner": group_id,
-            "title": title
+            "@odata.id": f"{GRAPH_API_ENDPOINT}/users/{user_id}"
         }
         
         response = requests.post(
-            f"{GRAPH_API_ENDPOINT}/planner/plans",
+            f"{GRAPH_API_ENDPOINT}/groups/{group_id}/members/$ref",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 204:
+            return f"User {user_id} added to group {group_id} successfully"
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+            
+    except Exception as e:
+        logging.error(f"Error adding user to group: {str(e)}")
+        return f"Error adding user to group: {str(e)}"
+
+
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="reset_password",
+    description="Reset a user's password",
+    toolProperties=tool_properties_reset_password_json
+)
+def reset_password(context) -> str:
+    """Reset a user's password"""
+    try:
+        content = json.loads(context)
+        user_id = content["arguments"]["userId"]
+        temp_password = content["arguments"]["temporaryPassword"]
+        
+        token = get_access_token()
+        if not token:
+            return "Authentication failed. Please check your Azure AD credentials."
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "passwordProfile": {
+                "forceChangePasswordNextSignIn": True,
+                "password": temp_password
+            }
+        }
+        
+        response = requests.patch(
+            f"{GRAPH_API_ENDPOINT}/users/{user_id}",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 204:
+            return f"Password reset successfully for user {user_id}"
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+            
+    except Exception as e:
+        logging.error(f"Error resetting password: {str(e)}")
+        return f"Error resetting password: {str(e)}"
+
+
+# Mail & Calendar Tools
+
+tool_properties_send_message_object = [
+    ToolProperty("to", "string", "Recipient email address"),
+    ToolProperty("subject", "string", "Email subject"),
+    ToolProperty("body", "string", "Email body content"),
+    ToolProperty("bodyType", "string", "Body type: 'text' or 'html' (optional, defaults to 'text')")
+]
+tool_properties_send_message_json = json.dumps(
+    [prop.to_dict() for prop in tool_properties_send_message_object]
+)
+
+tool_properties_create_event_object = [
+    ToolProperty("subject", "string", "Event subject"),
+    ToolProperty("start", "string", "Start time in ISO format"),
+    ToolProperty("end", "string", "End time in ISO format"),
+    ToolProperty("attendees", "string", "Comma-separated list of attendee emails (optional)")
+]
+tool_properties_create_event_json = json.dumps(
+    [prop.to_dict() for prop in tool_properties_create_event_object]
+)
+
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="send_message",
+    description="Send an email message",
+    toolProperties=tool_properties_send_message_json
+)
+def send_message(context) -> str:
+    """Send an email message"""
+    try:
+        content = json.loads(context)
+        to_email = content["arguments"]["to"]
+        subject = content["arguments"]["subject"]
+        body = content["arguments"]["body"]
+        body_type = content["arguments"].get("bodyType", "text")
+        
+        token = get_access_token()
+        if not token:
+            return "Authentication failed. Please check your Azure AD credentials."
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "message": {
+                "subject": subject,
+                "body": {
+                    "contentType": body_type,
+                    "content": body
+                },
+                "toRecipients": [
+                    {
+                        "emailAddress": {
+                            "address": to_email
+                        }
+                    }
+                ]
+            }
+        }
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/me/sendMail",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 202:
+            return f"Email sent successfully to {to_email}"
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+            
+    except Exception as e:
+        logging.error(f"Error sending message: {str(e)}")
+        return f"Error sending message: {str(e)}"
+
+
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="list_inbox",
+    description="List messages in the user's inbox",
+    toolProperties="[]"
+)
+def list_inbox(context) -> str:
+    """List inbox messages"""
+    try:
+        token = get_access_token()
+        if not token:
+            return "Authentication failed. Please check your Azure AD credentials."
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/me/mailFolders/inbox/messages"
+            "?$select=id,subject,from,receivedDateTime,isRead"
+            "&$top=20&$orderby=receivedDateTime desc",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return response.text
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+            
+    except Exception as e:
+        logging.error(f"Error listing inbox: {str(e)}")
+        return f"Error listing inbox: {str(e)}"
+
+
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="create_event",
+    description="Create a calendar event",
+    toolProperties=tool_properties_create_event_json
+)
+def create_event(context) -> str:
+    """Create a calendar event"""
+    try:
+        content = json.loads(context)
+        subject = content["arguments"]["subject"]
+        start_time = content["arguments"]["start"]
+        end_time = content["arguments"]["end"]
+        attendees_str = content["arguments"].get("attendees", "")
+        
+        token = get_access_token()
+        if not token:
+            return "Authentication failed. Please check your Azure AD credentials."
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "subject": subject,
+            "start": {
+                "dateTime": start_time,
+                "timeZone": "UTC"
+            },
+            "end": {
+                "dateTime": end_time,
+                "timeZone": "UTC"
+            }
+        }
+        
+        if attendees_str:
+            attendees = []
+            for email in attendees_str.split(","):
+                email = email.strip()
+                if email:
+                    attendees.append({
+                        "emailAddress": {
+                            "address": email
+                        }
+                    })
+            data["attendees"] = attendees
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/me/events",
             headers=headers,
             json=data,
             timeout=10
         )
         
         if response.status_code == 201:
-            return func.HttpResponse(
-                response.text,
-                status_code=201,
-                mimetype="application/json"
-            )
+            event = response.json()
+            return f"Event created successfully. ID: {event['id']}"
         else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
+            return f"Error: {response.status_code} - {response.text}"
             
     except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
+        logging.error(f"Error creating event: {str(e)}")
+        return f"Error creating event: {str(e)}"
 
 
-@app.route(route="tasks", methods=["GET"])
-def list_tasks_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to list tasks in a plan"""
+@app.generic_trigger(
+    arg_name="context",
+    type="mcpToolTrigger",
+    toolName="list_upcoming",
+    description="List upcoming calendar events",
+    toolProperties="[]"
+)
+def list_upcoming(context) -> str:
+    """List upcoming calendar events"""
     try:
-        plan_id = req.params.get('planId')
-        if not plan_id:
-            return func.HttpResponse(
-                "Missing required parameter: planId",
-                status_code=400
-            )
-        
         token = get_access_token()
         if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
+            return "Authentication failed. Please check your Azure AD credentials."
         
         headers = {
             "Authorization": f"Bearer {token}",
@@ -1420,977 +1776,25 @@ def list_tasks_http(req: func.HttpRequest) -> func.HttpResponse:
         }
         
         response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/tasks",
+            f"{GRAPH_API_ENDPOINT}/me/events"
+            "?$select=id,subject,start,end,attendees"
+            "&$top=20&$orderby=start/dateTime",
             headers=headers,
             timeout=10
         )
         
         if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
+            return response.text
         else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
+            return f"Error: {response.status_code} - {response.text}"
             
     except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
+        logging.error(f"Error listing upcoming events: {str(e)}")
+        return f"Error listing upcoming events: {str(e)}"
 
 
-@app.route(route="tasks", methods=["POST"])
-def create_task_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to create a new task"""
-    try:
-        req_body = req.get_json()
-        if not req_body:
-            return func.HttpResponse(
-                "Request body required",
-                status_code=400
-            )
-        
-        plan_id = req_body.get('planId')
-        title = req_body.get('title')
-        bucket_id = req_body.get('bucketId')  # Optional
-        
-        if not plan_id or not title:
-            return func.HttpResponse(
-                "Missing required fields: planId and title",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "planId": plan_id,
-            "title": title
-        }
-        
-        if bucket_id:
-            data["bucketId"] = bucket_id
-        
-        response = requests.post(
-            f"{GRAPH_API_ENDPOINT}/planner/tasks",
-            headers=headers,
-            json=data,
-            timeout=10
-        )
-        
-        if response.status_code == 201:
-            return func.HttpResponse(
-                response.text,
-                status_code=201,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
+register_http_endpoints(app)
 
-
-@app.route(route="tasks/{task_id}/progress", methods=["PATCH"])
-def update_task_progress_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to update task progress"""
-    try:
-        task_id = req.route_params.get('task_id')
-        if not task_id:
-            return func.HttpResponse(
-                "Missing task_id in URL path",
-                status_code=400
-            )
-        
-        req_body = req.get_json()
-        if not req_body:
-            return func.HttpResponse(
-                "Request body required",
-                status_code=400
-            )
-        
-        percent_complete = req_body.get('percentComplete')
-        if percent_complete is None:
-            return func.HttpResponse(
-                "Missing required field: percentComplete",
-                status_code=400
-            )
-        
-        # Validate percentage
-        if not isinstance(percent_complete, int) or not 0 <= percent_complete <= 100:
-            return func.HttpResponse(
-                "percentComplete must be an integer between 0 and 100",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "If-Match": "*"  # Required for updates
-        }
-        
-        data = {
-            "percentComplete": percent_complete
-        }
-        
-        response = requests.patch(
-            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
-            headers=headers,
-            json=data,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="hello", methods=["GET"])
-def hello_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint for connectivity test"""
-    return func.HttpResponse(
-        "Hello I am MCPTool! (HTTP endpoint)",
-        status_code=200,
-        mimetype="text/plain"
-    )
-
-
-# Additional HTTP Endpoints for New MCP Tools
-
-# Plan Management HTTP Endpoints
-
-@app.route(route="plans/{plan_id}", methods=["GET"])
-def get_plan_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to get a specific plan"""
-    try:
-        plan_id = req.route_params.get('plan_id')
-        if not plan_id:
-            return func.HttpResponse(
-                "Missing plan_id in URL path",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="plans/{plan_id}", methods=["PATCH"])
-def update_plan_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to update a plan"""
-    try:
-        plan_id = req.route_params.get('plan_id')
-        if not plan_id:
-            return func.HttpResponse(
-                "Missing plan_id in URL path",
-                status_code=400
-            )
-        
-        req_body = req.get_json()
-        if not req_body:
-            return func.HttpResponse(
-                "Request body required",
-                status_code=400
-            )
-        
-        title = req_body.get('title')
-        if not title:
-            return func.HttpResponse(
-                "Missing required field: title",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "If-Match": "*"
-        }
-        
-        data = {"title": title}
-        
-        response = requests.patch(
-            f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}",
-            headers=headers,
-            json=data,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="plans/{plan_id}", methods=["DELETE"])
-def delete_plan_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to delete a plan"""
-    try:
-        plan_id = req.route_params.get('plan_id')
-        if not plan_id:
-            return func.HttpResponse(
-                "Missing plan_id in URL path",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "If-Match": "*"
-        }
-        
-        response = requests.delete(
-            f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 204:
-            return func.HttpResponse(
-                "Plan deleted successfully",
-                status_code=204
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="plans/{plan_id}/details", methods=["GET"])
-def get_plan_details_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to get plan details"""
-    try:
-        plan_id = req.route_params.get('plan_id')
-        if not plan_id:
-            return func.HttpResponse(
-                "Missing plan_id in URL path",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/details",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-# Task Management HTTP Endpoints
-
-@app.route(route="tasks/{task_id}", methods=["GET"])
-def get_task_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to get a specific task"""
-    try:
-        task_id = req.route_params.get('task_id')
-        if not task_id:
-            return func.HttpResponse(
-                "Missing task_id in URL path",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="tasks/{task_id}", methods=["PATCH"])
-def update_task_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to update a task with full options"""
-    try:
-        task_id = req.route_params.get('task_id')
-        if not task_id:
-            return func.HttpResponse(
-                "Missing task_id in URL path",
-                status_code=400
-            )
-        
-        req_body = req.get_json()
-        if not req_body:
-            return func.HttpResponse(
-                "Request body required",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "If-Match": "*"
-        }
-        
-        # Build update data from request body
-        data = {}
-        if "title" in req_body:
-            data["title"] = req_body["title"]
-        if "percentComplete" in req_body:
-            percent = req_body["percentComplete"]
-            if not isinstance(percent, int) or not 0 <= percent <= 100:
-                return func.HttpResponse(
-                    "percentComplete must be an integer between 0 and 100",
-                    status_code=400
-                )
-            data["percentComplete"] = percent
-        if "dueDateTime" in req_body:
-            data["dueDateTime"] = req_body["dueDateTime"]
-        if "startDateTime" in req_body:
-            data["startDateTime"] = req_body["startDateTime"]
-        
-        if not data:
-            return func.HttpResponse(
-                "No update fields provided",
-                status_code=400
-            )
-        
-        response = requests.patch(
-            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
-            headers=headers,
-            json=data,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="tasks/{task_id}", methods=["DELETE"])
-def delete_task_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to delete a task"""
-    try:
-        task_id = req.route_params.get('task_id')
-        if not task_id:
-            return func.HttpResponse(
-                "Missing task_id in URL path",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "If-Match": "*"
-        }
-        
-        response = requests.delete(
-            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 204:
-            return func.HttpResponse(
-                "Task deleted successfully",
-                status_code=204
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="tasks/{task_id}/details", methods=["GET"])
-def get_task_details_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to get task details"""
-    try:
-        task_id = req.route_params.get('task_id')
-        if not task_id:
-            return func.HttpResponse(
-                "Missing task_id in URL path",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}/details",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-# User-Centric Task HTTP Endpoints
-
-@app.route(route="me/tasks", methods=["GET"])
-def list_my_tasks_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to list my tasks"""
-    try:
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/me/planner/tasks",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="users/{user_id}/tasks", methods=["GET"])
-def list_user_tasks_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to list user tasks"""
-    try:
-        user_id = req.route_params.get('user_id', 'me')
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        endpoint = f"{GRAPH_API_ENDPOINT}/users/{user_id}/planner/tasks" if user_id != "me" else f"{GRAPH_API_ENDPOINT}/me/planner/tasks"
-        
-        response = requests.get(
-            endpoint,
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-# Bucket Management HTTP Endpoints
-
-@app.route(route="plans/{plan_id}/buckets", methods=["GET"])
-def list_buckets_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to list buckets in a plan"""
-    try:
-        plan_id = req.route_params.get('plan_id')
-        if not plan_id:
-            return func.HttpResponse(
-                "Missing plan_id in URL path",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/buckets",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="buckets", methods=["POST"])
-def create_bucket_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to create a bucket"""
-    try:
-        req_body = req.get_json()
-        if not req_body:
-            return func.HttpResponse(
-                "Request body required",
-                status_code=400
-            )
-        
-        plan_id = req_body.get('planId')
-        name = req_body.get('name')
-        
-        if not plan_id or not name:
-            return func.HttpResponse(
-                "Missing required fields: planId and name",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "planId": plan_id,
-            "name": name
-        }
-        
-        response = requests.post(
-            f"{GRAPH_API_ENDPOINT}/planner/buckets",
-            headers=headers,
-            json=data,
-            timeout=10
-        )
-        
-        if response.status_code == 201:
-            return func.HttpResponse(
-                response.text,
-                status_code=201,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="buckets/{bucket_id}", methods=["GET"])
-def get_bucket_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to get a specific bucket"""
-    try:
-        bucket_id = req.route_params.get('bucket_id')
-        if not bucket_id:
-            return func.HttpResponse(
-                "Missing bucket_id in URL path",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="buckets/{bucket_id}", methods=["PATCH"])
-def update_bucket_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to update a bucket"""
-    try:
-        bucket_id = req.route_params.get('bucket_id')
-        if not bucket_id:
-            return func.HttpResponse(
-                "Missing bucket_id in URL path",
-                status_code=400
-            )
-        
-        req_body = req.get_json()
-        if not req_body:
-            return func.HttpResponse(
-                "Request body required",
-                status_code=400
-            )
-        
-        name = req_body.get('name')
-        if not name:
-            return func.HttpResponse(
-                "Missing required field: name",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "If-Match": "*"
-        }
-        
-        data = {"name": name}
-        
-        response = requests.patch(
-            f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}",
-            headers=headers,
-            json=data,
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            return func.HttpResponse(
-                response.text,
-                status_code=200,
-                mimetype="application/json"
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
-
-
-@app.route(route="buckets/{bucket_id}", methods=["DELETE"])
-def delete_bucket_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to delete a bucket"""
-    try:
-        bucket_id = req.route_params.get('bucket_id')
-        if not bucket_id:
-            return func.HttpResponse(
-                "Missing bucket_id in URL path",
-                status_code=400
-            )
-        
-        token = get_access_token()
-        if not token:
-            return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
-            )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "If-Match": "*"
-        }
-        
-        response = requests.delete(
-            f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}",
-            headers=headers,
-            timeout=10
-        )
-        
-        if response.status_code == 204:
-            return func.HttpResponse(
-                "Bucket deleted successfully",
-                status_code=204
-            )
-        else:
-            return func.HttpResponse(
-                f"Error: {response.status_code} - {response.text}",
-                status_code=response.status_code
-            )
-            
-    except Exception as e:
-        return func.HttpResponse(
-            f"Error: {str(e)}",
-            status_code=500
-        )
+# Register additional tools
+from additional_tools import register_additional_tools
+register_additional_tools(app)
