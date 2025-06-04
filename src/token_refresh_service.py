@@ -13,7 +13,7 @@ from typing import Optional
 import threading
 import time
 
-from redis_config import get_redis_token_manager, RedisTokenManager
+from mcp_redis_config import get_redis_token_manager, RedisTokenManager
 from agent_auth_manager import get_auth_manager, AgentAuthManager
 
 # Configure logging

@@ -20,7 +20,7 @@ from azure.identity import (
     ManagedIdentityCredential
 )
 from azure.core.credentials import AccessToken
-from redis_config import get_redis_token_manager, RedisTokenManager
+from mcp_redis_config import get_redis_token_manager, RedisTokenManager
 
 
 class AgentAuthManager:

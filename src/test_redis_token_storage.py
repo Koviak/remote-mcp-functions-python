@@ -31,7 +31,7 @@ def test_redis_connection():
     """Test basic Redis connection"""
     print("\n=== Testing Redis Connection ===")
     try:
-        from redis_config import get_redis_token_manager
+        from mcp_redis_config import get_redis_token_manager
         
         redis_manager = get_redis_token_manager()
         if redis_manager.health_check():
@@ -48,7 +48,7 @@ def test_token_storage():
     """Test storing and retrieving tokens"""
     print("\n=== Testing Token Storage ===")
     try:
-        from redis_config import get_redis_token_manager
+        from mcp_redis_config import get_redis_token_manager
         
         redis_manager = get_redis_token_manager()
         

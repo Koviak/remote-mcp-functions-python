@@ -5,7 +5,7 @@ This document provides a complete list of all HTTP endpoints implemented in the 
 ## Authentication
 All endpoints use OAuth 2.0 authentication via the `get_access_token()` function which supports both app-only and delegated access.
 
-## Total Endpoints: 56
+## Total Endpoints: 69
 
 ## Mail Endpoints (16 endpoints)
 

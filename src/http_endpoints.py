@@ -853,10 +853,9 @@ def get_mail_folder_http(req: func.HttpRequest) -> func.HttpResponse:
 def create_mail_folder_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to create a new mail folder"""
     try:
-        user_id = req.route_params.get('user_id')
-        if not user_id:
+        req_body = req.get_json()
+        if not req_body:
             return func.HttpResponse(
-                "Missing user_id in URL path",
                 "Request body required",
                 status_code=400
             )
@@ -2051,4 +2050,1907 @@ def register_http_endpoints(function_app):
         methods=["GET"]
     )(get_progress_task_board_format_http)
     
-    print("All 56 HTTP endpoints registered successfully!")
+    print("All 69 HTTP endpoints registered successfully!")
+
+
+# Task Management HTTP Endpoints
+
+def get_task_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to get a specific task"""
+    try:
+        task_id = req.route_params.get('task_id')
+        if not task_id:
+            return func.HttpResponse(
+                "Missing task_id in URL path",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def update_task_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to update a task with full options"""
+    try:
+        task_id = req.route_params.get('task_id')
+        if not task_id:
+            return func.HttpResponse(
+                "Missing task_id in URL path",
+                status_code=400
+            )
+        
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "If-Match": "*"
+        }
+        
+        data = {}
+        if "title" in req_body:
+            data["title"] = req_body["title"]
+        if "percentComplete" in req_body:
+            percent = req_body["percentComplete"]
+            if (not isinstance(percent, int) or
+                    not 0 <= percent <= 100):
+                return func.HttpResponse(
+                    "percentComplete must be an integer between 0 and 100",
+                    status_code=400
+                )
+            data["percentComplete"] = percent
+        if "dueDateTime" in req_body:
+            data["dueDateTime"] = req_body["dueDateTime"]
+        if "startDateTime" in req_body:
+            data["startDateTime"] = req_body["startDateTime"]
+        
+        if not data:
+            return func.HttpResponse(
+                "No update fields provided",
+                status_code=400
+            )
+        
+        response = requests.patch(
+            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def delete_task_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to delete a task"""
+    try:
+        task_id = req.route_params.get('task_id')
+        if not task_id:
+            return func.HttpResponse(
+                "Missing task_id in URL path",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "If-Match": "*"
+        }
+        
+        response = requests.delete(
+            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 204:
+            return func.HttpResponse(
+                "Task deleted successfully",
+                status_code=204
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def get_task_details_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to get task details"""
+    try:
+        task_id = req.route_params.get('task_id')
+        if not task_id:
+            return func.HttpResponse(
+                "Missing task_id in URL path",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}/details",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+# User-Centric Task HTTP Endpoints
+
+def list_my_tasks_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list my tasks"""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/me/planner/tasks",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def list_user_tasks_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list user tasks"""
+    try:
+        user_id = req.route_params.get('user_id', 'me')
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        if user_id != "me":
+            endpoint = f"{GRAPH_API_ENDPOINT}/users/{user_id}/planner/tasks"
+        else:
+            endpoint = f"{GRAPH_API_ENDPOINT}/me/planner/tasks"
+        
+        response = requests.get(
+            endpoint,
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+# Bucket Management HTTP Endpoints
+
+def list_buckets_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list buckets in a plan"""
+    try:
+        plan_id = req.route_params.get('plan_id')
+        if not plan_id:
+            return func.HttpResponse(
+                "Missing plan_id in URL path",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/buckets",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def create_bucket_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to create a bucket"""
+    try:
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        plan_id = req_body.get('planId')
+        name = req_body.get('name')
+        
+        if not plan_id or not name:
+            return func.HttpResponse(
+                "Missing required fields: planId and name",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "planId": plan_id,
+            "name": name
+        }
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/planner/buckets",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 201:
+            return func.HttpResponse(
+                response.text,
+                status_code=201,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def get_bucket_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to get a specific bucket"""
+    try:
+        bucket_id = req.route_params.get('bucket_id')
+        if not bucket_id:
+            return func.HttpResponse(
+                "Missing bucket_id in URL path",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def update_bucket_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to update a bucket"""
+    try:
+        bucket_id = req.route_params.get('bucket_id')
+        if not bucket_id:
+            return func.HttpResponse(
+                "Missing bucket_id in URL path",
+                status_code=400
+            )
+        
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        name = req_body.get('name')
+        if not name:
+            return func.HttpResponse(
+                "Missing required field: name",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "If-Match": "*"
+        }
+        
+        data = {"name": name}
+        
+        response = requests.patch(
+            f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def delete_bucket_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to delete a bucket"""
+    try:
+        bucket_id = req.route_params.get('bucket_id')
+        if not bucket_id:
+            return func.HttpResponse(
+                "Missing bucket_id in URL path",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "If-Match": "*"
+        }
+        
+        response = requests.delete(
+            f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 204:
+            return func.HttpResponse(
+                "Bucket deleted successfully",
+                status_code=204
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+# Additional HTTP Endpoints for new tools
+
+def get_user_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to get a specific user"""
+    try:
+        user_id = req.route_params.get('user_id')
+        if not user_id:
+            return func.HttpResponse(
+                "Missing user_id in URL path",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/users/{user_id}",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def list_deleted_users_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list deleted users"""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/directory/deletedItems/"
+            "microsoft.graph.user",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def list_group_members_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list group members"""
+    try:
+        group_id = req.route_params.get('group_id')
+        if not group_id:
+            return func.HttpResponse(
+                "Missing group_id in URL path",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/groups/{group_id}/members",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def send_message_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to send an email"""
+    try:
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        to_email = req_body.get('to')
+        subject = req_body.get('subject')
+        body = req_body.get('body')
+        body_type = req_body.get('bodyType', 'text')
+        
+        if not all([to_email, subject, body]):
+            return func.HttpResponse(
+                "Missing required fields: to, subject, body",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "message": {
+                "subject": subject,
+                "body": {
+                    "contentType": body_type,
+                    "content": body
+                },
+                "toRecipients": [
+                    {
+                        "emailAddress": {
+                            "address": to_email
+                        }
+                    }
+                ]
+            }
+        }
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/me/sendMail",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 202:
+            return func.HttpResponse(
+                f"Email sent successfully to {to_email}",
+                status_code=202
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def list_inbox_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list inbox messages"""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/me/mailFolders/inbox/messages"
+            "?$select=id,subject,from,receivedDateTime,isRead"
+            "&$top=20&$orderby=receivedDateTime desc",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def list_teams_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list teams"""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/teams",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def add_user_to_group_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to add user to group"""
+    try:
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        group_id = req_body.get('groupId')
+        user_id = req_body.get('userId')
+        
+        if not all([group_id, user_id]):
+            return func.HttpResponse(
+                "Missing required fields: groupId, userId",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "@odata.id": f"{GRAPH_API_ENDPOINT}/users/{user_id}"
+        }
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/groups/{group_id}/members/$ref",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 204:
+            return func.HttpResponse(
+                f"User {user_id} added to group {group_id} successfully",
+                status_code=204
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def reset_password_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to reset user password"""
+    try:
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        user_id = req_body.get('userId')
+        temp_password = req_body.get('temporaryPassword')
+        
+        if not all([user_id, temp_password]):
+            return func.HttpResponse(
+                "Missing required fields: userId, temporaryPassword",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "passwordProfile": {
+                "forceChangePasswordNextSignIn": True,
+                "password": temp_password
+            }
+        }
+        
+        response = requests.patch(
+            f"{GRAPH_API_ENDPOINT}/users/{user_id}",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 204:
+            return func.HttpResponse(
+                f"Password reset successfully for user {user_id}",
+                status_code=204
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def create_event_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to create calendar event"""
+    try:
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        subject = req_body.get('subject')
+        start_time = req_body.get('start')
+        end_time = req_body.get('end')
+        attendees_str = req_body.get('attendees', '')
+        
+        if not all([subject, start_time, end_time]):
+            return func.HttpResponse(
+                "Missing required fields: subject, start, end",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "subject": subject,
+            "start": {
+                "dateTime": start_time,
+                "timeZone": "UTC"
+            },
+            "end": {
+                "dateTime": end_time,
+                "timeZone": "UTC"
+            }
+        }
+        
+        if attendees_str:
+            attendees = []
+            for email in attendees_str.split(","):
+                email = email.strip()
+                if email:
+                    attendees.append({
+                        "emailAddress": {
+                            "address": email
+                        }
+                    })
+            data["attendees"] = attendees
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/me/events",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 201:
+            event = response.json()
+            return func.HttpResponse(
+                json.dumps({
+                    "id": event["id"], 
+                    "message": "Event created successfully"
+                }),
+                status_code=201,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def list_upcoming_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list upcoming events"""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/me/events"
+            "?$select=id,subject,start,end,attendees"
+            "&$top=20&$orderby=start/dateTime",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+# Additional endpoints for Teams, Files, Security
+def list_channels_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list channels in a team"""
+    try:
+        team_id = req.route_params.get('team_id')
+        if not team_id:
+            return func.HttpResponse(
+                "Missing team_id in URL path",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/teams/{team_id}/channels",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def post_channel_message_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to post message to Teams channel"""
+    try:
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        team_id = req_body.get('teamId')
+        channel_id = req_body.get('channelId')
+        message = req_body.get('message')
+        
+        if not all([team_id, channel_id, message]):
+            return func.HttpResponse(
+                "Missing required fields: teamId, channelId, message",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "body": {
+                "content": message
+            }
+        }
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/teams/{team_id}/channels/"
+            f"{channel_id}/messages",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 201:
+            return func.HttpResponse(
+                f"Message posted successfully to channel {channel_id}",
+                status_code=201
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def list_drives_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list drives"""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/me/drives",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def list_root_items_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list root items in drive"""
+    try:
+        drive_id = req.params.get('driveId')
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        if drive_id:
+            endpoint = f"{GRAPH_API_ENDPOINT}/drives/{drive_id}/root/children"
+        else:
+            endpoint = f"{GRAPH_API_ENDPOINT}/me/drive/root/children"
+        
+        response = requests.get(
+            endpoint,
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def download_file_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to get file download URL"""
+    try:
+        drive_id = req.route_params.get('drive_id')
+        item_id = req.route_params.get('item_id')
+        
+        if not all([drive_id, item_id]):
+            return func.HttpResponse(
+                "Missing drive_id or item_id in URL path",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/drives/{drive_id}/items/{item_id}/content",
+            headers=headers,
+            timeout=10,
+            allow_redirects=False
+        )
+        
+        if response.status_code == 302:
+            download_url = response.headers.get('Location')
+            return func.HttpResponse(
+                json.dumps({"downloadUrl": download_url}),
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def sites_search_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to search SharePoint sites"""
+    try:
+        query = req.params.get('query')
+        if not query:
+            return func.HttpResponse(
+                "Missing required parameter: query",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/sites?search={query}",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def usage_summary_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to get usage summary"""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/reports/"
+            "getOffice365ActiveUserCounts(period='D7')",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def get_alerts_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to get security alerts"""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/security/alerts",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def list_managed_devices_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list managed devices"""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/deviceManagement/managedDevices",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+# MISSING MAIL MESSAGE OPERATIONS
+
+def move_message_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to move a message to another folder"""
+    try:
+        message_id = req.route_params.get('message_id')
+        if not message_id:
+            return func.HttpResponse(
+                "Missing message_id in URL path",
+                status_code=400
+            )
+        
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        destination_id = req_body.get('destinationId')
+        if not destination_id:
+            return func.HttpResponse(
+                "Missing required field: destinationId",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {"destinationId": destination_id}
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/me/messages/{message_id}/move",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def copy_message_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to copy a message to another folder"""
+    try:
+        message_id = req.route_params.get('message_id')
+        if not message_id:
+            return func.HttpResponse(
+                "Missing message_id in URL path",
+                status_code=400
+            )
+        
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        destination_id = req_body.get('destinationId')
+        if not destination_id:
+            return func.HttpResponse(
+                "Missing required field: destinationId",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {"destinationId": destination_id}
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/me/messages/{message_id}/copy",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 201:
+            return func.HttpResponse(
+                response.text,
+                status_code=201,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def reply_message_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to reply to a message"""
+    try:
+        message_id = req.route_params.get('message_id')
+        if not message_id:
+            return func.HttpResponse(
+                "Missing message_id in URL path",
+                status_code=400
+            )
+        
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        comment = req_body.get('comment', '')
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {"comment": comment}
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/me/messages/{message_id}/reply",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 202:
+            return func.HttpResponse(
+                "Reply sent successfully",
+                status_code=202
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def reply_all_message_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to reply all to a message"""
+    try:
+        message_id = req.route_params.get('message_id')
+        if not message_id:
+            return func.HttpResponse(
+                "Missing message_id in URL path",
+                status_code=400
+            )
+        
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        comment = req_body.get('comment', '')
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {"comment": comment}
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/me/messages/{message_id}/replyAll",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 202:
+            return func.HttpResponse(
+                "Reply all sent successfully",
+                status_code=202
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def forward_message_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to forward a message"""
+    try:
+        message_id = req.route_params.get('message_id')
+        if not message_id:
+            return func.HttpResponse(
+                "Missing message_id in URL path",
+                status_code=400
+            )
+        
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        to_recipients = req_body.get('toRecipients', [])
+        comment = req_body.get('comment', '')
+        
+        if not to_recipients:
+            return func.HttpResponse(
+                "Missing required field: toRecipients",
+                status_code=400
+            )
+        
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "comment": comment,
+            "toRecipients": [
+                {"emailAddress": {"address": email}} 
+                for email in to_recipients
+            ]
+        }
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/me/messages/{message_id}/forward",
+            headers=headers,
+            json=data,
+            timeout=10
+        )
+        
+        if response.status_code == 202:
+            return func.HttpResponse(
+                "Message forwarded successfully",
+                status_code=202
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def list_mail_folders_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list mail folders"""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401
+            )
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/me/mailFolders",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                f"Error: {response.status_code} - {response.text}",
+                status_code=response.status_code
+            )
+            
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+
