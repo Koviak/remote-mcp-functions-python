@@ -31,8 +31,17 @@ from azure.identity import OnBehalfOfCredential
 from additional_tools import register_additional_tools
 from http_endpoints import register_http_endpoints
 from additional_tools_delegated import register_delegated_tools
+from token_refresh_service import start_token_refresh_service
+from token_api_endpoints import register_token_api_endpoints
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+
+# Start the token refresh service to keep tokens fresh in Redis
+try:
+    start_token_refresh_service()
+    logging.info("Token refresh service started successfully")
+except Exception as e:
+    logging.error(f"Failed to start token refresh service: {e}")
 
 # Constants for the Azure Blob Storage container, file, and blob path
 _SNIPPET_NAME_PROPERTY_NAME = "snippetname"
@@ -192,3 +201,6 @@ register_http_endpoints(app)
 
 # Register delegated access tools for autonomous agents
 register_delegated_tools(app)
+
+# Register token API endpoints for external applications
+register_token_api_endpoints(app)

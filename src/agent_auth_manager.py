@@ -11,7 +11,6 @@ Authentication Methods:
 """
 
 import os
-import json
 import logging
 from datetime import datetime
 from typing import Optional, Dict
@@ -21,19 +20,22 @@ from azure.identity import (
     ManagedIdentityCredential
 )
 from azure.core.credentials import AccessToken
+from redis_config import get_redis_token_manager, RedisTokenManager
 
 
 class AgentAuthManager:
     """Manages authentication for autonomous agents"""
     
-    def __init__(self, token_store=None):
+    def __init__(
+        self, redis_token_manager: Optional[RedisTokenManager] = None
+    ):
         """
         Initialize the auth manager
         
         Args:
-            token_store: Optional token storage backend (e.g., Redis client)
+            redis_token_manager: Optional Redis token manager instance
         """
-        self.token_store = token_store
+        self.redis_token_manager = redis_token_manager
         self.tenant_id = os.getenv("AZURE_TENANT_ID")
         self.client_id = os.getenv("AZURE_CLIENT_ID")
         self.client_secret = os.getenv("AZURE_CLIENT_SECRET")
@@ -43,7 +45,7 @@ class AgentAuthManager:
         self.agent_password = os.getenv("AGENT_PASSWORD")
         self.certificate_path = os.getenv("AGENT_CERTIFICATE_PATH")
         
-        # Token cache
+        # Local token cache for quick access
         self._token_cache: Dict[str, AccessToken] = {}
     
     def get_agent_user_token(
@@ -198,24 +200,16 @@ class AgentAuthManager:
         self._token_cache[scope] = token
     
     def _get_stored_token(self, scope: str) -> Optional[str]:
-        """Get token from persistent storage (Redis/KeyVault)"""
-        if not self.token_store:
+        """Get token from persistent storage (Redis)"""
+        if not self.redis_token_manager:
             return None
         
         try:
-            # Example for Redis storage
-            key = f"agent:token:{scope}"
-            stored_data = self.token_store.get(key)
+            # Get token from Redis
+            token_data = self.redis_token_manager.get_token(scope)
             
-            if stored_data:
-                data = json.loads(stored_data)
-                expires_on = data.get("expires_on", 0)
-                
-                # Check if still valid
-                if expires_on > (datetime.now().timestamp() + 300):
-                    return data["token"]
-                else:
-                    self.token_store.delete(key)
+            if token_data:
+                return token_data.get("token")
                     
         except Exception as e:
             logging.error(f"Error retrieving stored token: {e}")
@@ -224,19 +218,20 @@ class AgentAuthManager:
     
     def _store_token(self, scope: str, token: AccessToken):
         """Store token in persistent storage"""
-        if not self.token_store:
+        if not self.redis_token_manager:
             return
         
         try:
-            key = f"agent:token:{scope}"
-            data = {
-                "token": token.token,
-                "expires_on": token.expires_on
-            }
-            
-            # Store with TTL based on token expiration
-            ttl = max(0, token.expires_on - int(datetime.now().timestamp()))
-            self.token_store.setex(key, ttl, json.dumps(data))
+            # Store token using Redis token manager
+            self.redis_token_manager.store_token(
+                token=token.token,
+                expires_on=token.expires_on,
+                scope=scope,
+                metadata={
+                    "acquired_by": "agent_auth_manager",
+                    "client_id": self.client_id
+                }
+            )
             
         except Exception as e:
             logging.error(f"Error storing token: {e}")
@@ -250,14 +245,17 @@ def get_auth_manager() -> AgentAuthManager:
     """Get or create the global auth manager instance"""
     global _auth_manager
     if _auth_manager is None:
-        # Initialize with Redis if available
+        # Initialize with Redis token manager
         try:
-            import redis
-            redis_client = redis.from_url(
-                os.getenv("REDIS_URL", "redis://localhost:6379")
+            redis_manager = get_redis_token_manager()
+            _auth_manager = AgentAuthManager(
+                redis_token_manager=redis_manager
             )
-            _auth_manager = AgentAuthManager(token_store=redis_client)
-        except ImportError:
+        except Exception as e:
+            logging.warning(
+                f"Failed to initialize Redis token manager: {e}. "
+                "Falling back to memory-only caching."
+            )
             # Fall back to memory-only caching
             _auth_manager = AgentAuthManager()
     
