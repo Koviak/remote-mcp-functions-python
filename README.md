@@ -342,13 +342,25 @@ Note that the `host.json` file also includes a reference to the experimental bun
 
 ## Delegated access using On-Behalf-Of
 
-Once built-in authentication is enabled, each incoming request carries a user token. The sample now exchanges this token using `OnBehalfOfCredential`. Configure the following settings in your environment:
+**Important Limitation**: MCP tool triggers cannot access HTTP request headers, making true OBO flow impossible with MCP triggers. The delegated access pattern only works with HTTP triggers.
 
+### For MCP Tools
+MCP tools use app-only authentication with `ClientSecretCredential`. Configure the following in your environment:
 ```
 AZURE_CLIENT_ID
 AZURE_CLIENT_SECRET
 AZURE_TENANT_ID
+```
+
+### For HTTP Endpoints with Delegated Access
+Once built-in authentication is enabled, HTTP endpoints can use delegated access. The sample exchanges the incoming user token using `OnBehalfOfCredential`. Configure the following additional setting:
+```
 DOWNSTREAM_API_SCOPE
 ```
 
-The header `X-MS-TOKEN-AAD-ACCESS-TOKEN` is provided by built-in auth and is used for the exchange.
+The header `X-MS-TOKEN-AAD-ACCESS-TOKEN` is provided by built-in auth and is used for the exchange in HTTP functions only.
+
+### Current Implementation
+- **MCP Tools** (`additional_tools.py`): Use app-only authentication
+- **HTTP Endpoints** (`http_endpoints.py`): Can use either app-only or delegated authentication
+- **Example OBO Code** (`function_app.py`): Shows the OBO pattern in `_acquire_downstream_token()` (for HTTP triggers only)

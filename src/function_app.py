@@ -1,9 +1,36 @@
+"""
+Azure Functions MCP Server with Multiple Authentication Approaches
+
+This function app demonstrates both App-Only and Delegated (OBO)
+authentication patterns:
+
+1. App-Only Authentication (Working):
+   - Used by MCP tools in additional_tools.py
+   - Uses ClientSecretCredential with application permissions
+   - Works with all trigger types including MCP triggers
+
+2. Delegated Access (OBO) - Limited Support:
+   - Demonstrated in _acquire_downstream_token() function
+   - LIMITATION: MCP triggers cannot access HTTP request headers
+   - Only works with HTTP triggers that can access X-MS-TOKEN-AAD-ACCESS-TOKEN
+   - Requires built-in authentication enabled in Azure App Service
+
+For production use:
+- MCP tools use app-only authentication (additional_tools.py)
+- HTTP endpoints can use either authentication method (http_endpoints.py)
+- Enable built-in auth for true delegated access with HTTP endpoints
+"""
+
 import json
 import logging
 import os
 
 import azure.functions as func
 from azure.identity import OnBehalfOfCredential
+
+from additional_tools import register_additional_tools
+from http_endpoints import register_http_endpoints
+from additional_tools_delegated import register_delegated_tools
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -50,9 +77,17 @@ def _acquire_downstream_token() -> str | None:
     Returns ``None`` if no access token is available.
     """
 
+    # IMPORTANT: MCP tool triggers do not have access to HTTP request headers
+    # This is a limitation of the MCP trigger binding - it only provides
+    # the tool context. For true OBO flow, you would need to use HTTP
+    # triggers instead. This implementation shows the pattern but cannot
+    # work with MCP triggers
+    
     user_assertion = os.environ.get("X_MS_TOKEN_AAD_ACCESS_TOKEN")
     if not user_assertion:
-        logging.warning("User access token not found for OBO flow")
+        logging.warning(
+            "User access token not found for OBO flow - "
+            "MCP triggers cannot access request headers")
         return None
 
     tenant_id = os.getenv("AZURE_TENANT_ID")
@@ -147,3 +182,13 @@ def save_snippet(file: func.Out[str], context) -> str:
     file.set(snippet_content_from_args)
     logging.info(f"Saved snippet: {snippet_content_from_args}")
     return f"Snippet '{snippet_content_from_args}' saved successfully"
+
+
+# Register additional MCP tools and HTTP endpoints
+register_additional_tools(app)
+
+# Register HTTP endpoints
+register_http_endpoints(app)
+
+# Register delegated access tools for autonomous agents
+register_delegated_tools(app)

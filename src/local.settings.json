@@ -2,10 +2,15 @@
   "IsEncrypted": false,
   "Values": {
     "FUNCTIONS_WORKER_RUNTIME": "python",
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "AZURE_CLIENT_ID": "",
-    "AZURE_CLIENT_SECRET": "",
-    "AZURE_TENANT_ID": "",
-    "DOWNSTREAM_API_SCOPE": ""
+    "AzureWebJobsStorage": "",
+    "AzureWebJobsSecretStorageType": "Files",
+    "AZURE_CLIENT_ID": "fd79a94d-f572-4439-bba2-6465e0c40122",
+    "AZURE_CLIENT_SECRET": "sux8Q~kzQ.H.Vz.nyTMxeFEFpRPZ3yjZCgJmtcAI",
+    "AZURE_TENANT_ID": "cb629dfe-9f7b-497f-b0d2-502dd53d8227",
+    "DOWNSTREAM_API_SCOPE": "https://graph.microsoft.com/.default",
+    "AGENT_USERNAME": "agent@yourdomain.com",
+    "AGENT_PASSWORD": "Koviak202",
+    "AGENT_USER_NAME": "annika@reddypros.com",
+    "REDIS_URL": "redis://localhost:6379"
   }
 }

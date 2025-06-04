@@ -13,9 +13,9 @@ GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
 
 def get_access_token():
     """Get access token for Microsoft Graph API"""
-    tenant_id = os.environ.get("TENANT_ID")
-    client_id = os.environ.get("CLIENT_ID")
-    client_secret = os.environ.get("CLIENT_SECRET")
+    tenant_id = os.environ.get("AZURE_TENANT_ID")
+    client_id = os.environ.get("AZURE_CLIENT_ID")
+    client_secret = os.environ.get("AZURE_CLIENT_SECRET")
     
     if not all([tenant_id, client_id, client_secret]):
         return None

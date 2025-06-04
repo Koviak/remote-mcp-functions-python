@@ -6,3 +6,7 @@ azure-functions
 
 azure-identity
 
+requests
+
+redis
+

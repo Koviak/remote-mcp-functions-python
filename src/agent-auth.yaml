@@ -1,0 +1,77 @@
+# Autonomous Agent Authentication Configuration
+# This file documents the setup for autonomous agents to use delegated access
+
+agent_name: "Annika"
+description: "Agent that uses delegated permissions through MCP tools"
+
+authentication:
+  method: "ROPC"  # Resource Owner Password Credentials
+  
+  # Azure AD Application Settings
+  azure_ad:
+    tenant_id: "${AZURE_TENANT_ID}"
+    client_id: "${AZURE_CLIENT_ID}"
+    client_secret: "${AZURE_CLIENT_SECRET}"
+    
+    # IMPORTANT: Must enable "Allow public client flows" in Azure AD
+    public_client_flows_enabled: true
+    
+  # Agent Credentials (choose one method)
+  credentials:
+    # Method 1: Username/Password (ROPC)
+    username: "${AGENT_USER_NAME}"
+    password: "${AGENT_PASSWORD}"
+    
+    # Method 2: Certificate (more secure)
+    # certificate_path: "${AGENT_CERTIFICATE_PATH}"
+
+# Permissions Required
+delegated_permissions:
+  - "User.Read"
+  - "Mail.Send"
+  - "Files.ReadWrite.All"
+  - "Teams.ReadWrite.All"
+  - "Tasks.ReadWrite"
+  - "Group.Read.All"
+  - "Calendars.ReadWrite"
+
+# Available MCP Tools with Delegated Access
+mcp_tools:
+  - name: "get_my_profile"
+    description: "Get the agent's user profile"
+    
+  - name: "list_my_files"
+    description: "List files in the agent's OneDrive"
+    
+  - name: "send_email_as_agent"
+    description: "Send email as the agent user"
+    
+  - name: "list_my_calendar"
+    description: "List agent's calendar events"
+    
+  - name: "create_todo_task"
+    description: "Create tasks in agent's To Do"
+    
+  - name: "list_my_teams"
+    description: "List teams the agent is a member of"
+    
+  - name: "post_teams_message_as_agent"
+    description: "Post messages as the agent"
+
+# Token Management
+token_storage:
+  type: "redis"  # or "memory" for testing
+  redis_url: "${REDIS_URL:-redis://localhost:6379}"
+  cache_ttl: 3600  # 1 hour
+
+# Security Notes
+security:
+  - "ROPC is less secure - consider certificate auth for production"
+  - "Store credentials securely (use Key Vault in production)"
+  - "Enable MFA exemption for service accounts if needed"
+  - "Monitor authentication failures"
+
+# Testing
+test_commands:
+  - "python test_agent_auth.py"
+  - "func start --port 7071" 
