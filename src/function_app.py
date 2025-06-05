@@ -43,6 +43,36 @@ try:
 except Exception as e:
     logging.error(f"Failed to start token refresh service: {e}")
 
+# Start Enhanced Planner Sync Service (for local development)
+if os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None:
+    # Only start in local development
+    try:
+        from planner_sync_service import PlannerSyncService
+        import threading
+        import asyncio
+        
+        # Start sync service in background thread
+        def run_planner_sync():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            sync_service = PlannerSyncService()
+            loop.run_until_complete(sync_service.start())
+        
+        sync_thread = threading.Thread(
+            target=run_planner_sync, 
+            daemon=True
+        )
+        sync_thread.start()
+        logging.info("Enhanced Planner Sync Service started")
+        logging.info("- Uploads: Event-driven (immediate)")
+        logging.info("- Downloads: Polling (30 seconds)")
+        
+        # Note: Webhook subscriptions are now created by setup_local_webhooks.py
+        # Don't create them automatically here to avoid duplicates
+        
+    except Exception as e:
+        logging.error(f"Failed to start sync service: {e}")
+
 # Constants for the Azure Blob Storage container, file, and blob path
 _SNIPPET_NAME_PROPERTY_NAME = "snippetname"
 _SNIPPET_PROPERTY_NAME = "snippet"

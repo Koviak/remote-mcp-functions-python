@@ -3,12 +3,17 @@ import json
 import requests
 from azure.identity import ClientSecretCredential
 import azure.functions as func
+import logging
+from typing import Dict, Any
+from datetime import datetime
 
 # Global app instance - will be set by register_http_endpoints
 app = None
 
 # Microsoft Graph API endpoint
 GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
+
+logger = logging.getLogger(__name__)
 
 
 def get_access_token():
@@ -2050,7 +2055,29 @@ def register_http_endpoints(function_app):
         methods=["GET"]
     )(get_progress_task_board_format_http)
     
-    print("All 69 HTTP endpoints registered successfully!")
+    # === NEW WEBHOOK AND AGENT ENDPOINTS ===
+    
+    # Webhook endpoint
+    app.route(
+        route="graph_webhook",
+        methods=["POST"],
+        auth_level=func.AuthLevel.ANONYMOUS
+    )(graph_webhook_http)
+    
+    # Agent endpoints
+    app.route(
+        route="metadata",
+        methods=["GET"],
+        auth_level=func.AuthLevel.FUNCTION
+    )(get_metadata_http)
+    
+    app.route(
+        route="agent/tasks",
+        methods=["POST"],
+        auth_level=func.AuthLevel.FUNCTION
+    )(create_agent_task_http)
+    
+    print("All 72 HTTP endpoints registered successfully!")
 
 
 # Task Management HTTP Endpoints
@@ -3906,6 +3933,254 @@ def forward_message_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=response.status_code
             )
             
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def graph_webhook_http(req: func.HttpRequest) -> func.HttpResponse:
+    """Handle Microsoft Graph webhook notifications"""
+    
+    # Handle subscription validation
+    validation_token = req.params.get('validationToken')
+    if validation_token:
+        logger.info("Graph webhook validation request received")
+        return func.HttpResponse(
+            validation_token,
+            status_code=200,
+            mimetype="text/plain"
+        )
+    
+    # Process notifications
+    try:
+        body = req.get_json()
+        client_state = os.environ.get(
+            "GRAPH_WEBHOOK_CLIENT_STATE", "annika-secret"
+        )
+        
+        # Validate notifications
+        notifications = body.get("value", [])
+        for notification in notifications:
+            if notification.get("clientState") != client_state:
+                logger.warning("Invalid client state in webhook")
+                return func.HttpResponse("Unauthorized", status_code=401)
+        
+        # Process each notification
+        from mcp_redis_config import get_redis_token_manager
+        redis_manager = get_redis_token_manager()
+        
+        for notification in notifications:
+            process_graph_notification(notification, redis_manager)
+        
+        return func.HttpResponse("OK", status_code=200)
+        
+    except Exception as e:
+        logger.error(f"Error processing webhook: {e}")
+        return func.HttpResponse("Internal Server Error", status_code=500)
+
+
+def process_graph_notification(notification: Dict[str, Any], redis_manager):
+    """Process individual Graph notification"""
+    resource = notification.get("resource")
+    change_type = notification.get("changeType")
+    resource_data = notification.get("resourceData", {})
+    
+    logger.info(f"Processing {change_type} notification for {resource}")
+    
+    # Publish to Redis for agents
+    redis_client = redis_manager._client
+    
+    notification_data = {
+        "type": "graph_notification",
+        "resource": resource,
+        "changeType": change_type,
+        "resourceData": resource_data,
+        "subscriptionId": notification.get("subscriptionId"),
+        "timestamp": notification.get("subscriptionExpirationDateTime")
+    }
+    
+    # Determine the channel based on resource type
+    agent_user_id = os.environ.get('AGENT_USER_ID', '')
+    if "/me/" in resource or f"/users/{agent_user_id}/" in resource:
+        # This is for Annika's user
+        channel = "annika:notifications:user"
+    elif "/groups/" in resource:
+        channel = "annika:notifications:groups"
+    elif "/planner/" in resource:
+        channel = "annika:notifications:planner"
+    else:
+        channel = "annika:notifications:general"
+    
+    redis_client.publish(channel, json.dumps(notification_data))
+    
+    # For planner tasks, also sync to task cache
+    if "/planner/tasks" in resource and change_type in ["created", "updated"]:
+        sync_planner_task(resource, resource_data, redis_manager)
+
+
+def sync_planner_task(resource: str, resource_data: Dict, redis_manager):
+    """Sync Planner task to Redis cache"""
+    task_id = resource_data.get("id")
+    if not task_id:
+        return
+    
+    # Get full task details using delegated token
+    from agent_auth_manager import get_agent_token
+    token = get_agent_token()
+    
+    if token:
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            task = response.json()
+            # Store in Redis
+            redis_client = redis_manager._client
+            redis_client.setex(
+                f"annika:planner:tasks:{task_id}",
+                3600,
+                json.dumps(task)
+            )
+            
+            # Publish task update
+            redis_client.publish(
+                "annika:tasks:updates",
+                json.dumps({
+                    "action": "task_synced",
+                    "task": task,
+                    "source": "webhook"
+                })
+            )
+
+
+def get_metadata_http(req: func.HttpRequest) -> func.HttpResponse:
+    """Get cached metadata for users, groups, or plans"""
+    try:
+        resource_type = req.params.get('type')  # user, group, plan
+        resource_id = req.params.get('id')
+        
+        if not resource_type or not resource_id:
+            return func.HttpResponse(
+                "Missing required parameters: type and id",
+                status_code=400
+            )
+        
+        from mcp_redis_config import get_redis_token_manager
+        redis_manager = get_redis_token_manager()
+        redis_client = redis_manager._client
+        
+        # Build key based on resource type
+        key_patterns = {
+            "user": f"annika:graph:users:{resource_id}",
+            "group": f"annika:graph:groups:{resource_id}",
+            "plan": f"annika:graph:plans:{resource_id}",
+            "task": f"annika:graph:tasks:{resource_id}"
+        }
+        
+        if resource_type not in key_patterns:
+            return func.HttpResponse(
+                f"Invalid resource type: {resource_type}",
+                status_code=400
+            )
+        
+        key = key_patterns[resource_type]
+        data = redis_client.get(key)
+        
+        if data:
+            return func.HttpResponse(
+                data,
+                status_code=200,
+                mimetype="application/json"
+            )
+        else:
+            return func.HttpResponse(
+                json.dumps({
+                    "error": "Resource not found in cache",
+                    "type": resource_type,
+                    "id": resource_id
+                }),
+                status_code=404,
+                mimetype="application/json"
+            )
+        
+    except Exception as e:
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500
+        )
+
+
+def create_agent_task_http(req: func.HttpRequest) -> func.HttpResponse:
+    """Create a task from an agent (will sync to Planner)"""
+    try:
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400
+            )
+        
+        # Required fields
+        title = req_body.get('title')
+        plan_id = req_body.get('planId')
+        
+        if not title or not plan_id:
+            return func.HttpResponse(
+                "Missing required fields: title and planId",
+                status_code=400
+            )
+        
+        # Create task object
+        task = {
+            "id": f"agent-task-{datetime.utcnow().timestamp()}",
+            "title": title,
+            "planId": plan_id,
+            "bucketId": req_body.get('bucketId'),
+            "assignedTo": req_body.get('assignedTo', []),
+            "dueDate": req_body.get('dueDate'),
+            "percentComplete": req_body.get('percentComplete', 0),
+            "createdBy": "agent",
+            "createdAt": datetime.utcnow().isoformat()
+        }
+        
+        # Store task in Redis (primary storage)
+        from mcp_redis_config import get_redis_token_manager
+        redis_manager = get_redis_token_manager()
+        redis_client = redis_manager._client
+        
+        # Store task in Redis
+        redis_client.set(
+            f"annika:tasks:{task['id']}",
+            json.dumps(task),
+            ex=86400  # 24 hour expiry
+        )
+        
+        # Also publish notification
+        redis_client.publish(
+            "annika:tasks:updates",
+            json.dumps({
+                "action": "created",
+                "task": task,
+                "source": "agent"
+            })
+        )
+        
+        return func.HttpResponse(
+            json.dumps({
+                "status": "created",
+                "task": task,
+                "message": "Task will sync to Planner immediately"
+            }),
+            status_code=201,
+            mimetype="application/json"
+        )
+        
     except Exception as e:
         return func.HttpResponse(
             f"Error: {str(e)}",

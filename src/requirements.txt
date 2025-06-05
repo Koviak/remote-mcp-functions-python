@@ -8,5 +8,5 @@ azure-identity
 
 requests
 
-redis
+redis[asyncio]>=4.5.0
 
