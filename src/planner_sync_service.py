@@ -180,8 +180,8 @@ class PlannerSyncService:
                 task["plannerId"] = planner_id
                 await self.redis_client.set(
                     f"annika:tasks:{redis_id}",
-                    json.dumps(task),
-                    ex=86400  # 24 hour expiry
+                    json.dumps(task)
+                    # No expiry - tasks persist until completed/deleted
                 )
                 
                 logger.info(f"✅ Task uploaded to Planner: {planner_id}")
@@ -240,7 +240,7 @@ class PlannerSyncService:
             current_task = response.json()
             etag = current_task.get("@odata.etag")
             
-            # Prepare update data
+            # Prepare update data with all available fields
             update_data = {}
             
             if "title" in task:
@@ -251,6 +251,15 @@ class PlannerSyncService:
                 
             if "dueDate" in task:
                 update_data["dueDateTime"] = task["dueDate"] + "T00:00:00Z"
+                
+            if "bucketId" in task:
+                update_data["bucketId"] = task["bucketId"]
+                
+            if "priority" in task:
+                update_data["priority"] = task["priority"]
+                
+            if "startDateTime" in task:
+                update_data["startDateTime"] = task["startDateTime"]
             
             # Update Planner
             headers = {
@@ -471,7 +480,7 @@ class PlannerSyncService:
             f"New task from Planner: {planner_task.get('title')}"
         )
         
-        # Create Redis task
+        # Create Redis task with all fields
         redis_id = f"planner-{planner_task['id']}"
         redis_task = {
             "id": redis_id,
@@ -482,18 +491,29 @@ class PlannerSyncService:
             "percentComplete": planner_task.get("percentComplete", 0),
             "createdBy": "human",
             "createdDateTime": planner_task.get("createdDateTime"),
-            "assignedTo": list(planner_task.get("assignments", {}).keys())
+            "completedDateTime": planner_task.get("completedDateTime"),
+            "assignedTo": list(planner_task.get("assignments", {}).keys()),
+            "priority": planner_task.get("priority"),
+            "orderHint": planner_task.get("orderHint"),
+            "hasDescription": planner_task.get("hasDescription", False),
+            "previewType": planner_task.get("previewType"),
+            "referenceCount": planner_task.get("referenceCount", 0),
+            "checklistItemCount": planner_task.get("checklistItemCount", 0),
+            "activeChecklistItemCount": planner_task.get(
+                "activeChecklistItemCount", 0
+            ),
+            "conversationThreadId": planner_task.get("conversationThreadId"),
+            "startDateTime": planner_task.get("startDateTime")
         }
         
         # Extract due date if present
         if planner_task.get("dueDateTime"):
             redis_task["dueDate"] = planner_task["dueDateTime"].split("T")[0]
         
-        # Store in Redis
+        # Store in Redis (no expiry)
         await self.redis_client.set(
             f"annika:tasks:{redis_id}",
-            json.dumps(redis_task),
-            ex=86400
+            json.dumps(redis_task)
         )
         
         # Store mapping
@@ -533,7 +553,7 @@ class PlannerSyncService:
         if redis_task_json:
             redis_task = json.loads(redis_task_json)
             
-            # Update fields
+            # Update all fields
             redis_task["title"] = planner_task.get("title", "")
             redis_task["percentComplete"] = planner_task.get(
                 "percentComplete", 0
@@ -541,17 +561,29 @@ class PlannerSyncService:
             redis_task["assignedTo"] = list(
                 planner_task.get("assignments", {}).keys()
             )
+            redis_task["bucketId"] = planner_task.get("bucketId")
+            redis_task["priority"] = planner_task.get("priority")
+            redis_task["orderHint"] = planner_task.get("orderHint")
+            redis_task["hasDescription"] = planner_task.get("hasDescription", False)
+            redis_task["previewType"] = planner_task.get("previewType")
+            redis_task["referenceCount"] = planner_task.get("referenceCount", 0)
+            redis_task["checklistItemCount"] = planner_task.get("checklistItemCount", 0)
+            redis_task["activeChecklistItemCount"] = planner_task.get(
+                "activeChecklistItemCount", 0
+            )
+            redis_task["conversationThreadId"] = planner_task.get("conversationThreadId")
+            redis_task["completedDateTime"] = planner_task.get("completedDateTime")
+            redis_task["startDateTime"] = planner_task.get("startDateTime")
             
             if planner_task.get("dueDateTime"):
                 redis_task["dueDate"] = (
                     planner_task["dueDateTime"].split("T")[0]
                 )
             
-            # Store updated task
+            # Store updated task (no expiry)
             await self.redis_client.set(
                 f"annika:tasks:{redis_id}",
-                json.dumps(redis_task),
-                ex=86400
+                json.dumps(redis_task)
             )
             
             # Notify agents

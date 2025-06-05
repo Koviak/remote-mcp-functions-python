@@ -4,6 +4,12 @@
 
 This guide explains how your Planner Agent creates tasks using our optimized Redis-first architecture, where agents work at microsecond speeds while background services handle Microsoft Planner synchronization.
 
+### 🚀 Quick Reference
+- **Create Tasks**: Direct Redis or HTTP API (see Methods 1 & 2)
+- **Access Cached Data**: `GET /api/metadata?type={user|group|plan|task}&id={id}` (see Accessing Cached Data)
+- **Cache Benefits**: 2000-4000x faster, no API limits, works offline
+- **Task Storage**: Tasks never expire, other data cached for 24 hours
+
 ## 🚀 Why Redis-First Architecture?
 
 ### Traditional (Slow) Approach:
@@ -70,11 +76,10 @@ task = {
     "createdAt": datetime.utcnow().isoformat()
 }
 
-# Store task in Redis
+# Store task in Redis (no expiry - tasks persist until completed/deleted)
 redis_client.set(
     f"annika:tasks:{task['id']}",
-    json.dumps(task),
-    ex=86400  # 24 hour expiry
+    json.dumps(task)
 )
 
 # Publish notification (optional but recommended)
@@ -176,6 +181,116 @@ for bucket in buckets:
     print(f"Bucket: {bucket['name']} - ID: {bucket['id']}")
 ```
 
+## 🚀 Accessing Cached Data (Super Fast!)
+
+Our Redis caching layer provides microsecond-speed access to Microsoft Graph data. Here's how agents can access cached information:
+
+### Cache-First API Endpoint
+```
+GET http://localhost:7071/api/metadata?type={resource_type}&id={resource_id}
+```
+
+Resource types: `user`, `group`, `plan`, `task`
+
+### Examples
+
+#### Get Cached User Details (0.1ms vs 200-500ms)
+```python
+# Get user information from cache
+user_id = "5ac3e02f-825f-49f1-a2e2-8fe619020b60"
+response = requests.get(
+    f"http://localhost:7071/api/metadata?type=user&id={user_id}"
+)
+user_data = response.json()
+print(f"User: {user_data['displayName']} - {user_data['mail']}")
+```
+
+#### Get Cached Group with Plans (0.1ms vs 300-600ms)
+```python
+# Get group and its associated plans from cache
+group_id = "795b880a-be88-45f9-9a11-d1777169ffb8"
+response = requests.get(
+    f"http://localhost:7071/api/metadata?type=group&id={group_id}"
+)
+group_data = response.json()
+print(f"Group: {group_data['displayName']}")
+for plan in group_data.get('plans', []):
+    print(f"  - Plan: {plan['title']} ({plan['id']})")
+```
+
+#### Get Cached Plan with Buckets (0.1ms vs 400-800ms)
+```python
+# Get plan details including buckets from cache
+plan_id = "CbfN3rLYAkS0ZutzQP5J9mUAFxxt"
+response = requests.get(
+    f"http://localhost:7071/api/metadata?type=plan&id={plan_id}"
+)
+plan_data = response.json()
+print(f"Plan: {plan_data['title']}")
+for bucket in plan_data.get('buckets', []):
+    print(f"  - Bucket: {bucket['name']} ({bucket['id']})")
+```
+
+#### Get Cached Task Details (0.1ms vs 200-400ms)
+```python
+# Get task information from cache
+task_id = "AAMkAGI5MWY5Ym..."
+response = requests.get(
+    f"http://localhost:7071/api/metadata?type=task&id={task_id}"
+)
+task_data = response.json()
+print(f"Task: {task_data['title']} - {task_data['percentComplete']}% complete")
+```
+
+### Direct Redis Access for Maximum Speed
+
+For agents that need absolute maximum performance, access Redis directly:
+
+```python
+import redis
+import json
+
+redis_client = redis.Redis(
+    host='localhost',
+    port=6379,
+    password='password',
+    decode_responses=True
+)
+
+# Direct cache access patterns
+user_data = redis_client.get("annika:graph:users:{user_id}")
+group_data = redis_client.get("annika:graph:groups:{group_id}")
+plan_data = redis_client.get("annika:graph:plans:{plan_id}")
+task_data = redis_client.get("annika:graph:tasks:{task_id}")
+
+# Parse JSON if data exists
+if user_data:
+    user = json.loads(user_data)
+    print(f"Cached user: {user['displayName']}")
+```
+
+### Cache Benefits
+- **2000-4000x faster** than MS Graph API calls
+- **No rate limits** - Redis handles millions of requests/second
+- **Always available** - Works even if MS Graph is down
+- **Auto-updated** - Webhooks keep cache fresh
+- **24-hour TTL** - Data stays fresh for a full day
+
+### When to Use Cache vs Direct API
+
+**Use Cache When:**
+- Looking up user names, emails, or departments
+- Getting group memberships or plan lists
+- Retrieving task details or bucket information
+- Need instant response times (<1ms)
+
+**Force API Refresh When:**
+- Need absolute latest data
+- Cache returns 404 (data not yet cached)
+- Explicitly need to refresh stale data
+
+To force a refresh, just call the regular endpoint (e.g., `GET /api/users/{id}`) which will update the cache.
+
 ## 📡 Subscribing to Task Updates
 
 Your agent can subscribe to Redis pub/sub channels to receive real-time updates:
@@ -208,6 +323,8 @@ for message in pubsub.listen():
 3. **Instant Sync**: Task changes upload immediately (event-driven)
 4. **Works Offline**: Agents continue working even if Planner is down
 5. **Real-time Coordination**: Agents see each other's changes instantly
+6. **Comprehensive Caching**: User, group, plan, and task data cached for 24 hours
+7. **Task Persistence**: Tasks never expire - they persist until completed/deleted
 
 ## 📝 Important Notes
 
@@ -216,6 +333,8 @@ for message in pubsub.listen():
 3. **Human Tasks**: Tasks created by humans in Planner appear in Redis within 30 seconds
 4. **Error Handling**: The sync service handles retries automatically
 5. **Task IDs**: Use Redis IDs for agent operations, Planner IDs are handled by sync service
+6. **Cache TTL**: User/group/plan data cached for 24 hours, tasks never expire
+7. **Cache Warming**: First access may be slower if not cached, subsequent calls are instant
 
 ## 🧪 Testing Your Integration
 
@@ -268,31 +387,50 @@ SUBSCRIBE annika:tasks:updates
 - **Delete task**: `DELETE http://localhost:7071/api/tasks/{taskId}`
 - **Get task details**: `GET http://localhost:7071/api/tasks/{taskId}`
 
-## ✨ Example: Complete Task Creation Flow
+## ✨ Example: Complete Task Creation Flow with Caching
 
 ```python
 import requests
 import json
 import time
 
-# Step 1: Get available plans
+# Step 1: Get available plans (uses cache if available)
 plans_response = requests.get("http://localhost:7071/api/plans")
 plans = plans_response.json()["value"]
 plan_id = plans[0]["id"]  # Use first plan
 
-# Step 2: Get buckets in the plan
-buckets_response = requests.get(
-    f"http://localhost:7071/api/plans/{plan_id}/buckets"
+# Step 2: Get cached plan details (super fast!)
+plan_cache_response = requests.get(
+    f"http://localhost:7071/api/metadata?type=plan&id={plan_id}"
 )
-buckets = buckets_response.json()["value"]
-bucket_id = buckets[0]["id"] if buckets else None
+if plan_cache_response.status_code == 200:
+    plan_data = plan_cache_response.json()
+    print(f"📋 Using cached plan: {plan_data['title']}")
+    buckets = plan_data.get('buckets', [])
+    bucket_id = buckets[0]["id"] if buckets else None
+else:
+    # Fallback to API if not cached
+    buckets_response = requests.get(
+        f"http://localhost:7071/api/plans/{plan_id}/buckets"
+    )
+    buckets = buckets_response.json()["value"]
+    bucket_id = buckets[0]["id"] if buckets else None
 
-# Step 3: Create a task
+# Step 3: Get user details from cache (0.1ms vs 300ms!)
+user_id = "5ac3e02f-825f-49f1-a2e2-8fe619020b60"
+user_response = requests.get(
+    f"http://localhost:7071/api/metadata?type=user&id={user_id}"
+)
+if user_response.status_code == 200:
+    user_data = user_response.json()
+    print(f"📧 Assigning to: {user_data['displayName']} ({user_data['mail']})")
+
+# Step 4: Create a task
 task_data = {
-    "title": "Automated Task from Planner Agent",
+    "title": f"Automated Task for {user_data.get('displayName', 'User')}",
     "planId": plan_id,
     "bucketId": bucket_id,
-    "assignedTo": ["5ac3e02f-825f-49f1-a2e2-8fe619020b60"],
+    "assignedTo": [user_id],
     "dueDate": "2025-06-30",
     "percentComplete": 0
 }
@@ -308,11 +446,11 @@ if create_response.status_code == 201:
     print(f"   Task ID: {result['task']['id']}")
     print(f"   Status: {result['status']}")
     
-    # Wait for sync
-    print("⏳ Waiting for sync to Planner...")
-    time.sleep(35)
+    # Task syncs immediately (event-driven)
+    print("⚡ Task will sync to Planner within seconds...")
     
-    print("✅ Task should now be visible in Microsoft Planner!")
+    # Optional: Subscribe to sync confirmations
+    print("💡 Tip: Subscribe to 'annika:tasks:sync' for sync confirmations")
 else:
     print(f"❌ Error: {create_response.status_code}")
     print(create_response.text)

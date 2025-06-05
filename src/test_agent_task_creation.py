@@ -102,11 +102,10 @@ def test_redis_direct_method():
         
         print(f"📝 Creating task: {task['title']}")
         
-        # Store task in Redis (primary storage)
+        # Store task in Redis (primary storage, no expiry)
         redis_client.set(
             f"annika:tasks:{task['id']}",
-            json.dumps(task),
-            ex=86400  # 24 hour expiry
+            json.dumps(task)
         )
         print(f"✅ Task stored in Redis: annika:tasks:{task['id']}")
         

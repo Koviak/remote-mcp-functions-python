@@ -1,7 +1,7 @@
 """
 Microsoft Graph Metadata Manager
 
-Manages caching and retrieval of MS Graph metadata (users, groups, plans) in Redis
+Manages caching and retrieval of MS Graph metadata in Redis
 """
 
 import os
@@ -22,11 +22,12 @@ REDIS_GROUP_KEY = "annika:graph:groups:{group_id}"
 REDIS_PLAN_KEY = "annika:graph:plans:{plan_id}"
 REDIS_TASK_KEY = "annika:graph:tasks:{task_id}"
 REDIS_BUCKET_KEY = "annika:graph:buckets:{bucket_id}"
-REDIS_METADATA_TTL = 3600  # 1 hour cache
+REDIS_METADATA_TTL = 86400  # 24 hour cache
 
 # Pub/Sub channels
 TASK_UPDATE_CHANNEL = "annika:pubsub:tasks"
 METADATA_UPDATE_CHANNEL = "annika:pubsub:metadata"
+
 
 class GraphMetadataManager:
     """Manages Microsoft Graph metadata in Redis"""

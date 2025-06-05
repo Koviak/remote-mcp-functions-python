@@ -6,6 +6,8 @@ import azure.functions as func
 import logging
 from typing import Dict, Any
 from datetime import datetime
+from graph_metadata_manager import GraphMetadataManager
+import asyncio
 
 # Global app instance - will be set by register_http_endpoints
 app = None
@@ -14,6 +16,16 @@ app = None
 GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
 
 logger = logging.getLogger(__name__)
+
+# Global metadata manager instance
+metadata_manager = None
+
+def get_metadata_manager():
+    """Get or create the metadata manager instance"""
+    global metadata_manager
+    if metadata_manager is None:
+        metadata_manager = GraphMetadataManager()
+    return metadata_manager
 
 
 def get_access_token():
@@ -2671,6 +2683,27 @@ def get_user_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
+        # Try to get from cache first
+        manager = get_metadata_manager()
+        
+        # Run async code in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            cached_data = loop.run_until_complete(
+                manager.get_cached_metadata("user", user_id)
+            )
+            
+            if cached_data:
+                return func.HttpResponse(
+                    json.dumps(cached_data),
+                    status_code=200,
+                    mimetype="application/json"
+                )
+        finally:
+            loop.close()
+        
+        # If not cached or cache miss, fetch from API
         token = get_access_token()
         if not token:
             return func.HttpResponse(
@@ -2690,8 +2723,20 @@ def get_user_http(req: func.HttpRequest) -> func.HttpResponse:
         )
         
         if response.status_code == 200:
+            user_data = response.json()
+            
+            # Cache the result
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(
+                    manager.cache_user_metadata(user_id)
+                )
+            finally:
+                loop.close()
+            
             return func.HttpResponse(
-                response.text,
+                json.dumps(user_data),
                 status_code=200,
                 mimetype="application/json"
             )
@@ -4015,9 +4060,40 @@ def process_graph_notification(notification: Dict[str, Any], redis_manager):
     
     redis_client.publish(channel, json.dumps(notification_data))
     
+    # Update cache based on resource type
+    manager = get_metadata_manager()
+    
+    # Cache updates for different resource types
+    if "/users/" in resource:
+        user_id = resource.split("/users/")[1].split("/")[0]
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(manager.cache_user_metadata(user_id))
+        finally:
+            loop.close()
+            
+    elif "/groups/" in resource:
+        group_id = resource.split("/groups/")[1].split("/")[0]
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(manager.cache_group_metadata(group_id))
+        finally:
+            loop.close()
+    
     # For planner tasks, also sync to task cache
     if "/planner/tasks" in resource and change_type in ["created", "updated"]:
         sync_planner_task(resource, resource_data, redis_manager)
+        # Also cache task metadata
+        task_id = resource_data.get("id")
+        if task_id:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(manager.cache_task_metadata(task_id))
+            finally:
+                loop.close()
 
 
 def sync_planner_task(resource: str, resource_data: Dict, redis_manager):
@@ -4154,11 +4230,10 @@ def create_agent_task_http(req: func.HttpRequest) -> func.HttpResponse:
         redis_manager = get_redis_token_manager()
         redis_client = redis_manager._client
         
-        # Store task in Redis
+        # Store task in Redis (no expiry)
         redis_client.set(
             f"annika:tasks:{task['id']}",
-            json.dumps(task),
-            ex=86400  # 24 hour expiry
+            json.dumps(task)
         )
         
         # Also publish notification
