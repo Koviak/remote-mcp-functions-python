@@ -43,15 +43,40 @@ try:
 except Exception as e:
     logging.error(f"Failed to start token refresh service: {e}")
 
-# Start Enhanced Planner Sync Service (for local development)
+# Start Enhanced Local Development Services (includes everything)
 if os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None:
     # Only start in local development
     try:
-        from planner_sync_service import PlannerSyncService
+        from startup_local_services import start_local_services
         import threading
         import asyncio
         
-        # Start sync service in background thread
+        # Start all local services (ngrok, webhooks, sync) in background
+        def run_local_services():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(start_local_services())
+            # Keep the loop running for monitoring
+            loop.run_forever()
+        
+        services_thread = threading.Thread(
+            target=run_local_services,
+            daemon=True,
+            name="LocalServices"
+        )
+        services_thread.start()
+        logging.info("🚀 Starting local development services...")
+        logging.info(
+            "This includes: ngrok, webhooks, planner sync, monitoring"
+        )
+        
+        # Give services time to start
+        import time
+        time.sleep(3)
+        
+        # Also start the planner sync service
+        from planner_sync_service import PlannerSyncService
+        
         def run_planner_sync():
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -60,23 +85,25 @@ if os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None:
         
         sync_thread = threading.Thread(
             target=run_planner_sync, 
-            daemon=True
+            daemon=True,
+            name="PlannerSync"
         )
         sync_thread.start()
-        logging.info("Enhanced Planner Sync Service started")
-        logging.info("- Uploads: Event-driven (immediate)")
-        logging.info("- Downloads: Polling (30 seconds)")
-        
-        # Note: Webhook subscriptions are now created by setup_local_webhooks.py
-        # Don't create them automatically here to avoid duplicates
+        logging.info("✅ Planner Sync Service started")
         
     except Exception as e:
-        logging.error(f"Failed to start sync service: {e}")
+        logging.error(f"Failed to start local services: {e}")
+        logging.error(
+            "You may need to manually start ngrok and "
+            "run setup_local_webhooks.py"
+        )
 
 # Constants for the Azure Blob Storage container, file, and blob path
 _SNIPPET_NAME_PROPERTY_NAME = "snippetname"
 _SNIPPET_PROPERTY_NAME = "snippet"
-_BLOB_PATH = "snippets/{mcptoolargs." + _SNIPPET_NAME_PROPERTY_NAME + "}.json"
+_BLOB_PATH = (
+    "snippets/{mcptoolargs." + _SNIPPET_NAME_PROPERTY_NAME + "}.json"
+)
 
 
 class ToolProperty:
@@ -95,15 +122,27 @@ class ToolProperty:
 
 # Define the tool properties using the ToolProperty class
 tool_properties_save_snippets_object = [
-    ToolProperty(_SNIPPET_NAME_PROPERTY_NAME, "string", "The name of the snippet."),
-    ToolProperty(_SNIPPET_PROPERTY_NAME, "string", "The content of the snippet."),
+    ToolProperty(
+        _SNIPPET_NAME_PROPERTY_NAME, "string", "The name of the snippet."
+    ),
+    ToolProperty(
+        _SNIPPET_PROPERTY_NAME, "string", "The content of the snippet."
+    ),
 ]
 
-tool_properties_get_snippets_object = [ToolProperty(_SNIPPET_NAME_PROPERTY_NAME, "string", "The name of the snippet.")]
+tool_properties_get_snippets_object = [
+    ToolProperty(
+        _SNIPPET_NAME_PROPERTY_NAME, "string", "The name of the snippet."
+    )
+]
 
 # Convert the tool properties to JSON
-tool_properties_save_snippets_json = json.dumps([prop.to_dict() for prop in tool_properties_save_snippets_object])
-tool_properties_get_snippets_json = json.dumps([prop.to_dict() for prop in tool_properties_get_snippets_object])
+tool_properties_save_snippets_json = json.dumps(
+    [prop.to_dict() for prop in tool_properties_save_snippets_object]
+)
+tool_properties_get_snippets_json = json.dumps(
+    [prop.to_dict() for prop in tool_properties_get_snippets_object]
+)
 
 
 def _acquire_downstream_token() -> str | None:
