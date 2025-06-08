@@ -50,6 +50,16 @@ class GraphWebhookHandler:
             if not self._validate_notification(notification):
                 logger.warning("Invalid webhook notification received")
                 return False
+
+            # Lifecycle events don't include changeType
+            lifecycle_event = notification.get("lifecycleEvent")
+            if lifecycle_event:
+                sub_id = notification.get("subscriptionId")
+                logger.info(
+                    f"🔔 Lifecycle event '{lifecycle_event}' for subscription {sub_id}"
+                )
+                await self._log_webhook_notification(notification)
+                return True
             
             # Extract notification details
             change_type = notification.get("changeType")
@@ -92,21 +102,27 @@ class GraphWebhookHandler:
     
     def _validate_notification(self, notification: Dict) -> bool:
         """Validate webhook notification structure."""
+        # Lifecycle events (e.g., reauthorizationRequired) may omit changeType
+        if "lifecycleEvent" in notification:
+            if "resource" not in notification:
+                logger.warning("Missing required field: resource")
+                return False
+            return True
+
         required_fields = ["changeType", "resource"]
-        
+
         for field in required_fields:
             if field not in notification:
                 logger.warning(f"Missing required field: {field}")
                 return False
-        
-        # Validate change type
+
         valid_change_types = ["created", "updated", "deleted"]
         if notification["changeType"] not in valid_change_types:
             logger.warning(
                 f"Invalid change type: {notification['changeType']}"
             )
             return False
-        
+
         return True
     
     async def _handle_planner_task_notification(self, notification: Dict):
@@ -446,7 +462,8 @@ class GraphWebhookHandler:
                 "resource": notification.get("resource"),
                 "resource_id": notification.get("resourceData", {}).get("id"),
                 "client_state": notification.get("clientState"),
-                "subscription_id": notification.get("subscriptionId")
+                "subscription_id": notification.get("subscriptionId"),
+                "lifecycle_event": notification.get("lifecycleEvent")
             }
             
             await self.redis_client.lpush(
