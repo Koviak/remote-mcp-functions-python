@@ -453,10 +453,17 @@ class GraphWebhookHandler:
                 "annika:webhook:log",
                 json.dumps(log_entry)
             )
-            
+
             # Keep only last 500 webhook logs
             await self.redis_client.ltrim("annika:webhook:log", 0, 499)
-            
+
+            # Store notifications with a 1-hour TTL for monitoring
+            await self.redis_client.lpush(
+                "annika:webhooks:notifications",
+                json.dumps(log_entry)
+            )
+            await self.redis_client.expire("annika:webhooks:notifications", 3600)
+
         except Exception as e:
             logger.error(f"Error logging webhook notification: {e}")
     
