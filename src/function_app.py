@@ -77,6 +77,32 @@ try:
 except Exception as e:
     logger.error(f"Failed to start token refresh service: {e}")
 
+# Initialize webhook handler for V5 sync service
+try:
+    from webhook_handler import initialize_webhook_handler
+    
+    def init_webhook_handler():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(initialize_webhook_handler())
+            logger.info("✅ Webhook handler initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize webhook handler: {e}")
+        finally:
+            loop.close()
+    
+    # Initialize in background thread
+    webhook_thread = threading.Thread(
+        target=init_webhook_handler,
+        daemon=True,
+        name="WebhookInit"
+    )
+    webhook_thread.start()
+    
+except Exception as e:
+    logger.error(f"Failed to start webhook handler initialization: {e}")
+
 
 # Start Enhanced Local Development Services (includes everything)
 if os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None:
@@ -108,89 +134,33 @@ if os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None:
         
         # Check configuration before starting sync
         if ensure_configuration():
-            # Import the NEW sync service
-            from planner_sync_service_v2 import AnnikaPlannerSync
-            
-            # Global reference for monitoring
-            sync_service = None
-            sync_restart_count = 0
-            
-            def run_planner_sync_with_monitoring():
-                """Run sync service with automatic restart on failure."""
-                global sync_service, sync_restart_count
-                
-                while True:
-                    try:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        
-                        sync_service = AnnikaPlannerSync()
-                        logger.info(
-                            f"🔄 Starting Annika-Planner Sync "
-                            f"(attempt {sync_restart_count + 1})"
-                        )
-                        
-                        # This will run until stopped or error
-                        loop.run_until_complete(sync_service.start())
-                        
-                    except KeyboardInterrupt:
-                        logger.info("Sync service stopped by user")
-                        break
-                    except Exception as e:
-                        sync_restart_count += 1
-                        logger.error(
-                            f"Sync service crashed: {e}. "
-                            f"Restarting in 30 seconds..."
-                        )
-                        
-                        # Clean up
-                        if sync_service:
-                            try:
-                                loop.run_until_complete(sync_service.stop())
-                            except Exception:
-                                pass
-                        
-                        # Wait before restart
-                        time.sleep(30)
-                        
-                        # Give up after too many failures
-                        if sync_restart_count > 10:
-                            logger.error(
-                                "Sync service failed too many times. "
-                                "Giving up."
-                            )
-                            break
-            
-            sync_thread = threading.Thread(
-                target=run_planner_sync_with_monitoring, 
-                daemon=True,
-                name="AnnikaPlannerSync"
+            logger.info(
+                "✅ Configuration validated. Sync service will be started "
+                "by start_all_services.py"
             )
-            sync_thread.start()
-            logger.info("✅ Annika-Planner Sync Service started with monitoring")
+            logger.info(
+                "Note: Function app now uses start_all_services.py for "
+                "comprehensive service management"
+            )
             
             # Add health check endpoint
             @app.route(route="health/sync")
-            def sync_health_check(req: func.HttpRequest) -> func.HttpResponse:
+            def sync_health_check(
+                req: func.HttpRequest
+            ) -> func.HttpResponse:
                 """Check sync service health."""
-                global sync_service, sync_restart_count
                 
                 status = {
-                    "running": sync_service is not None and sync_service.running,
-                    "restart_count": sync_restart_count,
+                    "running": False,
+                    "restart_count": 0,
                     "redis_connected": False,
-                    "last_sync": None
+                    "last_sync": None,
+                    "message": (
+                        "Sync service managed by start_all_services.py"
+                    )
                 }
                 
-                if sync_service and sync_service.running:
-                    # Check Redis connection
-                    try:
-                        # This is a simplified check
-                        status["redis_connected"] = True
-                    except Exception:
-                        pass
-                
-                status_code = 200 if status["running"] else 503
+                status_code = 200
                 
                 return func.HttpResponse(
                     json.dumps(status),
@@ -289,6 +259,14 @@ def _acquire_downstream_token() -> str | None:
         logging.warning("OBO settings are incomplete")
         return None
 
+    # Type check to satisfy mypy
+    if not isinstance(tenant_id, str) or not isinstance(client_id, str):
+        logging.warning("Invalid tenant_id or client_id type")
+        return None
+    if not isinstance(scope, str):
+        logging.warning("Invalid scope type")
+        return None
+
     credential = OnBehalfOfCredential(
         tenant_id=tenant_id,
         client_id=client_id,
@@ -307,7 +285,7 @@ def _acquire_downstream_token() -> str | None:
     description="Hello world.",
     toolProperties="[]",
 )
-def hello_mcp(context) -> None:
+def hello_mcp(context) -> str:
     """
     A simple function that returns a greeting message.
 

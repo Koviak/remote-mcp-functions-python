@@ -332,6 +332,282 @@ class GraphSubscriptionManager:
             logger.error(f"Failed to list subscriptions: {response.text}")
             return []
     
+    def create_teams_chat_message_subscriptions(self) -> Dict[str, str]:
+        """Create subscriptions for Teams chat messages that Annika is part of"""
+        token = get_agent_token()
+        if not token:
+            logger.error("Failed to get agent token for chat message subscriptions")
+            return {}
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        created_subscriptions = {}
+        
+        # 1. Subscribe to all chats Annika is part of (user-level)
+        user_chats_sub = {
+            "changeType": "created,updated",
+            "notificationUrl": WEBHOOK_URL,
+            "resource": "/me/chats/getAllMessages",
+            "expirationDateTime": (
+                datetime.utcnow() + timedelta(hours=23)
+            ).isoformat() + "Z",  # Max 24 hours for chat messages
+            "clientState": "annika_user_chat_messages",
+            "lifecycleNotificationUrl": WEBHOOK_URL  # Required for >1 hour
+        }
+        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/subscriptions",
+            headers=headers,
+            json=user_chats_sub,
+            timeout=10
+        )
+        
+        if response.status_code == 201:
+            sub = response.json()
+            subscription_id = sub["id"]
+            created_subscriptions["user_chat_messages"] = subscription_id
+            
+            # Store in Redis
+            self.redis_manager._client.setex(
+                f"annika:subscriptions:{subscription_id}",
+                int(timedelta(hours=23).total_seconds()),
+                json.dumps(sub)
+            )
+            
+            logger.info(
+                f"✅ Created user chat messages subscription: {subscription_id}"
+            )
+        else:
+            logger.error(
+                f"❌ Failed to create user chat messages subscription: "
+                f"{response.text}"
+            )
+        
+        # 2. Subscribe to all chats in the tenant (if app permissions)
+        try:
+            tenant_chats_sub = {
+                "changeType": "created,updated",
+                "notificationUrl": WEBHOOK_URL,
+                "resource": "/chats/getAllMessages",
+                "expirationDateTime": (
+                    datetime.utcnow() + timedelta(hours=23)
+                ).isoformat() + "Z",
+                "clientState": "annika_tenant_chat_messages",
+                "lifecycleNotificationUrl": WEBHOOK_URL
+            }
+            
+            response = requests.post(
+                f"{GRAPH_API_ENDPOINT}/subscriptions",
+                headers=headers,
+                json=tenant_chats_sub,
+                timeout=10
+            )
+            
+            if response.status_code == 201:
+                sub = response.json()
+                subscription_id = sub["id"]
+                created_subscriptions["tenant_chat_messages"] = subscription_id
+                
+                self.redis_manager._client.setex(
+                    f"annika:subscriptions:{subscription_id}",
+                    int(timedelta(hours=23).total_seconds()),
+                    json.dumps(sub)
+                )
+                
+                logger.info(
+                    f"✅ Created tenant chat messages subscription: "
+                    f"{subscription_id}"
+                )
+            else:
+                logger.warning(
+                    f"⚠️ Could not create tenant chat messages subscription "
+                    f"(may need app permissions): {response.status_code}"
+                )
+        except Exception as e:
+            logger.warning(
+                f"⚠️ Tenant chat subscription failed "
+                f"(expected if no app permissions): {e}"
+            )
+        
+        # 3. Subscribe to specific chats Annika is part of
+        try:
+            # Get Annika's chats first
+            chats_response = requests.get(
+                f"{GRAPH_API_ENDPOINT}/me/chats",
+                headers=headers,
+                timeout=10
+            )
+            
+            if chats_response.status_code == 200:
+                chats = chats_response.json().get("value", [])
+                logger.info(f"Found {len(chats)} chats for Annika")
+                
+                # Subscribe to messages in each chat (limit to 10 most recent)
+                for chat in chats[:10]:
+                    chat_id = chat["id"]
+                    chat_sub = {
+                        "changeType": "created,updated",
+                        "notificationUrl": WEBHOOK_URL,
+                        "resource": f"/chats/{chat_id}/messages",
+                        "expirationDateTime": (
+                            datetime.utcnow() + timedelta(hours=23)
+                        ).isoformat() + "Z",
+                        "clientState": f"annika_chat_{chat_id[:8]}",
+                        "lifecycleNotificationUrl": WEBHOOK_URL
+                    }
+                    
+                    response = requests.post(
+                        f"{GRAPH_API_ENDPOINT}/subscriptions",
+                        headers=headers,
+                        json=chat_sub,
+                        timeout=10
+                    )
+                    
+                    if response.status_code == 201:
+                        sub = response.json()
+                        subscription_id = sub["id"]
+                        created_subscriptions[f"chat_{chat_id[:8]}"] = subscription_id
+                        
+                        self.redis_manager._client.setex(
+                            f"annika:subscriptions:{subscription_id}",
+                            int(timedelta(hours=23).total_seconds()),
+                            json.dumps(sub)
+                        )
+                        
+                        logger.info(f"✅ Created chat subscription for {chat_id[:8]}: {subscription_id}")
+                    else:
+                        logger.warning(f"⚠️ Failed to create subscription for chat {chat_id[:8]}: {response.status_code}")
+            
+        except Exception as e:
+            logger.error(f"❌ Error setting up individual chat subscriptions: {e}")
+        
+        return created_subscriptions
+
+    def create_teams_channel_message_subscriptions(self) -> Dict[str, str]:
+        """Create subscriptions for Teams channel messages in teams Annika is part of"""
+        token = get_agent_token()
+        if not token:
+            return {}
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        created_subscriptions = {}
+        
+        # 1. Subscribe to all channel messages in the tenant (if we have permissions)
+        try:
+            tenant_channels_sub = {
+                "changeType": "created,updated",
+                "notificationUrl": WEBHOOK_URL,
+                "resource": "/teams/getAllMessages",
+                "expirationDateTime": (
+                    datetime.utcnow() + timedelta(hours=23)
+                ).isoformat() + "Z",
+                "clientState": "annika_tenant_channel_messages",
+                "lifecycleNotificationUrl": WEBHOOK_URL
+            }
+            
+            response = requests.post(
+                f"{GRAPH_API_ENDPOINT}/subscriptions",
+                headers=headers,
+                json=tenant_channels_sub,
+                timeout=10
+            )
+            
+            if response.status_code == 201:
+                sub = response.json()
+                subscription_id = sub["id"]
+                created_subscriptions["tenant_channel_messages"] = subscription_id
+                
+                self.redis_manager._client.setex(
+                    f"annika:subscriptions:{subscription_id}",
+                    int(timedelta(hours=23).total_seconds()),
+                    json.dumps(sub)
+                )
+                
+                logger.info(f"✅ Created tenant channel messages subscription: {subscription_id}")
+            else:
+                logger.warning(f"⚠️ Could not create tenant channel messages subscription: {response.status_code}")
+        except Exception as e:
+            logger.warning(f"⚠️ Tenant channel subscription failed: {e}")
+        
+        # 2. Subscribe to specific teams/channels Annika is part of
+        try:
+            # Get teams Annika is member of
+            teams_response = requests.get(
+                f"{GRAPH_API_ENDPOINT}/me/joinedTeams",
+                headers=headers,
+                timeout=10
+            )
+            
+            if teams_response.status_code == 200:
+                teams = teams_response.json().get("value", [])
+                logger.info(f"Found {len(teams)} teams for Annika")
+                
+                # Subscribe to messages in each team (limit to 5 teams)
+                for team in teams[:5]:
+                    team_id = team["id"]
+                    team_name = team.get("displayName", "Unknown")
+                    
+                    # Get channels for this team
+                    channels_response = requests.get(
+                        f"{GRAPH_API_ENDPOINT}/teams/{team_id}/channels",
+                        headers=headers,
+                        timeout=10
+                    )
+                    
+                    if channels_response.status_code == 200:
+                        channels = channels_response.json().get("value", [])
+                        
+                        # Subscribe to messages in each channel (limit to 3 channels per team)
+                        for channel in channels[:3]:
+                            channel_id = channel["id"]
+                            channel_name = channel.get("displayName", "Unknown")
+                            
+                            channel_sub = {
+                                "changeType": "created,updated",
+                                "notificationUrl": WEBHOOK_URL,
+                                "resource": f"/teams/{team_id}/channels/{channel_id}/messages",
+                                "expirationDateTime": (
+                                    datetime.utcnow() + timedelta(hours=23)
+                                ).isoformat() + "Z",
+                                "clientState": f"annika_team_{team_id[:8]}_channel_{channel_id[:8]}",
+                                "lifecycleNotificationUrl": WEBHOOK_URL
+                            }
+                            
+                            response = requests.post(
+                                f"{GRAPH_API_ENDPOINT}/subscriptions",
+                                headers=headers,
+                                json=channel_sub,
+                                timeout=10
+                            )
+                            
+                            if response.status_code == 201:
+                                sub = response.json()
+                                subscription_id = sub["id"]
+                                key = f"team_{team_id[:8]}_channel_{channel_id[:8]}"
+                                created_subscriptions[key] = subscription_id
+                                
+                                self.redis_manager._client.setex(
+                                    f"annika:subscriptions:{subscription_id}",
+                                    int(timedelta(hours=23).total_seconds()),
+                                    json.dumps(sub)
+                                )
+                                
+                                logger.info(f"✅ Created channel subscription for {team_name}/{channel_name}: {subscription_id}")
+                            else:
+                                logger.warning(f"⚠️ Failed to create subscription for {team_name}/{channel_name}: {response.status_code}")
+        
+        except Exception as e:
+            logger.error(f"❌ Error setting up team channel subscriptions: {e}")
+        
+        return created_subscriptions
+
     def setup_annika_subscriptions(self):
         """Set up all necessary subscriptions for Annika"""
         logger.info("Setting up Annika's webhook subscriptions...")
@@ -340,7 +616,17 @@ class GraphSubscriptionManager:
         self.create_user_subscription()
         self.create_event_subscription()
         
-        # 2. Get groups Annika is member of
+        # 2. Subscribe to Teams chat messages
+        logger.info("🔔 Setting up Teams chat message subscriptions...")
+        chat_subs = self.create_teams_chat_message_subscriptions()
+        logger.info(f"Created {len(chat_subs)} chat message subscriptions")
+        
+        # 3. Subscribe to Teams channel messages
+        logger.info("📺 Setting up Teams channel message subscriptions...")
+        channel_subs = self.create_teams_channel_message_subscriptions()
+        logger.info(f"Created {len(channel_subs)} channel message subscriptions")
+        
+        # 4. Get groups Annika is member of
         token = get_agent_token()
         if token:
             headers = {"Authorization": f"Bearer {token}"}

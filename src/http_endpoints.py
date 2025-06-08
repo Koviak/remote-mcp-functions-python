@@ -2089,7 +2089,14 @@ def register_http_endpoints(function_app):
         auth_level=func.AuthLevel.FUNCTION
     )(create_agent_task_http)
     
-    print("All 72 HTTP endpoints registered successfully!")
+    # Planner sync endpoints
+    app.route(
+        route="planner/poll",
+        methods=["POST"],
+        auth_level=func.AuthLevel.FUNCTION
+    )(trigger_planner_poll_http)
+    
+    print("All 73 HTTP endpoints registered successfully!")
 
 
 # Task Management HTTP Endpoints
@@ -4001,23 +4008,32 @@ def graph_webhook_http(req: func.HttpRequest) -> func.HttpResponse:
     # Process notifications
     try:
         body = req.get_json()
-        client_state = os.environ.get(
-            "GRAPH_WEBHOOK_CLIENT_STATE", "annika-secret"
-        )
         
         # Validate notifications
         notifications = body.get("value", [])
-        for notification in notifications:
-            if notification.get("clientState") != client_state:
-                logger.warning("Invalid client state in webhook")
-                return func.HttpResponse("Unauthorized", status_code=401)
         
-        # Process each notification
-        from mcp_redis_config import get_redis_token_manager
-        redis_manager = get_redis_token_manager()
+        # Import and use our new webhook handler
+        import asyncio
+        from webhook_handler import handle_graph_webhook
         
+        # Process each notification through our V5 handler
         for notification in notifications:
-            process_graph_notification(notification, redis_manager)
+            try:
+                # Run the async webhook handler
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    success = loop.run_until_complete(handle_graph_webhook(notification))
+                    if success:
+                        logger.info(f"Successfully processed webhook notification: {notification.get('changeType')} for {notification.get('resource')}")
+                    else:
+                        logger.warning(f"Failed to process webhook notification: {notification}")
+                finally:
+                    loop.close()
+                    
+            except Exception as e:
+                logger.error(f"Error processing individual notification: {e}")
+                # Continue processing other notifications
         
         return func.HttpResponse("OK", status_code=200)
         
@@ -4300,6 +4316,69 @@ def list_mail_folders_http(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             f"Error: {str(e)}",
             status_code=500
+        )
+
+
+def trigger_planner_poll_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to trigger immediate Planner polling"""
+    try:
+        # Import the sync service
+        import asyncio
+        from planner_sync_service_v5 import WebhookDrivenPlannerSync
+        
+        # Create a temporary sync service instance to trigger polling
+        async def run_poll():
+            sync_service = WebhookDrivenPlannerSync()
+            
+            # Initialize Redis connection
+            import redis.asyncio as redis
+            sync_service.redis_client = await redis.Redis(
+                host="localhost",
+                port=6379,
+                password="password",
+                decode_responses=True
+            )
+            
+            # Initialize adapter
+            from annika_task_adapter import AnnikaTaskAdapter
+            sync_service.adapter = AnnikaTaskAdapter(
+                sync_service.redis_client
+            )
+            
+            try:
+                # Trigger the poll
+                await sync_service._poll_all_planner_tasks()
+                return {
+                    "status": "success", 
+                    "message": "Planner poll completed"
+                }
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+            finally:
+                if sync_service.redis_client:
+                    await sync_service.redis_client.close()
+        
+        # Run the async function
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(run_poll())
+        finally:
+            loop.close()
+        
+        status_code = 200 if result.get("status") == "success" else 500
+        
+        return func.HttpResponse(
+            json.dumps(result),
+            status_code=status_code,
+            mimetype="application/json"
+        )
+        
+    except Exception as e:
+        return func.HttpResponse(
+            json.dumps({"status": "error", "message": str(e)}),
+            status_code=500,
+            mimetype="application/json"
         )
 
 

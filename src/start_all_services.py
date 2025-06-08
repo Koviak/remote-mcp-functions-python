@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Comprehensive startup script for all services.
-Starts Function App, sets up webhooks, and runs Planner sync service.
+Starts ngrok, Function App, sets up webhooks, and runs Planner sync service.
 """
 import asyncio
 import subprocess
@@ -11,6 +11,7 @@ import httpx
 import os
 from pathlib import Path
 import signal
+from typing import Optional
 
 # Add this import for token acquisition
 from agent_auth_manager import get_agent_token
@@ -22,9 +23,82 @@ logger = logging.getLogger(__name__)
 class ServiceManager:
     def __init__(self):
         self.func_process = None
+        self.ngrok_process = None
         self.sync_process = None
         self.base_dir = Path(__file__).parent
         self.shutdown_in_progress = False
+        self.background_tasks = []  # Track background async tasks
+        self.sync_service = None  # Track the sync service instance
+        self.webhook_url = None
+        
+    async def find_ngrok_tunnel(self) -> Optional[str]:
+        """Find ngrok tunnel URL."""
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get("http://localhost:4040/api/tunnels")
+                data = resp.json()
+                for tunnel in data.get("tunnels", []):
+                    if tunnel.get("proto") == "https":
+                        return tunnel.get("public_url")
+        except Exception:
+            pass
+        return None
+    
+    async def start_ngrok(self) -> bool:
+        """Start ngrok in the background."""
+        try:
+            # Check if ngrok is already running
+            existing_url = await self.find_ngrok_tunnel()
+            if existing_url:
+                logger.info(f"✅ ngrok already running: {existing_url}")
+                self.webhook_url = f"{existing_url}/api/graph_webhook"
+                # Update environment variable
+                os.environ["GRAPH_WEBHOOK_URL"] = self.webhook_url
+                return True
+            
+            # Start ngrok
+            logger.info("🚀 Starting ngrok...")
+            
+            # Use the agency-swarm domain
+            cmd = [
+                "ngrok", "http", "--domain", "agency-swarm.ngrok.app", "7071"
+            ]
+            
+            # Start ngrok process
+            if sys.platform == "win32":
+                self.ngrok_process = subprocess.Popen(
+                    cmd,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            else:
+                self.ngrok_process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            
+            # Wait for ngrok to start
+            for i in range(15):  # Give it more time
+                await asyncio.sleep(2)
+                url = await self.find_ngrok_tunnel()
+                if url:
+                    logger.info(f"✅ ngrok started: {url}")
+                    self.webhook_url = f"{url}/api/graph_webhook"
+                    # Update environment variable
+                    os.environ["GRAPH_WEBHOOK_URL"] = self.webhook_url
+                    return True
+                
+                if i % 5 == 0:
+                    logger.info(f"Still waiting for ngrok... ({i}/15)")
+            
+            logger.error("❌ ngrok failed to start")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error starting ngrok: {e}")
+            return False
         
     async def wait_for_function_app(self, max_attempts=30):
         """Wait for Function App to be ready."""
@@ -96,22 +170,21 @@ class ServiceManager:
     
     def start_sync_service(self):
         """Start the Planner sync service."""
-        logger.info("🔄 Starting Planner sync service V2...")
+        logger.info("🔄 Starting Planner sync service V5...")
         
-        # Start the NEW sync service with initial sync
-        if sys.platform == "win32":
-            self.sync_process = subprocess.Popen(
-                [sys.executable, "planner_sync_service_v4.py"],
-                cwd=self.base_dir,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
-            )
-        else:
-            self.sync_process = subprocess.Popen(
-                [sys.executable, "planner_sync_service_v4.py"],
-                cwd=self.base_dir
-            )
+        # Initialize webhook handler first
+        from webhook_handler import initialize_webhook_handler
+        asyncio.create_task(initialize_webhook_handler())
         
-        logger.info("✅ Planner sync service V2 started")
+        # Start V5 sync service
+        from planner_sync_service_v5 import WebhookDrivenPlannerSync
+        self.sync_service = WebhookDrivenPlannerSync()
+        
+        # Start sync service in background
+        sync_task = asyncio.create_task(self.sync_service.start())
+        self.background_tasks.append(sync_task)
+        
+        logger.info("✅ Planner sync service V5 started")
     
     async def ensure_token_available(self, max_attempts=10):
         """Ensure authentication token is available before starting sync."""
@@ -178,22 +251,27 @@ class ServiceManager:
         """Start all services in the correct order."""
         logger.info("🎯 Starting all services...")
         
-        # 1. Start Function App
+        # 1. Start ngrok first
+        if not await self.start_ngrok():
+            logger.error("❌ ngrok failed to start")
+            logger.info("Continuing without ngrok - webhooks will not work")
+        
+        # 2. Start Function App
         self.start_function_app()
         
-        # 2. Wait for it to be ready
+        # 3. Wait for it to be ready
         if not await self.wait_for_function_app():
             logger.error("❌ Function App failed to start")
             return False
         
-        # 3. Setup webhooks
+        # 4. Setup webhooks
         await self.setup_webhooks()
         
-        # 4. Wait a bit for token service to be ready
+        # 5. Wait a bit for token service to be ready
         logger.info("⏳ Waiting for token service to initialize...")
         await asyncio.sleep(5)
         
-        # 4.5. NEW: Ensure token is available before starting sync
+        # 6. Ensure token is available before starting sync
         if not await self.ensure_token_available():
             logger.error(
                 "❌ Cannot start sync service without "
@@ -206,11 +284,13 @@ class ServiceManager:
             # Don't fail completely, just skip sync service
             return True
         
-        # 5. Start sync service
+        # 7. Start sync service
         self.start_sync_service()
         
         logger.info("✅ All services started successfully!")
         logger.info("📡 Function App: http://localhost:7071")
+        if self.webhook_url:
+            logger.info(f"🌐 Webhook URL: {self.webhook_url}")
         logger.info("🔄 Planner sync service: Running")
         logger.info("📨 Webhooks: Configured")
         
@@ -224,30 +304,51 @@ class ServiceManager:
         self.shutdown_in_progress = True
         logger.info("\n🛑 Stopping all services...")
         
-        # Stop sync service first (it's less critical)
-        if self.sync_process:
-            logger.info("Stopping Planner sync service...")
+        # Stop V5 sync service first
+        if self.sync_service:
+            logger.info("Stopping Planner sync service V5...")
+            try:
+                # Create a task to stop the sync service gracefully
+                async def stop_sync():
+                    await self.sync_service.stop()
+                
+                # Run the stop coroutine
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If we're in an async context, create a task
+                    stop_task = asyncio.create_task(stop_sync())
+                    self.background_tasks.append(stop_task)
+                else:
+                    # If not in async context, run it
+                    asyncio.run(stop_sync())
+                
+                logger.info("✅ Planner sync service V5 stopped gracefully")
+            except Exception as e:
+                logger.error(f"Error stopping V5 sync service: {e}")
+        
+        # Cancel any remaining background tasks
+        for task in self.background_tasks:
+            if not task.done():
+                task.cancel()
+        
+        # Stop ngrok
+        if self.ngrok_process:
+            logger.info("Stopping ngrok...")
             try:
                 if sys.platform == "win32":
-                    # On Windows, send CTRL_C_EVENT to the process group
-                    self.sync_process.send_signal(signal.CTRL_C_EVENT)
+                    self.ngrok_process.send_signal(signal.CTRL_C_EVENT)
                 else:
-                    self.sync_process.terminate()
+                    self.ngrok_process.terminate()
                 
-                # Give it time to shut down gracefully
                 try:
-                    self.sync_process.wait(timeout=5)
-                    logger.info(
-                        "✅ Planner sync service stopped gracefully"
-                    )
+                    self.ngrok_process.wait(timeout=5)
+                    logger.info("✅ ngrok stopped gracefully")
                 except subprocess.TimeoutExpired:
-                    logger.warning(
-                        "Sync service didn't stop gracefully, forcing..."
-                    )
-                    self.sync_process.kill()
-                    self.sync_process.wait()
+                    logger.warning("ngrok didn't stop gracefully, forcing...")
+                    self.ngrok_process.kill()
+                    self.ngrok_process.wait()
             except Exception as e:
-                logger.error(f"Error stopping sync service: {e}")
+                logger.error(f"Error stopping ngrok: {e}")
         
         # Stop Function App
         if self.func_process:
