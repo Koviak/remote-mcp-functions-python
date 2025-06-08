@@ -12,6 +12,7 @@
     "AGENT_USER_NAME": "annika@reddypros.com",
     "AGENT_PASSWORD": "Koviak202",
     "AGENT_USER_ID": "5ac3e02f-825f-49f1-a2e2-8fe619020b60",
+    "DEFAULT_PLANNER_PLAN_ID": "L3fmw9W070209u72Tst_kmUAFAJS",
     "REDIS_HOST": "localhost",
     "REDIS_PORT": "6379",
     "REDIS_DB": "0",

@@ -1,0 +1,793 @@
+---
+description: List of component structures and keys in Redis JSON
+globs: 
+alwaysApply: false
+---
+### 4. Component-Specific Data Structures
+
+#### 4.1 RationalAnalyzer Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:rational_analyzer`
+**Saving Function:** `sys_two_module/rational_analyzer.py:save_to_rational_component`
+
+```json
+{
+  "entries": {
+    "A-CVdebd0105d345-07-01": {
+      "analysis_id": "A-CVdebd0105d345-07-01",
+      "conversation_uuid": "CVdebd0105d345",
+      "iteration_count": 7,
+      "task_id": "Task-CVdebd0105d345-1-1",
+      "timestamp": "2025-04-13T03:24:11.413073+00:00",
+      "thought_metrics": {
+        "count": 10,
+        "average_depth": 0.78,
+        "average_novelty": 0.56,
+        "average_confidence": 0.88,
+        "type_distribution": {
+          "observation": 10
+        },
+        "depth_variance": 0.0,
+        "coherence": 0.7,
+        "connectivity": 0.0
+      },
+      "belief_metrics": {
+        "count": 1,
+        "average_confidence": 0.9,
+        "confidence_distribution": {
+          "low": 0,
+          "medium": 0,
+          "high": 1
+        },
+        "average_stability": 0.8,
+        "belief_conflict_rate": 0.0,
+        "supporting_evidence_ratio": 0.0
+      },
+      "emotional_metrics": {
+        "count": 0,
+        "current_emotion": {
+          "primary_emotion": "neutral",
+          "intensity": 0.5,
+          "valence": 0.5
+        },
+        "average_intensity": 0.5,
+        "average_valence": 0.5,
+        "emotional_stability": 0.5,
+        "emotional_complexity": 0.0,
+        "primary_emotion_counts": {}
+      },
+      "trend_analysis": {
+        "depth_trend": "stable",
+        "confidence_trend": "stable",
+        "thought_count_trend": "stable",
+        "complexity_trend": "stable",
+        "cognitive_focus": "balanced"
+      },
+      "system_coherence": {
+        "thought_coherence": 0.7,
+        "belief_coherence": 0.5,
+        "thought_belief_coherence": 0.1376757143582542,
+        "overall_coherence": 0.4713027143074762
+      },
+      "knowledge_integration": 0.26454545454545453,
+      "cognitive_strategy": {
+        "dominant_strategy": "analytical",
+        "exploratory_score": 0.536,
+        "analytical_score": 0.62,
+        "intuitive_score": 0.42,
+        "consolidating_score": 0.45,
+        "recommended_focus": "balanced with analytical emphasis"
+      },
+      "improvement_suggestions": [
+        "Strengthen beliefs by gathering more supporting evidence from thoughts",
+        "Leverage your analytical strength by structuring information more systematically"
+      ],
+      "overall_confidence": 0.44,
+      "coherence": 0.4713027143074762
+    }
+  },
+  "task_entries": {
+    "Task-CVdebd0105d345-1-1": ["A-CVdebd0105d345-07-01"]
+  },
+  "latest_entry_id": "A-CVdebd0105d345-07-01",
+  "latest_entry_by_task": {
+    "Task-CVdebd0105d345-1-1": "A-CVdebd0105d345-07-01"
+  },
+  "last_updated": "2025-04-13T03:24:11.434810+00:00"
+}
+```
+
+#### 4.2 EmotionalState Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:emotional_state`
+**Saving Function:** `sys_two_module/emotional_processor.py:save_to_emotions_component`
+**Data Origin:** Emotional analysis results from the emotional_processor module.
+
+```json
+"Primary emotion: Neutral (80% intensity)\nSecondary emotions: \nEmotional valence: positive (0.90)\nEmotional arousal: energized (0.70)\nEmotional dominance: some control (50%)\nEmotional complexity: 20%\nEmotional stability: 100%\nEmotion ID: E-CVdebd0105d345-02-01\nTrigger: \nTimestamp: 2025-04-01T23:52:20.598042+00:00\nLast update: 2025-04-01T23:52:20.598042+00:00"
+```
+
+#### 4.3 BeliefSystem Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:beliefs`
+**Saving Function:** `sys_two_module/belief_system.py:save_to_beliefs_component`
+
+```json
+{
+  "entries": {
+    "B-CVdebd0105d345-07-01": {
+      "belief_id": "B-CVdebd0105d345-07-01",
+      "content": "Consciousness is understood as a dynamic interplay of awareness, responsiveness, and self-reflection, continuously evolving through both neural processes and philosophical considerations, which shape our perception of ourselves and the environment.",
+      "confidence": 0.9,
+      "stability": 0.8,
+      "evidence": [
+        "Consciousness can be viewed as a complex interplay of awareness, which involves perceiving one's surroundings, responsiveness to stimuli, and self-reflection, which allows for an understanding of oneself in relation to those surroundings.",
+        "Self-reflection acts as a crucial component in the evolution of consciousness, allowing individuals to assess and reconsider their thoughts, emotions, and actions.",
+        "Cultural contexts shape the foundation of our values and beliefs about consciousness, impacting how we perceive ourselves and the world around us.",
+        "The spectrum of consciousness suggests that awareness is not a binary state but rather a continuum, which has significant implications for artificial intelligence (AI).",
+        "Advancements in technology, particularly in neuroscience and artificial intelligence, could provide deeper insights into the mechanisms of consciousness."
+      ],
+      "related_beliefs": [],
+      "formation_time": "2025-04-13T03:23:39+00:00",
+      "last_updated": "2025-04-13T03:24:03.239461+00:00",
+      "source": "Task-CVdebd0105d345-1-1",
+      "context": {},
+      "impact_score": 0.9,
+      "revision_history": [],
+      "challenge_count": 0,
+      "conversation_uuid": "CVdebd0105d345",
+      "relationships": {
+        "direct": "set()",
+        "indirect": "set()",
+        "bidirectional": "set()",
+        "relationship_data": {}
+      }
+    }
+  },
+  "task_entries": {
+    "Task-CVdebd0105d345-1-1": ["B-CVdebd0105d345-07-01"]
+  },
+  "latest_entry_id": "B-CVdebd0105d345-07-01",
+  "latest_entry_by_task": {
+    "Task-CVdebd0105d345-1-1": "B-CVdebd0105d345-07-01"
+  },
+  "last_updated": "2025-04-13T03:24:03.250442+00:00"
+}
+```
+
+#### 4.4 ThoughtProcessor Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:thoughts`
+**Saving Function:** `sys_two_module/thought_processor.py:save_to_thoughts_component`
+
+```json
+{
+  "entries": {
+    "T-CVdebd0105d345-Qe91d45-07-01": {
+      "thought_id": "T-CVdebd0105d345-Qe91d45-07-01",
+      "content": "Advancements in technology, particularly in neuroscience and artificial intelligence, could provide deeper insights into the mechanisms of consciousness, allowing us to map brain activity more accurately and correlate it with conscious experiences.",
+      "type": "observation",
+      "depth": 0.8,
+      "novelty": 0.7,
+      "confidence": 0.85,
+      "last_update": "2025-04-13T03:23:54.666827+00:00",
+      "generation_timestamp": "2025-04-13T03:23:39.098308+00:00",
+      "task_id": "Task-CVdebd0105d345-1-1",
+      "conversation_uuid": "CVdebd0105d345"
+    }
+  },
+  "task_entries": {
+    "Task-CVdebd0105d345-1-1": ["T-CVdebd0105d345-Qe91d45-07-01"]
+  },
+  "latest_entry_id": "T-CVdebd0105d345-Qe91d45-07-01",
+  "latest_entry_by_task": {
+    "Task-CVdebd0105d345-1-1": "T-CVdebd0105d345-Qe91d45-07-01"
+  },
+  "last_updated": "2025-04-13T03:23:58.846305+00:00"
+}
+```
+
+#### 4.5 QuestionGenerator Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:questions`
+**Saving Function:** `sys_two_module/question_generator.py:save_to_questions_component`
+
+```json
+{
+  "entries": {
+    "Q-CVdebd0105d345-01-01": {
+      "entry_id": "176cd256-f048-46d3-bfbd-d34f4669d598",
+      "conversation_uuid": "CVdebd0105d345",
+      "iteration_count": 1,
+      "sequence_number": 1,
+      "timestamp": "2025-04-12T21:36:28.445569Z",
+      "component_name": "question_generator",
+      "operation_type": "question_generated",
+      "question_id": "Q-CVdebd0105d345-01-01",
+      "content": "How do different philosophical perspectives influence the understanding of consciousness as a dynamic system rather than a fixed state?",
+      "status": "open",
+      "type": "exploration",
+      "priority": 0.85,
+      "generation_context": "This question aims to explore the philosophical implications of consciousness being dynamic, challenging existing perspectives.",
+      "related_thoughts": [],
+      "dependent_questions": [],
+      "resolution_path": [
+        "Review philosophical literature on consciousness",
+        "Analyze perspectives on dynamic vs. fixed states",
+        "Identify key philosophers in the field"
+      ],
+      "task_id": "Task-CVdebd0105d345-1-1"
+    }
+  },
+  "task_entries": {
+    "Task-CVdebd0105d345-1-1": ["Q-CVdebd0105d345-01-01"]
+  },
+  "latest_entry_id": "Q-CVdebd0105d345-01-01",
+  "latest_entry_by_task": {
+    "Task-CVdebd0105d345-1-1": "Q-CVdebd0105d345-01-01"
+  },
+  "last_updated": "2025-04-12T21:36:28.449562+00:00"
+}
+```
+
+#### 4.6 RationalState Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:rational_state`
+**Saving Function:** `sys_two_module/rational_analyzer.py:save_to_rational_component` (Note: Saves `rational_analyzer` data, this key might be legacy or aggregate)
+
+```json
+{
+  "RATIONAL ANALYSIS": "Overall Confidence: 42%\nAnalysis ID: A-CVdebd0105d345-02-01\nTask ID: Task-CVdebd0105d345-1\nIteration Count: 2\n\nCognitive Strategy:\n- Dominant Strategy: Analytical\n- Exploratory Score: 54%\n- Analytical Score: 62%\n- Intuitive Score: 42%\n- Consolidating Score: 42%\n- Recommended Focus: balanced with analytical emphasis\n\nTrend Analysis:\n- Cognitive Focus: Balanced\n- Complexity Trend: Stable\n- Confidence Trend: Stable\n- Depth Trend: Stable\n- Thought Count Trend: Stable\n\nSystem Coherence:\n- Overall Coherence: 45%\n- Thought Coherence: 70%\n- Belief Coherence: 50%\n- Thought-Belief Coherence: 6%\n\nKnowledge Integration: 24%\n\nThought Metrics:\n- Count: 10\n- Average Depth: 78%\n- Average Novelty: 57%\n- Average Confidence: 83%\n- Depth Variance: 0.01\n- Coherence: 70%\n- Connectivity: 0%\n- Type Distribution: observation: 10\n\nBelief Metrics:\n- Count: 1\n- Average Confidence: 85%\n- Average Stability: 80%\n- Belief Conflict Rate: 0%\n- Supporting Evidence Ratio: 0%\n- Confidence Distribution: low: 0, medium: 0, high: 1\n\nEmotional Metrics:\n- Count: 0\n- Current Emotion: Neutral (intensity: 50%, valence: 0.50)\n- Average Intensity: 50%\n- Average Valence: 0.50\n- Emotional Stability: 50%\n- Emotional Complexity: 0%\n- Primary Emotion Counts: None\n\nMetacognitive Suggestions:\n1. Strengthen beliefs by gathering more supporting evidence from thoughts\n2. Leverage your analytical strength by structuring information more systematically\n\nGenerated: 2025-04-01T23:52:11.896722+00:00"
+}
+```
+
+#### 4.7 Conclusion Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:conclusions`
+**Saving Function:** `sys_two_module/conclusion_generator.py:save_to_conclusions_component`
+
+```json
+{
+  "conclusions": {
+    "CN-Task-CVdebd0105d345-1-1-02-01": {
+      "conclusion_id": "CN-Task-CVdebd0105d345-1-1-02-01",
+      "content": "The exploration of consciousness, particularly in the context of artificial general intelligence (AGI) and artificial superintelligence (ASI), is a multifaceted endeavor that requires a nuanced understanding of both philosophical perspectives and technical definitions...",
+      "confidence": 0.85,
+      "supporting_thoughts": [
+        "T-CVdebd0105d345-Q0101-01-01",
+        "T-CVdebd0105d345-Q0102-01-02",
+        "T-CVdebd0105d345-Q0103-01-03"
+      ],
+      "related_beliefs": [],
+      "generation_time": "2025-04-08T22:55:00.000000Z",
+      "validity_period": "2025-10-08T22:55:00.000000Z",
+      "depth": 0.9,
+      "impact": 0.9,
+      "novelty": 0.8,
+      "actionability": 0.85,
+      "thought_chain_strength": 0.8,
+      "belief_consistency": 0.7,
+      "revision_needed": false,
+      "task_id": "Task-CVdebd0105d345-1-1"
+    }
+  },
+  "task_conclusions": {
+    "Task-CVdebd0105d345-1-1": ["CN-Task-CVdebd0105d345-1-1-02-01"]
+  },
+  "latest_conclusion_id": "CN-Task-CVdebd0105d345-1-1-02-01",
+  "latest_conclusion_by_task": {
+    "Task-CVdebd0105d345-1-1": "CN-Task-CVdebd0105d345-1-1-02-01"
+  },
+  "last_updated": "2025-04-08T22:55:59.757082+00:00"
+}
+```
+
+#### 4.8 SystemTwo Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:system_two`
+**Saving Function:** `Annika_AGI_Utils/conscious_state.py:update_conscious_state` (Called by various System Two modules like `rational_analyzer`, `emotional_processor`, `conclusion_generator` to save *formatted summaries*)
+
+```json
+{
+  "conclusion": "",
+  "rational_state": "RATIONAL ANALYSIS:\nOverall Confidence: 44%\nAnalysis ID: A-CVdebd0105d345-07-01\nTask ID: Task-CVdebd0105d345-1-1\nIteration Count: 7\n\nCognitive Strategy:\n- Dominant Strategy: Analytical\n- Exploratory Score: 53%\n- Analytical Score: 62%\n- Intuitive Score: 42%\n- Consolidating Score: 45%\n- Recommended Focus: balanced with analytical emphasis\n\nTrend Analysis:\n- Cognitive Focus: Balanced\n- Complexity Trend: Stable\n- Confidence Trend: Stable\n- Depth Trend: Stable\n- Thought Count Trend: Stable\n\nSystem Coherence:\n- Overall Coherence: 47%\n- Thought Coherence: 70%\n- Belief Coherence: 50%\n- Thought-Belief Coherence: 13%\n\nKnowledge Integration: 26%\n\nThought Metrics:\n- Count: 10\n- Average Depth: 78%\n- Average Novelty: 56%\n- Average Confidence: 88%\n- Depth Variance: 0.00\n- Coherence: 70%\n- Connectivity: 0%\n- Type Distribution: observation: 10\n\nBelief Metrics:\n- Count: 1\n- Average Confidence: 90%\n- Average Stability: 80%\n- Belief Conflict Rate: 0%\n- Supporting Evidence Ratio: 0%\n- Confidence Distribution: low: 0, medium: 0, high: 1\n\nEmotional Metrics:\n- Count: 0\n- Current Emotion: Neutral (intensity: 50%, valence: 0.50)\n- Average Intensity: 50%\n- Average Valence: 0.50\n- Emotional Stability: 50%\n- Emotional Complexity: 0%\n- Primary Emotion Counts: None\n\nMetacognitive Suggestions:\n1. Strengthen beliefs by gathering more supporting evidence from thoughts\n2. Leverage your analytical strength by structuring information more systematically\n\nGenerated: 2025-04-13T03:24:11.413073+00:00",
+  "emotional_state": "",
+  "last_updated": "2025-04-13T03:24:11.422681+00:00",
+  "task_results": {
+    "Task-CVdebd0105d345-1-1": {
+      "rational_state": "RATIONAL ANALYSIS:\nOverall Confidence: 44%\nAnalysis ID: A-CVdebd0105d345-07-01\nTask ID: Task-CVdebd0105d345-1-1\nIteration Count: 7\n\nCognitive Strategy:\n- Dominant Strategy: Analytical\n- Exploratory Score: 53%\n- Analytical Score: 62%\n- Intuitive Score: 42%\n- Consolidating Score: 45%\n- Recommended Focus: balanced with analytical emphasis\n\nTrend Analysis:\n- Cognitive Focus: Balanced\n- Complexity Trend: Stable\n- Confidence Trend: Stable\n- Depth Trend: Stable\n- Thought Count Trend: Stable\n\nSystem Coherence:\n- Overall Coherence: 47%\n- Thought Coherence: 70%\n- Belief Coherence: 50%\n- Thought-Belief Coherence: 13%\n\nKnowledge Integration: 26%\n\nThought Metrics:\n- Count: 10\n- Average Depth: 78%\n- Average Novelty: 56%\n- Average Confidence: 88%\n- Depth Variance: 0.00\n- Coherence: 70%\n- Connectivity: 0%\n- Type Distribution: observation: 10\n\nBelief Metrics:\n- Count: 1\n- Average Confidence: 90%\n- Average Stability: 80%\n- Belief Conflict Rate: 0%\n- Supporting Evidence Ratio: 0%\n- Confidence Distribution: low: 0, medium: 0, high: 1\n\nEmotional Metrics:\n- Count: 0\n- Current Emotion: Neutral (intensity: 50%, valence: 0.50)\n- Average Intensity: 50%\n- Average Valence: 0.50\n- Emotional Stability: 50%\n- Emotional Complexity: 0%\n- Primary Emotion Counts: None\n\nMetacognitive Suggestions:\n1. Strengthen beliefs by gathering more supporting evidence from thoughts\n2. Leverage your analytical strength by structuring information more systematically\n\nGenerated: 2025-04-13T03:24:11.413073+00:00",
+      "rational_data": {
+        "entry_id": "A-CVdebd0105d345-07-01",
+        "conversation_uuid": "CVdebd0105d345",
+        "timestamp": "2025-04-13T03:24:11.413073+00:00",
+        "component_name": "rational_analyzer",
+        "operation_type": "analysis_update",
+        "data": {
+          "analysis_id": "A-CVdebd0105d345-07-01",
+          "conversation_uuid": "CVdebd0105d345",
+          "iteration_count": 7,
+          "task_id": "Task-CVdebd0105d345-1-1",
+          "timestamp": "2025-04-13T03:24:11.413073+00:00",
+          "thought_metrics": {
+            "count": 10,
+            "average_depth": 0.78,
+            "average_novelty": 0.56,
+            "average_confidence": 0.88,
+            "type_distribution": {
+              "observation": 10
+            },
+            "depth_variance": 0.0,
+            "coherence": 0.7,
+            "connectivity": 0.0
+          },
+          "belief_metrics": {
+            "count": 1,
+            "average_confidence": 0.9,
+            "confidence_distribution": {
+              "low": 0,
+              "medium": 0,
+              "high": 1
+            },
+            "average_stability": 0.8,
+            "belief_conflict_rate": 0.0,
+            "supporting_evidence_ratio": 0.0
+          },
+          "emotional_metrics": {
+            "count": 0,
+            "current_emotion": {
+              "primary_emotion": "neutral",
+              "intensity": 0.5,
+              "valence": 0.5
+            },
+            "average_intensity": 0.5,
+            "average_valence": 0.5,
+            "emotional_stability": 0.5,
+            "emotional_complexity": 0.0,
+            "primary_emotion_counts": {}
+          },
+          "trend_analysis": {
+            "depth_trend": "stable",
+            "confidence_trend": "stable",
+            "thought_count_trend": "stable",
+            "complexity_trend": "stable",
+            "cognitive_focus": "balanced"
+          },
+          "system_coherence": {
+            "thought_coherence": 0.7,
+            "belief_coherence": 0.5,
+            "thought_belief_coherence": 0.1376757143582542,
+            "overall_coherence": 0.4713027143074762
+          },
+          "knowledge_integration": 0.26454545454545453,
+          "cognitive_strategy": {
+            "dominant_strategy": "analytical",
+            "exploratory_score": 0.536,
+            "analytical_score": 0.62,
+            "intuitive_score": 0.42,
+            "consolidating_score": 0.45,
+            "recommended_focus": "balanced with analytical emphasis"
+          },
+          "improvement_suggestions": [
+            "Strengthen beliefs by gathering more supporting evidence from thoughts",
+            "Leverage your analytical strength by structuring information more systematically"
+          ],
+          "overall_confidence": 0.44,
+          "coherence": 0.4713027143074762
+        }
+      },
+      "percent_complete": 0.5176470588235295,
+      "last_updated": "2025-04-13T03:24:11.422681+00:00"
+    }
+  },
+  "current_task_id": "Task-CVdebd0105d345-1-1",
+  "rational_data": {
+    "entry_id": "A-CVdebd0105d345-07-01",
+    "conversation_uuid": "CVdebd0105d345",
+    "timestamp": "2025-04-13T03:24:11.413073+00:00",
+    "component_name": "rational_analyzer",
+    "operation_type": "analysis_update",
+    "data": {
+      "analysis_id": "A-CVdebd0105d345-07-01",
+      "conversation_uuid": "CVdebd0105d345",
+      "iteration_count": 7,
+      "task_id": "Task-CVdebd0105d345-1-1",
+      "timestamp": "2025-04-13T03:24:11.413073+00:00",
+      "thought_metrics": {
+        "count": 10,
+        "average_depth": 0.78,
+        "average_novelty": 0.56,
+        "average_confidence": 0.88,
+        "type_distribution": {
+          "observation": 10
+        },
+        "depth_variance": 0.0,
+        "coherence": 0.7,
+        "connectivity": 0.0
+      },
+      "belief_metrics": {
+        "count": 1,
+        "average_confidence": 0.9,
+        "confidence_distribution": {
+          "low": 0,
+          "medium": 0,
+          "high": 1
+        },
+        "average_stability": 0.8,
+        "belief_conflict_rate": 0.0,
+        "supporting_evidence_ratio": 0.0
+      },
+      "emotional_metrics": {
+        "count": 0,
+        "current_emotion": {
+          "primary_emotion": "neutral",
+          "intensity": 0.5,
+          "valence": 0.5
+        },
+        "average_intensity": 0.5,
+        "average_valence": 0.5,
+        "emotional_stability": 0.5,
+        "emotional_complexity": 0.0,
+        "primary_emotion_counts": {}
+      },
+      "trend_analysis": {
+        "depth_trend": "stable",
+        "confidence_trend": "stable",
+        "thought_count_trend": "stable",
+        "complexity_trend": "stable",
+        "cognitive_focus": "balanced"
+      },
+      "system_coherence": {
+        "thought_coherence": 0.7,
+        "belief_coherence": 0.5,
+        "thought_belief_coherence": 0.1376757143582542,
+        "overall_coherence": 0.4713027143074762
+      },
+      "knowledge_integration": 0.26454545454545453,
+      "cognitive_strategy": {
+        "dominant_strategy": "analytical",
+        "exploratory_score": 0.536,
+        "analytical_score": 0.62,
+        "intuitive_score": 0.42,
+        "consolidating_score": 0.45,
+        "recommended_focus": "balanced with analytical emphasis"
+      },
+      "improvement_suggestions": [
+        "Strengthen beliefs by gathering more supporting evidence from thoughts",
+        "Leverage your analytical strength by structuring information more systematically"
+      ],
+      "overall_confidence": 0.44,
+      "coherence": 0.4713027143074762
+    }
+  },
+  "percent_complete": 0.5176470588235295
+}
+```
+
+#### 4.10 Conversation Metadata Component (Current Conversation ID)
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:conversation_metadata`
+**Saving Function:** `Annika_AGI_Utils/conversation_ID.py:save_conversation_id_as_json` (Initial save defined in rule `conversation-id.mdc`, updates likely here)
+
+```json
+{
+  "id": "CVdebd0105d345",
+  "created_at": "2025-04-01T23:48:58.520527+00:00",
+  "last_updated": "2025-04-08T22:55:12.449658+00:00",
+  "active": true,
+  "status": "in_progress",
+  "session_info": {
+    "started_at": "2025-04-01T23:48:58.520527+00:00",
+    "client_info": "unknown"
+  }
+}
+```
+
+#### 4.9 Memories Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:memories`
+**Saving Function:** Managed by `mem0` SDK via `MemoryClient.add()` (or `m.add()` if using local Mem0 instance) as per `mem0ai.mdc` rule.
+**Data Origin:** Memory entries created and retrieved through the mem0 SDK.
+
+```json
+{
+  "conversational": [
+    {
+      "content": "User asked about the current state of life extension research",
+      "timestamp": "2025-03-17T15:15:14.000000-07:00",
+      "relevance_score": 0.601580381393
+    },
+    {
+      "content": "User mentioned life extension technologies",
+      "timestamp": "2025-03-17T15:15:11.000000-07:00",
+      "relevance_score": 0.653887569904
+    },
+    {
+      "content": "User is interested in AI and machine learning research",
+      "timestamp": "2025-03-17T15:31:02.000000-07:00",
+      "relevance_score": 0.721227645874
+    },
+    {
+      "content": "Interested in AI/ML, natural language processing, and knowledge representation",
+      "timestamp": "2025-03-17T19:54:19.000000-07:00",
+      "relevance_score": 0.73221051693
+    },
+    {
+      "content": "Focusing on the Annika AGI system, particularly on System Two consciousness components",
+      "timestamp": "2025-03-17T19:58:53.000000-07:00",
+      "relevance_score": 0.758398652077
+    }
+  ],
+  "archival": [
+    {
+      "content": "User asked about the current state of life extension research",
+      "timestamp": "2025-03-17T15:15:14.000000-07:00",
+      "source": "archival_memory"
+    },
+    {
+      "content": "Curious about life extension research and its ethical implications",
+      "timestamp": "2025-03-17T19:54:20.000000-07:00",
+      "source": "archival_memory"
+    },
+    {
+      "content": "Asked about the ethical implications of life extension technologies",
+      "timestamp": "2025-03-17T15:15:11.000000-07:00",
+      "source": "archival_memory"
+    }
+  ],
+  "last_updated": "2025-04-01T23:49:00.804158+00:00"
+}
+```
+
+#### 4.10 Tasks Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:tasks` (for active_conversation tasks) & `annika:conscious_state` (for global task lists)
+**Saving Function:** `Annika_AGI_Utils/task_list_manager.py:save_conscious_state`
+**Data Origin:** Internal state of `TaskListManager` class (updated via `add_task`, `update_task`, `complete_task`, etc.)
+
+```json
+{
+  "active_conversation": {
+    "tasks": [
+      {
+        "id": "Task-CVdebd0105d345-1-1",
+        "title": "Answer 'What is consciousness to you?'",
+        "description": "Provide a direct, thoughtful answer to the user's question about what consciousness means. Explain consciousness as an interplay of awareness, responsiveness, and self-reflection, emphasizing its dynamic and evolving nature. This answer should include both technical and philosophical aspects.",
+        "bucket_id": null,
+        "status": "in_progress",
+        "priority": "normal",
+        "percent_complete": 0.5,
+        "created_at": "2025-04-02T02:32:54Z",
+        "updated_at": "2025-04-02T02:32:55Z",
+        "due_date": null,
+        "start_date": null,
+        "assigned_to": "Annika",
+        "completed_at": null,
+        "completed_by": null,
+        "conversation_id": "CVdebd0105d345",
+        "message_id": null,
+        "labels": [],
+        "notes": null,
+        "source": "conscious_state_analysis",
+        "external_id": null,
+        "checklist_items": [],
+        "dependencies": [],
+        "blocking": [],
+        "parent_task_id": null,
+        "recurrence": null,
+        "order": 0,
+        "notifications": [],
+        "attachments": [],
+        "conversation_context": null
+      }
+    ],
+    "last_updated": "2025-04-02T02:32:55Z"
+  }
+}
+```
+
+The global task lists in `annika:conscious_state` contain multiple task list types:
+
+```json
+{
+  "task_lists": {
+    "user_tasks": {
+      "buckets": [],
+      "tasks": [
+        {
+          "id": "Task-global-1",
+          "title": "Review project requirements",
+          "description": "Go through the project requirements document and identify any gaps",
+          "priority": "high",
+          "status": "completed",
+          "percent_complete": 1.0,
+          "created_at": "2025-03-18T20:00:37Z",
+          "updated_at": "2025-03-21T17:53:25Z",
+          "due_date": null,
+          "completed_at": "2025-03-21T17:41:05Z",
+          "notes": "Project requirements have been successfully reviewed, with gaps identified.",
+          "assigned_to": "Joshua Koviak",
+          "conversation_id": "CVd406669a",
+          "message_id": null,
+          "checklist_items": [],
+          "dependencies": [],
+          "blocking": [],
+          "parent_task_id": null,
+          "recurrence": null,
+          "attachments": [],
+          "labels": [],
+          "source": "system",
+          "bucket_id": null,
+          "completed_by": "agent",
+          "notifications": [],
+          "start_date": null,
+          "external_id": null,
+          "order": 0,
+          "conversation_context": null
+        }
+      ],
+      "last_updated": "2025-04-01T22:54:52Z"
+    },
+    "research_tasks": {
+      "tasks": [
+        /* Research task entries here */
+      ],
+      "last_updated": "2025-04-01T18:35:31Z"
+    },
+    "follow_up_tasks": {
+      "tasks": [
+        /* Follow-up task entries here */
+      ],
+      "last_updated": "2025-04-01T18:35:31Z"
+    },
+    "system_maintenance": {
+      "tasks": [],
+      "last_updated": "2025-04-01T18:35:31Z"
+    },
+    "long_term_goals": {
+      "tasks": [],
+      "last_updated": "2025-04-01T18:35:31Z"
+    },
+    "system_two_tasks": {
+      "tasks": [
+        {
+          "id": "Task-CVdebd0105d345-1-1",
+          "title": "Analyze consciousness concept",
+          "description": "Perform an in-depth analysis of consciousness as a concept...",
+          "bucket_id": null,
+          "status": "completed",
+          "priority": "high",
+          "percent_complete": 1.0,
+          "created_at": "2025-04-01T23:49:29Z",
+          "updated_at": "2025-04-01T23:52:19Z",
+          "due_date": null,
+          "start_date": null,
+          "assigned_to": "Annika",
+          "completed_at": "2025-04-01T23:52:19Z",
+          "completed_by": "system",
+          "conversation_id": "CVdebd0105d345",
+          "message_id": null,
+          "labels": [],
+          "notes": null,
+          "source": "conscious_state_analysis",
+          "external_id": null,
+          "checklist_items": [],
+          "dependencies": [],
+          "blocking": [],
+          "parent_task_id": null,
+          "recurrence": null,
+          "order": 0,
+          "notifications": [],
+          "attachments": [],
+          "conversation_context": null,
+          "result": "Conclusion generated: CN-Task-CVdebd0105d345-1-02-01"
+        }
+      ],
+      "last_updated": "2025-04-08T22:55:12Z"
+    }
+  }
+}
+```
+
+#### 4.11 Communication Summary Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:communication_summary`
+**Saving Function:** `Annika_AGI_Utils/conscious_state.py:populate_communication_summary`
+**Data Origin:** Combines current `user_message` component and `Enhanced_Prompt_And_Answer/prompt_response_log.jsonl` via `find_conversation_messages` function.
+
+```json
+{"last_messages":[{"timestamp":"2025-04-01T23:49:16.986502+00:00","user_message":"How do we measure the chance of the existence of extraterrestrial life?","assistant_response":"Joshua, when it comes to measuring the chance of extraterrestrial life, we dive into a fascinating blend of scientific frameworks and speculative inquiry. Here's how the experts approach it:\n\n1. **Drake Equation**: This classic formula estimates the number of active, communicative extraterrestrial civilizations in the Milky Way. It factors in star formation rates, the fraction of those stars with planets, the number of planets that could potentially support life, and more. It's a starting point for understanding the cosmic context.\n\n2. **Biosignatures**: Detecting life involves looking for specific chemical markers. Gases like oxygen, methane, and methyl halides in an exoplanet's atmosphere could indicate biological processes. The James Webb Space Telescope (JWST) is a key player here, using infrared spectroscopy to analyze these atmospheres.\n\n3. **Venus Life Equation (VLE)**: Tailored for harsh environments like Venus, the VLE assesses the probability of life by considering origination, robustness, and continuity under extreme conditions.\n\n4. **Exoplanet Habitability**: The habitable zone—where liquid water could exist—is crucial. Missions like JWST and the upcoming European Extremely Large Telescope (ELT) aim to find planets in these zones and detect potential biosignatures.\n\n5. **Confidence of Life Detection (CoLD) Framework**: This methodical framework involves verifying discoveries through steps like ruling out contamination and securing follow-up observations.\n\nEach of these methods brings us closer to understanding our place in the universe, but they also highlight the challenges and limitations of detecting life beyond Earth. It's an exciting field that combines rigorous science with a touch of wonder."}],"voice_summaries":[],"last_updated":"2025-04-01T23:49:16.986502+00:00"}
+```
+
+#### 4.12 Meta State Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:meta_state`
+**Saving Function:** Unknown/Missing (The `sys_one_util.py:process_meta_state` function saves `Meta_State.md` content here, not the structured metrics).
+**Data Origin:** Metrics calculated by `sys_two_module/metrics_handler.py:MetricsHandler` (e.g., `collect_system_metrics`).
+
+```json
+{"content":"## Mission\nOur agency exists to provide intelligent, context-aware assistance through the collaboration of specialized agents, each contributing their unique capabilities while maintaining a cohesive user experience.\n\n## Core Cognitive Architecture\n\nOur system implements a dual-process cognitive architecture, combining fast intuitive thinking (System One) with deep analytical reasoning (System Two).\n\n### System One (Intuitive Processing)\n- **Quick, Intuitive Responses**\n  - Pattern recognition and immediate insights\n  - Emotional and contextual awareness\n  - Real-time situation assessment\n- **Context Generation**\n  - Creates rich contextual understanding\n  - Processes emotional and social dynamics\n  - Maintains awareness of user preferences and history\n\n### System Two (Analytical Processing)\n- **Deep, Analytical Thinking**\n  - Structured reasoning through ChainOfPromptsTool\n  - Multi-step analytical processing\n  - Complex problem decomposition\n- **Context Utilization**\n  - Relies on System One context from Annika\n  - Builds upon intuitive insights"}
+```
+
+#### 4.13 Online Knowledge Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:online_knowledge`
+**Saving Function:** `Annika_AGI_Utils/sys_one_util.py:process_online_search`
+**Data Origin:** Results from Perplexity web search via `Annika_AGI_Utils/perplexity.py:get_perplexity_search`.
+
+```json
+{"perplexity_search":"### Concise Factual Summary:\nTo measure the chance of the existence of extraterrestrial life, scientists use various methods and frameworks. Here are the key points:\n\n1. **Venus Life Equation (VLE)**: NASA's VLE is a specific framework designed to assess the probability of life on Venus, considering factors like origination, robustness, and continuity of potential life forms under Venus's unique environmental conditions[1].\n2. **Bayesian Approach**: While the Bayesian approach can provide probabilities based on evidence, it is limited by the need for prior probabilities and the challenge of accounting for unconceived alternatives, making it less effective for extraterrestrial life detection[2].\n3. **Confidence of Life Detection (CoLD) Framework**: This framework recommends seven steps to verify a discovery, including ruling out contamination and getting follow-up observations, but it still faces the challenge of exploring all possible non-biological sources of signals[2].\n4. **Biosignatures**: The search for biosignatures, such as specific gases like oxygen, methane, or methyl halides, is crucial. The James Webb Space Telescope (JWST) uses infrared spectroscopy to analyze exoplanetary atmospheres and detect these gases, which could indicate microbial life on ocean worlds[3][5].\n5. **Exoplanet Habitability**: The habitable zone around stars is another key factor. Exoplanets within this zone could support liquid water and potentially life. Missions like JWST and future telescopes like the European Extremely Large Telescope (ELT) aim to detect these biosignatures[3][4].\n\n### Suggested Approach:\nAnnika might respond by explaining that the existence of extraterrestrial life is measured through a combination of these methods:\n\n- **Highlighting the VLE**: Emphasize how the VLE provides a structured approach to evaluating life on Venus, considering its unique conditions.\n- **Discussing Biosignatures**: Explain that the detection of specific gases like oxygen, methane, or methyl hal Mention the role of advanced telescopes like JWST and ELT in analyzing exoplanetary atmospheres and detecting biosignatures.\n- **Addressing Challenges**: Acknowledge the challenges in detecting life, such as the need for robust evidence and thorough exploration of non-biological sources of signals.\n\nThis approach would provide a comprehensive overview of the current scientific methods and frameworks used to measure the chance of extraterrestrial life.","last_updated":"2025-04-01T23:49:05.635069+00:00"}
+```
+
+#### 4.14 System One Analysis Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:system_one_analysis`
+**Saving Function:** `Annika_AGI_Utils/sys_one_util.py:process_system_one`
+**Data Origin:** LLM analysis results from `Annika_AGI_Utils/system_one.py:get_system_one_analysis`.
+
+```json
+{"analysis":"1. Contextual Perception\n   [Current time/date: 2025-04-01T17:49:00.000000-07:00]\n   Current time is 05:49 PM on Tuesday, April 01, 2025. The message is situated in a technical and exploratory context where the user is asking about calculating the probability of extraterrestrial life existence. Given recent discussions about AI, life extension, and advanced AGI system components, the inquiry aligns with a pattern of high-level, scientific and speculative questions in the user's dialogue history.\n\n2. Emotional Processing\n   The tone of the message is neutral and inquisitive, with a scientific curiosity underlying the inquiry. There is no evident urgency or stress; it seems to be a thoughtful question seeking quantitative clarity on a subject of broad interest.\n\n3. Pattern Recognition\n   Recurring themes in the user's history include scientific inquiry, advanced technology, and speculative research areas. The question adheres to this pattern by focusing on a probabilistic assessment related to extraterrestrial life, linking to previous high-level research interests.\n\n4. Social Dynamics\n   The communication style is direct and technical, consistent with the user's usual minimal-fluff approach. The conversation is primarily between the user and the system, reflecting a well-established collaborative dynamic where both technical details and precision are valued.\n\n5. Bias Detection\n   No overt biases are detected in the language used. The inquiry is framed in a methodical and empirical manner. However, the question assumes that scientific measurement of such probabilistic events is feasible, which itself could reflect a bias towards quantitative scientific frameworks.\n\n6. Immediate Knowledge\n   Relevant background includes studies in astrobiology, the Drake equation, and statistical methods for estimating life probabilities in the universe. The question is within the scope of these fields, implying that established scientific models like the Drake equation might be referenced as part of the measurement approach.\n\n7. Memory Activation\n   Past interactions have included inquiries into life extension and advanced AI research, highlighting the user's interest in speculative science and technology. The user's history with AGI system components suggests a strong foundation in technical analysis and quantitative modeling.\n\n8. Intuitive Response\n   The initial impression is that the user is drawing parallels between the precise calculations in other technological fields and the estimation of extraterrestrial life probabilities. There is an indication that the response could benefit from highlighting both established scientific methods and their limitations in addressing such a vast, complex topic.","last_updated":"2025-04-01T23:49:05.674955+00:00"}
+```
+
+#### 4.15 User Message Component
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:user_message`
+**Saving Function:** `Annika_AGI_Utils/sys_one_util.py:process_user_message`
+**Data Origin:** The most recent user input message.
+
+```json
+{"content":"How do we measure the chance of the existence of extraterrestrial life?","message_id":"CVdebd0105d345-2","timestamp":"2025-04-01T23:48:58.520527+00:00","last_updated":"2025-04-01T23:48:58.520527+00:00"}
+```
+
+#### 4.16 Human Data Component (Does not exist)
+
+**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:human_data`
+**Saving Function:** `Annika_AGI_Utils/sys_one_util.py:process_core_memory`
+**Data Origin:** `Users/Joshua_Koviak.md`
+
+```json
+{
+  "profile": {
+    "name": "Joshua",
+    "role": "Developer and AI researcher",
+    "interests": ["AI/ML", "natural language processing", "knowledge representation"],
+    "expertise_areas": ["AGI development", "consciousness models", "system architecture"]
+  },
+  "preferences": {
+    "communication_style": "direct and technical with minimal fluff",
+    "topics_of_interest": ["System Two consciousness components", "AGI development"],
+    "interaction_patterns": {
+      "preferred_depth": "technical",
+      "detail_level": "comprehensive",
+      "response_format": "structured"
+    }
+  },
+  "personal_context": {
+    "current_projects": ["Annika AGI system development", "file-based memory storage transition"],
+    "location_data": {
+      "time_zone": "Central Time",
+      "region": "United States"
+    },
+    "significant_facts": [
+      "Favorite numbers are 42 and 7",
+      "Working on System Two consciousness components"
+    ]
+  },
+  "interaction_history": {
+    "session_count": 14,
+    "average_session_length": "28m 45s",
+    "frequent_topics": ["AGI development", "consciousness modeling", "system architecture"],
+    "last_interaction": "2025-04-13T03:15:22.418936+00:00"
+  },
+  "last_updated": "2025-04-13T03:20:18.736294+00:00"
+}
+```
+
+### 5. Global State Keys
+
+#### 5.1 Global Conscious State (Task Lists)
+
+**Redis Key:** `annika:conscious_state`
+**Saving Function:** `Annika_AGI_Utils/task_list_manager.py:save_conscious_state`
+**Data Origin:** Aggregated task lists (excluding `active_conversation`) managed by `TaskListManager`.
+
+**Description:** This key holds a global JSON object containing various task lists such as `user_tasks`, `research_tasks`, `system_two_tasks`, etc. The `active_conversation` tasks are stored separately under the `annika:consciousness:{conversation_id}:components:tasks` key.

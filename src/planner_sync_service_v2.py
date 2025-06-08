@@ -254,7 +254,8 @@ class AnnikaPlannerSync:
                 annika_id = annika_task.get("id")
                 
                 # Store ID mapping
-                await self._store_id_mapping(annika_id, planner_id)
+                if annika_id:
+                    await self._store_id_mapping(annika_id, planner_id)
                 
                 logger.info(f"✅ Created Planner task: {planner_id}")
                 
@@ -292,6 +293,23 @@ class AnnikaPlannerSync:
             current_task = response.json()
             etag = current_task.get("@odata.etag")
             
+            # Log which plan this task is in
+            current_plan_id = current_task.get("planId")
+            if current_plan_id:
+                # Get plan details
+                plan_response = requests.get(
+                    f"{GRAPH_API_ENDPOINT}/planner/plans/{current_plan_id}",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10
+                )
+                if plan_response.status_code == 200:
+                    plan_data = plan_response.json()
+                    plan_title = plan_data.get("title", "Unknown")
+                    task_title = annika_task.get('title', 'Untitled')
+                    logger.info(
+                        f"📍 Task '{task_title}' is in plan: {plan_title}"
+                    )
+            
             # Convert to Planner format
             update_data = self.adapter.annika_to_planner(annika_task)
             
@@ -311,7 +329,7 @@ class AnnikaPlannerSync:
                 timeout=10
             )
             
-            if response.status_code == 200:
+            if response.status_code in [200, 204]:
                 logger.info(f"✅ Updated Planner task: {planner_id}")
             else:
                 logger.error(
@@ -345,20 +363,60 @@ class AnnikaPlannerSync:
         headers = {"Authorization": f"Bearer {token}"}
         
         try:
-            # Get all plans
+            all_plans = []
+            
+            # Method 1: Get user's personal plans
             response = requests.get(
                 f"{GRAPH_API_ENDPOINT}/me/planner/plans",
                 headers=headers,
                 timeout=10
             )
             
-            if response.status_code != 200:
-                logger.warning("Failed to get plans from Planner")
-                return
-                
-            plans = response.json().get("value", [])
+            if response.status_code == 200:
+                personal_plans = response.json().get("value", [])
+                all_plans.extend(personal_plans)
+                logger.info(f"📋 Found {len(personal_plans)} personal plans")
             
-            for plan in plans:
+            # Method 2: Get group plans
+            response = requests.get(
+                f"{GRAPH_API_ENDPOINT}/me/memberOf",
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                groups = response.json().get("value", [])
+                group_count = 0
+                
+                for item in groups:
+                    if item.get("@odata.type") == "#microsoft.graph.group":
+                        group_id = item.get("id")
+                        
+                        # Get plans for this group
+                        url = f"{GRAPH_API_ENDPOINT}/groups/{group_id}"
+                        plans_resp = requests.get(
+                            f"{url}/planner/plans",
+                            headers=headers,
+                            timeout=10
+                        )
+                        
+                        if plans_resp.status_code == 200:
+                            group_plans = plans_resp.json().get("value", [])
+                            if group_plans:
+                                all_plans.extend(group_plans)
+                                group_count += len(group_plans)
+                
+                logger.info(f"📋 Found {group_count} group plans")
+            
+            # Now check all plans for tasks
+            total = len(all_plans)
+            logger.info(f"📋 Checking {total} total plans for updates...")
+            
+            for plan in all_plans:
+                plan_title = plan.get("title", "Unknown")
+                plan_id = plan.get("id")
+                id_preview = plan_id[:8] if plan_id else "Unknown"
+                logger.info(f"🔍 Checking plan: {plan_title} ({id_preview}...)")
                 await self._check_plan_tasks(plan["id"], headers)
                 
         except Exception as e:
@@ -378,29 +436,48 @@ class AnnikaPlannerSync:
                 
             tasks = response.json().get("value", [])
             
+            if tasks:
+                logger.info(f"   Found {len(tasks)} tasks in this plan")
+            
+            new_tasks = 0
+            updated_tasks = 0
+            
             for planner_task in tasks:
                 planner_id = planner_task["id"]
+                task_title = planner_task.get("title", "Untitled")
                 
                 # Check if we know about this task
                 annika_id = await self._get_annika_id(planner_id)
                 
                 if not annika_id:
                     # New task from Planner
+                    logger.info(f"   🆕 New task from Planner: {task_title}")
                     await self._create_annika_task(planner_task)
+                    new_tasks += 1
                 else:
                     # Check if updated
                     current_etag = planner_task.get("@odata.etag", "")
                     if current_etag != self.task_etags.get(planner_id, ""):
+                        msg = f"   🔄 Task updated in Planner: {task_title}"
+                        logger.debug(msg)
                         await self._update_annika_task(annika_id, planner_task)
+                        updated_tasks += 1
                         
-                self.task_etags[planner_id] = planner_task.get("@odata.etag", "")
+                etag = planner_task.get("@odata.etag", "")
+                self.task_etags[planner_id] = etag
+            
+            if new_tasks > 0 or updated_tasks > 0:
+                logger.info(
+                    f"   Summary: {new_tasks} new, {updated_tasks} updated"
+                )
                 
         except Exception as e:
             logger.error(f"Error checking plan tasks: {e}")
     
     async def _create_annika_task(self, planner_task: Dict):
         """Create task in Annika from Planner task."""
-        logger.info(f"Creating Annika task from Planner: {planner_task.get('title')}")
+        title = planner_task.get('title', 'Untitled')
+        logger.info(f"Creating Annika task from Planner: {title}")
         
         # Convert to Annika format
         annika_task = await self.adapter.planner_to_annika(planner_task)
@@ -447,7 +524,8 @@ class AnnikaPlannerSync:
                     annika_id = created_task.get("id")
                     if annika_id:
                         # Store mapping
-                        await self._store_id_mapping(annika_id, planner_task["id"])
+                        planner_id = planner_task["id"]
+                        await self._store_id_mapping(annika_id, planner_id)
                         logger.info(f"✅ Created Annika task: {annika_id}")
                 break
             await asyncio.sleep(0.1)

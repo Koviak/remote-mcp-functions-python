@@ -1,0 +1,380 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Redis-CLI in Docker - Reference Guide (WSL Version)
+
+## Basic Connection
+
+Connect to Redis in Docker using WSL:
+```bash
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password
+```
+
+## Key Commands
+
+### View Data
+```bash
+# Get all keys matching a pattern
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password KEYS 'annika:consciousness:*'
+
+# Get JSON data
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:consciousness:{conversation_id}:components:{component_name}
+
+# Basic GET command
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password GET {key}
+```
+
+### Modify Data
+```bash
+# Set a simple key-value pair
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password SET {key} {value}
+
+# Delete key
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password DEL {key}
+```
+
+## RedisJSON Commands
+
+RedisJSON provides native JSON support in Redis, allowing you to store, update and retrieve JSON structured data efficiently:
+
+### Basic JSON Operations
+```bash
+# Store a JSON document
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.SET annika:consciousness:{conversation_id}:components:{component_name} $ '{"key": "value"}'
+
+# Get a full JSON document 
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:consciousness:{conversation_id}:components:{component_name}
+
+# Get a specific field using path syntax
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:consciousness:{conversation_id}:components:rational_state $.overall_confidence
+
+# Delete a JSON element
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.DEL annika:consciousness:{conversation_id}:components:{component_name} $.field_to_delete
+
+# Check the type of a JSON element
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.TYPE annika:consciousness:{conversation_id}:components:{component_name} $
+```
+
+### JSON Array Operations
+```bash
+# Get array length
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.ARRLEN annika:consciousness:{conversation_id}:components:memories $
+
+# Append to an array
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.ARRAPPEND annika:consciousness:{conversation_id}:components:memories $ '{"memory": "new memory", "timestamp": "2025-04-02T10:15:00Z"}'
+
+# Insert into an array at index
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.ARRINSERT annika:consciousness:{conversation_id}:components:memories $ 0 '{"memory": "first memory", "timestamp": "2025-04-02T10:00:00Z"}'
+
+# Find index of an element in array
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.ARRINDEX annika:consciousness:{conversation_id}:components:memories $ '{"memory": "specific memory"}'
+
+# Pop an element from array
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.ARRPOP annika:consciousness:{conversation_id}:components:memories $ -1
+
+# Trim an array
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.ARRTRIM annika:consciousness:{conversation_id}:components:memories $ 0 9
+```
+
+### JSON Object Operations
+```bash
+# Get object keys
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.OBJKEYS annika:consciousness:{conversation_id}:components:rational_state $
+
+# Get object length (number of keys)
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.OBJLEN annika:consciousness:{conversation_id}:components:rational_state $
+
+# Increment a numeric value
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.NUMINCRBY annika:consciousness:{conversation_id}:components:rational_state $.iteration_count 1
+
+# Toggle a boolean value
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.TOGGLE annika:consciousness:{conversation_id}:components:emotional_state $.is_activated
+```
+
+### Multi-Key Operations
+```bash
+# Get the same path from multiple keys
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.MGET annika:consciousness:{id1}:components:rational_state annika:consciousness:{id2}:components:rational_state $ 
+```
+
+### Example: Working with Conversation Metadata
+```bash
+# Create conversation metadata
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.SET annika:consciousness:{conversation_id}:components:conversation_metadata $ '{
+  "id": "{conversation_id}",
+  "created_at": "2025-04-02T12:00:00Z",
+  "last_updated": "2025-04-02T12:05:00Z",
+  "active": true,
+  "status": "in_progress"
+}'
+
+# Update conversation status
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.SET annika:consciousness:{conversation_id}:components:conversation_metadata $.status '"completed"'
+
+# Update timestamp 
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.SET annika:consciousness:{conversation_id}:components:conversation_metadata $.last_updated '"2025-04-02T12:10:00Z"'
+
+# Toggle active status
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.TOGGLE annika:consciousness:{conversation_id}:components:conversation_metadata $.active
+```
+
+## String Quoting and Escaping
+
+When working with strings containing spaces or special characters:
+
+```bash
+# Using double quotes for strings with spaces
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password SET mykey "Hello World"
+
+# Using escape sequences in double quotes
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password SET mykey "Hello\nWorld"
+
+# Special characters in passwords or values
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password SET mykey "Value with \"quotes\" and \\backslashes"
+```
+
+Double-quoted strings support these escape sequences:
+- `\"` - double-quote
+- `\n` - newline
+- `\r` - carriage return
+- `\t` - horizontal tab
+- `\b` - backspace
+- `\a` - alert
+- `\\` - backslash
+- `\xhh` - ASCII character (hex)
+
+## Interactive Mode
+
+You can use Redis CLI in interactive mode for a more efficient workflow:
+
+```bash
+# Start interactive mode
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password
+
+# Once in interactive mode, you can run commands directly:
+# 127.0.0.1:6379> KEYS *
+# 127.0.0.1:6379> GET mykey
+# 127.0.0.1:6379> SET newkey "value"
+# 127.0.0.1:6379> exit
+```
+
+Interactive mode features:
+- Type `?` for help information
+- Type `HELP [command]` for detailed information about a command
+- Press `Tab` for command completion
+- Type `exit` or `quit` or press `Ctrl+D` to exit
+- Type `CLEAR` to clear the terminal screen
+- Run a command multiple times with `N times command` (e.g., `5 INCR mycounter`)
+- Auto-reconnect if connection is lost
+
+## Advanced Features
+
+### Mass Insertion of Data
+For importing large datasets quickly:
+
+```bash
+# Pipe data in Redis protocol format
+cat data.txt | wsl -d Ubuntu docker exec -i annika_20-redis-1 redis-cli --pipe
+```
+
+### CSV Output Mode
+Format results as CSV for data analysis:
+
+```bash
+# Output in CSV format
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --csv HGETALL user:1000
+```
+
+### Running Lua Scripts
+Execute Lua scripts directly:
+
+```bash
+# Run a Lua script with keys and arguments
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --eval /path/to/script.lua key1 key2 , arg1 arg2
+```
+
+### Specialized Monitoring Modes
+
+```bash
+# Continuous stats mode - display live stats
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --stat
+
+# Memory usage analysis
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --memkeys
+
+# Scan for big keys
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --bigkeys
+
+# Combine memory usage and big keys scan
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --memkeys --bigkeys
+
+# Latency monitoring
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --latency
+
+# Latency histogram
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --latency-history
+
+# Latency distribution graph
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --latency-dist
+```
+
+### LRU Simulation
+Test cache performance with a simulation:
+
+```bash
+# Run LRU simulation with 1 million keys
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --lru-test 1000000
+```
+
+## Component Key Pattern
+
+Components follow this pattern:
+```
+annika:consciousness:{conversation_id}:components:{component_name}
+```
+
+Common component names:
+- rational_state
+- emotional_state
+- conversation_metadata
+- system_one_analysis
+- system_two
+- meta_state
+- memories
+- human_data
+- online_knowledge
+- tasks
+- user_message
+- communication_summary
+
+## Usage Tips
+
+### Monitoring
+```bash
+# Monitor all commands (Ctrl+C to exit)
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password MONITOR
+
+# Subscribe to a channel (Ctrl+C to exit)
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password SUBSCRIBE annika:conversation_metadata:updated
+```
+
+### Pub/Sub Operations
+```bash
+# Subscribe to multiple channels
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password SUBSCRIBE channel1 channel2
+
+# Subscribe to channels matching a pattern
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password PSUBSCRIBE "annika:*"
+
+# Publish a message to a channel
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password PUBLISH channel1 "Hello World"
+```
+
+### Database Management
+```bash
+# Select database
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password SELECT 0
+
+# Get database size
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password DBSIZE
+
+# Find big keys (memory usage analysis)
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password --bigkeys
+```
+
+### Slow Log Analysis
+```bash
+# Check recent slow commands
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password SLOWLOG GET 10
+```
+
+### Pattern Matching
+
+Redis patterns support:
+- `*` - match any sequence of characters
+- `?` - match any single character
+- `[abc]` - match any character in the brackets
+- `[^abc]` - match any character not in the brackets
+
+Example:
+```bash
+# Find all conversation components for a specific conversation
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password KEYS 'annika:consciousness:CVdebd0105d345:components:*'
+```
+
+## Format JSON Output
+For better readability of JSON output, use the raw flag with formatting options:
+```bash
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli --raw -a password JSON.GET annika:consciousness:{conversation_id}:components:{component_name}
+```
+
+## Working with Tasks
+
+### Accessing Task Data
+
+Tasks are stored in two primary locations:
+1. Conversation-specific tasks: `annika:consciousness:{conversation_id}:components:tasks` (Phasing Out This Method)
+2. Global tasks: `annika:conscious_state` (contains all task list types)
+
+```bash
+# List all conversation-specific task components
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password KEYS 'annika:consciousness:*:components:tasks'
+
+# Get all tasks for a specific conversation
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:consciousness:CVdebd0105d345:components:tasks
+
+# Get active conversation tasks for a specific conversation
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:consciousness:CVdebd0105d345:components:tasks $.active_conversation.tasks
+
+# Access global tasks (contains all task list types)
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state
+
+# Get just the task_lists from the global conscious state
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state $.task_lists
+
+# Get a specific task list type (e.g., user_tasks)
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state $.task_lists.user_tasks
+
+# Get system_two_tasks from global state
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state $.task_lists.system_two_tasks.tasks
+```
+
+### Working with Specific Tasks
+
+```bash
+# Get a specific task by its index (first task in system_two_tasks)
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state $.task_lists.system_two_tasks.tasks[0]
+
+# Get a specific field from a task (title of first system_two task)
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state $.task_lists.system_two_tasks.tasks[0].title
+
+# Get completed tasks in user_tasks
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state '$.task_lists.user_tasks.tasks[?(@.status=="completed")]'
+
+# Get high priority tasks from research_tasks
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state '$.task_lists.research_tasks.tasks[?(@.priority=="high")]'
+
+# Get tasks assigned to a specific person
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state '$.task_lists.user_tasks.tasks[?(@.assigned_to=="Joshua Koviak")]'
+
+# Get tasks with checklist items
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state '$.task_lists.system_two_tasks.tasks[?(@.checklist_items.length>0)]'
+```
+
+### Task Statistics and Monitoring
+
+```bash
+# Count total number of user tasks
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.ARRLEN annika:conscious_state $.task_lists.user_tasks.tasks
+
+# Monitor task updates (good for debugging)
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password PSUBSCRIBE "annika:consciousness:*:components:tasks:updated"
+
+# Get tasks created after a certain date
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state '$.task_lists.user_tasks.tasks[?(@.created_at>"2025-03-20")]'
+
+# Get in-progress tasks across all lists (one example of combining data)
+wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state '$.task_lists.*.tasks[?(@.status=="in_progress")]'
+```

@@ -1,0 +1,646 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Memory System Rules and Guidelines (Redis)
+
+## Redis Configuration
+
+The [memory_system.py](mdc:sys_two_module/memory_system.py) is now located here: sys_two_module\memory_system.py This is the system two entry point to the Redis Memory System.
+
+This is the Redis docker-compose file:
+
+[docker-compose.yml](mdc:docker-compose.yml)
+
+The rest of the redis system files are located in the 'sys_two_module\Redis_Memory' directory.
+
+sys_two_module\Redis_Memory\redis_config.py
+Handles Redis configuration settings
+Manages connection parameters and pool settings
+Provides configuration validation
+
+sys_two_module\Redis_Memory\redis_exceptions.py
+Contains custom exception classes for Redis operations
+Helps with error handling and reporting
+
+sys_two_module\Redis_Memory\redis_memory_operations.py
+Core class for memory storage and retrieval operations
+Handles basic CRUD operations for memories
+Manages memory data validation and formatting
+Implements the main memory store interface
+
+sys_two_module\Redis_Memory\redis_metrics.py
+Collects and monitors Redis performance metrics
+Tracks operation success/failure rates
+Monitors memory usage and connection stats
+Provides performance insights
+
+sys_two_module\Redis_Memory\redis_store_base.py
+Abstract base class for Redis storage operations
+Provides common functionality for Redis operations
+Handles connection pooling and management
+Implements memory validation and repair functions
+
+sys_two_module\Redis_Memory\redis_similarity_search.py
+Implements vector similarity search functionality
+Handles embedding storage and retrieval
+Provides content and emotion-based search capabilities
+Calculates cosine similarity between memory vectors
+
+sys_two_module\Redis_Memory\redis_utils.py
+Utility functions for Redis operations
+Provides logging decorators
+Contains helper functions for formatting and parsing
+Implements performance monitoring tools
+
+
+Redis configuration is maintained in `redis_config.py`:
+
+```python
+redis_config = {
+    'host': '127.0.0.1',
+    'port': 6379,
+    'db': 0,
+    'decode_responses': True,
+    'max_connections': 50,
+    'socket_timeout': 5.0,
+    'socket_connect_timeout': 5.0,
+    'retry_on_timeout': True,
+    'health_check_interval': 30,
+    'validation_interval': 10,
+    'save_interval': 10,
+    'min_chain_length': 2,
+    'max_chain_length': 5,
+    'chain_similarity_threshold': 0.8,
+    'concept_cluster_threshold': 2,
+    'search_all_above_threshold': True
+}
+```
+
+## Memory Validation Rules
+
+- Required fields for all memories (thoughts):
+  - `entry_id`: Unique identifier for the log entry (UUID)
+  - `conversation_uuid`:  UUID from `conversation_history.json`
+  - `iteration_count`:  System iteration count.
+  - `sequence_number`: Order within the current iteration.
+  - `content`: The thought itself.
+  - `timestamp`:  ISO format with UTC timezone.
+  - `emotion`: Primary emotional state.
+  - `intensity`: (0.0-1.0) Strength of the emotion.
+  - `depth`: (0.0-1.0) Complexity of the thought.
+  - `associations`: List of related concepts/ideas.
+  - `embedding`: Vector embedding (3072 dimensions from `text-embedding-3-large`).
+  - `belief_impact`: (0.0-1.0) Influence on decision-making.
+  - `confidence`: (0.0-1.0) Certainty level.
+  - `source`: Origin of the thought (`system`, `analysis`, `memory`).
+  - `novelty`: (0.0-1.0) Uniqueness score.
+  - `type`: Category of thought (`observation`, `analysis`, `synthesis`, `meta`).
+  - `parent_thought`: ID of the originating thought.
+  - `child_thoughts`: Derived thought IDs.
+  - `related_thoughts`: Associated thought IDs.
+  - `belief_connections`: Related belief IDs.
+  - `question_links`: Linked question IDs.
+  - `generation_context`: Circumstances of creation.
+  - `emotional_state`: Associated emotion.
+  - `attention_focus`: Focus area.
+  - `processing_mode`: Current system mode.
+  - `component_name`: Source component (e.g., `thought_processor`).
+  - `operation_type`: Type of operation performed (e.g., `store_thought`).
+
+## Key Storage Patterns
+
+- Thoughts: Hash format with standardized fields (see `thought_format` below)
+- Embeddings:  Stored as JSON strings via `redis.set()` with 3072 dimensions (`text-embedding-3-large`)
+- Temporal Index: Sorted set with timestamps
+- Associations: Set format
+- Emotions: Set format
+
+```python
+# Key Formats (example)
+NAMESPACE = "annika:" # Example namespace
+thought_key = f"{NAMESPACE}thought:{thought_id}"
+embedding_key = f"{NAMESPACE}embedding:{thought_id}"
+temporal_index = f"{NAMESPACE}temporal_index"
+association_key = f"{NAMESPACE}association:{association}"
+emotion_key = f"{NAMESPACE}emotion:{emotion}"
+
+# Thought Storage Format (in Redis Hash)
+thought_format = {
+    'entry_id': str,  # UUID
+    'conversation_uuid': str, # UUID
+    'iteration_count': int,
+    'sequence_number': int,
+    'content': str,
+    'timestamp': str,  # ISO format
+    'emotion': str,
+    'intensity': float,
+    'depth': float,
+    'associations': str,  # JSON encoded list
+    'embedding': str,  # JSON encoded list of floats
+    'belief_impact': float,
+    'confidence': float,
+    'source': str,
+    'novelty': float,
+    'type': str,
+    'parent_thought': str, # UUID
+    'child_thoughts': str, # JSON encoded list of UUIDs
+    'related_thoughts': str, # JSON encoded list of UUIDs
+    'belief_connections': str, # JSON encoded list of UUIDs
+    'question_links': str, # JSON encoded list of UUIDs
+    'generation_context': str, # JSON encoded dict
+    'emotional_state': str, # JSON encoded dict
+    'attention_focus': str,
+    'processing_mode': str,
+    'component_name': str,
+    'operation_type': str,
+}
+```
+
+## Performance Requirements
+
+- Response time < 2 seconds
+- Memory usage within defined limits
+- Connection pool max 50 connections
+- Proper cleanup after operations
+- Automatic retry on timeouts
+
+## Logging Requirements
+
+- Use rotating file handlers (10MB max, 5 backups)
+- Include timestamps for all entries
+- Track state transitions
+- Monitor performance metrics
+- Log all errors with stack traces
+- Document recovery steps
+
+
+2. Vector Similarity Search
+
+### Implementation Examples
+
+#### Memory Validation
+
+```python
+async def validate_memory(memory: dict) -> bool:
+    required_fields = list(thought_format.keys()) # Use the keys from thought_format
+    return all(field in memory for field in required_fields)
+```
+
+#### Redis Key Structure
+
+(See Key Formats section above)
+
+#### Memory Retrieval Configuration
+
+```python
+retrieval_config = {
+    'similarity_threshold': 0.4,  # Lowered for better recall
+    'retrieval_limit': 10,
+    'search_min_similarity': 0.4,
+    'search_chain_bonus': 0.2,
+    'emotional_weight': 0.3,
+    'depth_weight': 0.3,
+    'concept_weight': 0.4,
+    'debug_mode': True
+}
+
+# Memory scoring weights
+base_score = (
+    similarity * 0.5 +      # Base similarity (50%)
+    depth * 0.3 +          # Depth (30%)
+    emotion_intensity * 0.2 # Emotional intensity (20%)
+)
+
+# Apply relationship bonus
+if has_relationships:
+    score *= 1.2  # 20% bonus for related memories
+```
+
+#### Redis Statistics Monitoring
+
+```python
+async def get_redis_stats():
+    # Memory stats
+    memory_stats = {
+        'used_memory_human': info['used_memory_human'],
+        'used_memory_peak_human': info['used_memory_peak_human'],
+        'maxmemory_human': info.get('maxmemory_human', 'No Limit'),
+        'maxmemory_policy': info.get('maxmemory_policy', 'noeviction')
+    }
+
+    # Key statistics by type
+    stats = {
+        'thoughts': len(await redis.keys(f"{namespace}thought:*")),
+        'embeddings': len(await redis.keys(f"{namespace}embedding:*")),
+        'associations': len(await redis.keys(f"{namespace}association:*")),
+        'emotions': len(await redis.keys(f"{namespace}emotion:*"))
+    }
+
+    # Memory usage by key pattern
+    memory_usage = {}
+    for pattern in ['thought:', 'embedding:', 'association:', 'emotion:']:
+        keys = await redis.keys(f"{namespace}{pattern}*")
+        total_size = sum(await redis.memory_usage(key) or 0 for key in keys)
+        memory_usage[pattern.rstrip(':')] = total_size
+```
+
+#### Redis State Validation
+
+```python
+async def validate_redis_state():
+    # Get debug info
+    debug_info = await redis_store.get_debug_info()
+
+    # Check memory usage
+    memory_stats = debug_info['memory_stats']
+    if float(memory_stats['used_memory']) > MEMORY_THRESHOLD:
+        logger.warning("High memory usage detected")
+
+    # Verify connection pool
+    pool_stats = debug_info['pool_stats']
+    if pool_stats['used_connections'] > MAX_CONNECTIONS * 0.8:
+        logger.warning("Connection pool near capacity")
+
+    # Check key distribution
+    key_stats = debug_info['key_stats']
+    for key_type, count in key_stats.items():
+        if count == 0:
+            logger.error(f"Missing keys for type: {key_type}")
+```
+
+#### Performance Monitoring
+
+```python
+async def monitor_redis_performance():
+    # Track operation times
+    start_time = time.time()
+    try:
+        result = await operation()
+        duration = time.time() - start_time
+        if duration > SLOW_OPERATION_THRESHOLD:
+            logger.warning(f"Slow operation detected: {duration}s")
+    except Exception as e:
+        logger.error(f"Operation failed: {str(e)}")
+
+    # Monitor memory growth
+    memory_before = await redis.info('memory')
+    # ... operation ...
+    memory_after = await redis.info('memory')
+    growth = memory_after['used_memory'] - memory_before['used_memory']
+    if growth > MEMORY_GROWTH_THRESHOLD:
+        logger.warning(f"High memory growth: {growth} bytes")
+```
+
+#### Debugging Steps
+
+1.  **Error Investigation**
+    -   Check `error.log` for initial error messages
+    -   Correlate timestamps with `system_two.log`
+    -   Review Redis-specific errors in `redis_test.log`
+    -   Verify memory state in `memory_state.json`
+
+2.  **Redis Health Checks**
+
+    ```python
+    async def check_redis_health():
+        # Connection check
+        if not await redis.ping():
+            logger.error("Redis connection failed")
+
+        # Memory check
+        info = await redis.info('memory')
+        if int(info['used_memory']) > MEMORY_LIMIT:
+            logger.warning("Memory usage exceeds limit")
+
+        # Key verification
+        for key_pattern in REQUIRED_KEYS:
+            count = len(await redis.keys(key_pattern))
+            if count == 0:
+                logger.error(f"Missing required keys: {key_pattern}")
+    ```
+
+3.  **Performance Analysis**
+    -   Monitor operation durations in `metrics.log`
+    -   Check for slow Redis commands
+    -   Track memory usage patterns
+    -   Identify connection pool bottlenecks
+
+4.  **Data Integrity**
+    -   Verify key formats and types
+    -   Check embedding consistency
+    -   Validate relationship indices
+    -   Ensure proper timestamp ordering
+
+5.  **Recovery Procedures**
+    -   Document each repair step
+    -   Verify fixes don't impact other components
+    -   Test system stability after repairs
+    -   Update monitoring thresholds if needed
+
+
+## TDD Debugging Process
+
+### 1. Initial Setup Verification
+
+```python
+@pytest.mark.asyncio
+async def test_redis_connection_setup():
+    """Verify Redis connection and configuration"""
+    store = RedisMemoryStore()
+
+    # Test configuration
+    assert store.config['port'] == 6379
+    assert store.config['max_connections'] == 50
+    assert store.config['socket_timeout'] == 5.0
+
+    # Test connection
+    assert await store.ping()
+
+    # Verify namespace setup
+    keys = await store.redis.keys(f"{store.namespace}*")
+    assert len(keys) >= 0
+```
+
+### 2. Memory State Validation
+
+```python
+@pytest.mark.asyncio
+async def test_memory_state():
+    """Verify memory state integrity"""
+    store = RedisMemoryStore()
+
+    # Check required memory fields
+    memory = await store.get_memory_state()
+    required_fields = list(thought_format.keys()) # Get required fields from thought_format
+    assert all(field in memory for field in required_fields)
+
+    # Verify memory format (examples - adjust types as needed)
+    assert isinstance(memory['intensity'], float)
+    assert isinstance(memory['depth'], float)
+    assert isinstance(memory['associations'], str) # Should be JSON string
+    assert isinstance(memory['embedding'], str) # Should be JSON string
+    # Add other type checks based on thought_format
+```
+
+### 3. Connection Pool Management
+
+```python
+@pytest.mark.asyncio
+async def test_connection_pool():
+    """Test connection pool behavior"""
+    store = RedisMemoryStore()
+
+    # Test pool limits
+    connections = []
+    for _ in range(50):  # Max connections
+        conn = await store._get_redis()
+        assert conn is not None
+        connections.append(conn)
+
+    # Test connection release
+    for conn in connections:
+        await store._release_connection(conn)
+
+    # Verify pool cleanup
+    pool_stats = await store.get_pool_stats()
+    assert pool_stats['used_connections'] == 0
+```
+
+### 4. Memory Operations
+
+```python
+@pytest.mark.asyncio
+async def test_memory_operations():
+    """Test memory storage and retrieval"""
+    store = RedisMemoryStore()
+
+    # Test thought storage
+    thought = {
+        'entry_id': str(uuid.uuid4()),
+        'conversation_uuid': str(uuid.uuid4()), # Replace with actual conversation UUID
+        'iteration_count': 1, # Replace with actual iteration
+        'sequence_number': 1,
+        'content': 'test content',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'emotion': 'neutral',
+        'intensity': 0.5,
+        'depth': 0.5,
+        'associations': json.dumps(['test']),
+        'embedding': json.dumps([0.1] * 3072),  # text-embedding-3-large default dimensions
+        'belief_impact': 0.0,
+        'confidence': 0.5,
+        'source': 'test',
+        'novelty': 0.5,
+        'type': 'observation',
+        'parent_thought': str(uuid.uuid4()),
+        'child_thoughts': json.dumps([]),
+        'related_thoughts': json.dumps([]),
+        'belief_connections': json.dumps([]),
+        'question_links': json.dumps([]),
+        'generation_context': json.dumps({}),
+        'emotional_state': json.dumps({}),
+        'attention_focus': 'test',
+        'processing_mode': 'testing',
+        'component_name': 'test_component',
+        'operation_type': 'test_operation'
+    }
+
+    success = await store.store_thought(thought)
+    assert success
+
+    # Test retrieval
+    retrieved = await store.get_memory(thought['entry_id'])
+    assert retrieved['entry_id'] == thought['entry_id']
+    assert retrieved['content'] == thought['content']
+    # Add other field comparisons
+```
+
+### 5. Vector Similarity Search
+
+```python
+@pytest.mark.asyncio
+async def test_vector_search():
+    """Test vector similarity search"""
+    store = RedisMemoryStore()
+
+    # Test with our specific thresholds
+    config = {
+        'similarity_threshold': 0.4,
+        'retrieval_limit': 10,
+        'search_chain_bonus': 0.2,
+        'emotional_weight': 0.3,
+        'depth_weight': 0.3,
+        'concept_weight': 0.4
+    }
+
+    results = await store.search_similar_memories(
+        query_vector=[0.1] * 3072,  # text-embedding-3-large default dimensions
+        config=config
+    )
+
+    # Verify scoring
+    if results:
+        first_result = results[0]
+        score = (
+            first_result['similarity'] * 0.5 +
+            first_result['depth'] * 0.3 +
+            first_result['emotion_intensity'] * 0.2
+        )
+        assert score >= config['similarity_threshold']
+```
+
+### 6. Performance Monitoring
+
+```python
+@pytest.mark.asyncio
+async def test_performance_metrics():
+    """Test performance monitoring"""
+    store = RedisMemoryStore()
+
+    # Track operation time
+    start = time.time()
+    await store.get_recent_memories(10)
+    duration = time.time() - start
+    assert duration < 2.0  # Our response time requirement
+
+    # Check memory usage
+    stats = await store.get_redis_stats()
+    assert float(stats['memory_stats']['used_memory']) < MEMORY_THRESHOLD
+    assert stats['pool_stats']['used_connections'] <= 50
+```
+
+### 7. Error Recovery
+
+```python
+@pytest.mark.asyncio
+async def test_error_recovery():
+    """Test error handling and recovery"""
+    store = RedisMemoryStore()
+
+    # Test connection loss recovery
+    await store._redis.close()
+
+    # Should reconnect automatically
+    thought = {'entry_id': str(uuid.uuid4()), 'content': 'test', 'timestamp': datetime.now(timezone.utc).isoformat()} # Minimal thought for testing
+    await store.store_thought(thought)
+
+    # Verify storage worked after recovery
+    retrieved = await store.get_memory(thought['entry_id'])
+    assert retrieved is not None
+```
+
+## Debugging Steps
+
+1.  **Check Logs First**
+
+    ```bash
+    tail -f sys_two_module/logs/error.log
+    tail -f sys_two_module/logs/memory_system.log
+    tail -f sys_two_module/mind_logs/redis_test.log
+    ```
+
+2.  **Verify Redis State**
+
+    ```python
+    async def check_redis_health():
+        store = RedisMemoryStore()
+
+        # Basic connectivity
+        assert await store.ping()
+
+        # Memory usage
+        stats = await store.get_redis_stats()
+        assert float(stats['used_memory']) < MEMORY_THRESHOLD
+
+        # Connection pool
+        pool_stats = await store.get_pool_stats()
+        assert pool_stats['used_connections'] <= MAX_CONNECTIONS
+
+        # Key integrity
+        for pattern in ['thought:', 'embedding:', 'association:']:
+            keys = await store.redis.keys(f"{store.namespace}{pattern}*")
+            assert len(keys) > 0, f"Missing {pattern} keys"
+    ```
+
+3.  **Common Issues and Solutions**
+
+    a.  Connection Pool Exhaustion
+
+    ```python
+    # Symptoms:
+    - TimeoutError in logs
+    - High used_connections in pool_stats
+
+    # Solution:
+    await store.cleanup_connections()  # Force connection cleanup
+    await store.reset_pool()          # Reset connection pool
+    ```
+
+    b.  Memory State Corruption
+
+    ```python
+    # Symptoms:
+    - KeyError when accessing memories
+    - Inconsistent thought retrieval
+
+    # Solution:
+    await store.validate_memories()    # Check memory integrity
+    await store.rebuild_indices()      # Rebuild memory indices
+    ```
+
+    c.  Vector Search Issues
+
+    ```python
+    # Symptoms:
+    - Empty search results
+    - Low similarity scores
+
+    # Solution:
+    await store.verify_embeddings()    # Check embedding format
+    await store.optimize_indices()     # Rebuild search indices
+    ```
+
+4.  **Performance Optimization**
+
+    ```python
+    # Monitor operation times
+    async def check_performance():
+        store = RedisMemoryStore()
+
+        # Test bulk operations
+        start = time.time()
+        thoughts = [create_test_thought() for _ in range(100)] # Use a helper function to create valid thoughts
+        await store.bulk_store_thoughts(thoughts)
+        duration = time.time() - start
+        assert duration < 5.0, "Bulk storage too slow"
+
+        # Test retrieval speed
+        start = time.time()
+        memories = await store.get_recent_memories(50)
+        duration = time.time() - start
+        assert duration < 1.0, "Retrieval too slow"
+    ```
+
+5.  **Data Integrity Checks**
+
+    ```python
+    async def verify_data_integrity():
+        store = RedisMemoryStore()
+
+        # Check thought format
+        thoughts = await store.get_recent_memories(10)
+        for thought in thoughts:
+            assert 'entry_id' in thought
+            assert 'content' in thought
+            # Add checks for all required fields and their types, using thought_format as a guide
+
+        # Verify relationships (if applicable - adjust based on your implementation)
+        for thought in thoughts:
+            if thought['associations']:  # Assuming associations is a JSON string of IDs
+                related_ids = json.loads(thought['associations'])
+                for related_id in related_ids:
+                    related = await store.get_memory(related_id)
+                    assert related is not None, f"Related memory not found: {related_id}"
+    ```

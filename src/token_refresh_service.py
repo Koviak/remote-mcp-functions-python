@@ -52,6 +52,10 @@ class TokenRefreshService:
             logger.warning("Token refresh service is already running")
             return
         
+        # Acquire initial tokens before starting the refresh loop
+        logger.info("Acquiring initial tokens...")
+        self._acquire_initial_tokens()
+        
         self.is_running = True
         self._thread = threading.Thread(
             target=self._run_refresh_loop,
@@ -78,6 +82,32 @@ class TokenRefreshService:
             
             # Sleep for the refresh interval
             time.sleep(self.refresh_interval)
+    
+    def _acquire_initial_tokens(self):
+        """Acquire initial tokens for common scopes"""
+        try:
+            # Common scopes that should have tokens
+            scopes = [
+                "https://graph.microsoft.com/.default",
+                "User.Read Mail.Send Files.ReadWrite.All",
+                "Tasks.ReadWrite"
+            ]
+            
+            for scope in scopes:
+                logger.info(f"Acquiring initial token for scope: {scope}")
+                token = self.auth_manager.get_agent_user_token(scope)
+                
+                if token:
+                    logger.info(
+                        f"✅ Successfully acquired initial token for {scope}"
+                    )
+                else:
+                    logger.warning(
+                        f"⚠️  Failed to acquire initial token for {scope}"
+                    )
+                    
+        except Exception as e:
+            logger.error(f"Error acquiring initial tokens: {e}")
     
     def _refresh_tokens(self):
         """Check and refresh tokens that are close to expiry"""
