@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import redis.asyncio as redis
@@ -74,8 +74,8 @@ class ChatSubscriptionManager:
             "notificationUrl": WEBHOOK_URL,
             "resource": f"/chats/{chat_id}/messages",
             "expirationDateTime": (
-                datetime.utcnow() + timedelta(hours=1)
-            ).isoformat() + "Z",
+                datetime.now(UTC) + timedelta(hours=1)
+            ).isoformat().replace("+00:00", "Z"),
             "clientState": f"chat_{chat_id[:8]}",
             "lifecycleNotificationUrl": WEBHOOK_URL,
         }
@@ -94,7 +94,7 @@ class ChatSubscriptionManager:
                     f"{REDIS_PREFIX}{chat_id}",
                     mapping={
                         "subscription_id": data.get("id"),
-                        "created_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.now(UTC).isoformat(),
                         "expires_at": data.get("expirationDateTime"),
                         "status": "active",
                     },
@@ -144,8 +144,10 @@ class ChatSubscriptionManager:
                 exp_time = datetime.fromisoformat(expires.replace("Z", "+00:00"))
             except Exception:
                 continue
-            if exp_time - datetime.utcnow() < timedelta(minutes=15):
-                new_exp = (datetime.utcnow() + timedelta(hours=1)).isoformat() + "Z"
+            if exp_time - datetime.now(UTC) < timedelta(minutes=15):
+                new_exp = (
+                    datetime.now(UTC) + timedelta(hours=1)
+                ).isoformat().replace("+00:00", "Z")
                 async with httpx.AsyncClient() as client:
                     resp = await client.patch(
                         f"{GRAPH_API_ENDPOINT}/subscriptions/{sub_id}",
@@ -182,7 +184,7 @@ class ChatSubscriptionManager:
                 continue
             try:
                 exp = datetime.fromisoformat(expires.replace("Z", "+00:00"))
-                if exp > datetime.utcnow():
+                if exp > datetime.now(UTC):
                     active += 1
                 else:
                     expired += 1
