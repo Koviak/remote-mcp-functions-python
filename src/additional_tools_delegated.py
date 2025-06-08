@@ -8,7 +8,9 @@ operations in their user context.
 
 import json
 import logging
+
 import requests
+
 from agent_auth_manager import get_agent_token
 
 # Microsoft Graph API endpoint
@@ -421,5 +423,103 @@ def register_delegated_tools(app):
         except Exception as e:
             logging.error(f"Error posting message: {str(e)}")
             return f"Error posting message: {str(e)}"
+
+    tool_properties_list_chats_json = "[]"
+
+    @app.generic_trigger(
+        arg_name="context",
+        type="mcpToolTrigger",
+        toolName="list_my_chats",
+        description="List chats the agent is part of",
+        toolProperties=tool_properties_list_chats_json,
+    )
+    def list_my_chats(context) -> str:
+        """List chats using delegated permissions."""
+        try:
+            token = get_delegated_access_token()
+            if not token:
+                return (
+                    "Authentication failed. "
+                    "Agent credentials not configured."
+                )
+
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
+
+            response = requests.get(
+                f"{GRAPH_API_ENDPOINT}/me/chats",
+                headers=headers,
+                timeout=10,
+            )
+
+            if response.status_code == 200:
+                return response.text
+            return f"Error: {response.status_code} - {response.text}"
+
+        except Exception as e:  # pragma: no cover - network errors
+            logging.error(f"Error listing chats: {str(e)}")
+            return f"Error listing chats: {str(e)}"
+
+    tool_properties_post_chat_obj = [
+        ToolProperty("chatId", "string", "The ID of the chat"),
+        ToolProperty("message", "string", "The message content"),
+        ToolProperty(
+            "replyToId",
+            "string",
+            "ID of the message to reply to (optional)",
+        ),
+    ]
+    tool_properties_post_chat_json = json.dumps(
+        [prop.to_dict() for prop in tool_properties_post_chat_obj]
+    )
+
+    @app.generic_trigger(
+        arg_name="context",
+        type="mcpToolTrigger",
+        toolName="post_chat_message_as_agent",
+        description="Post a message to Teams chat as the agent",
+        toolProperties=tool_properties_post_chat_json,
+    )
+    def post_chat_message_as_agent(context) -> str:
+        """Post Teams chat message using delegated permissions."""
+        try:
+            content = json.loads(context)
+            chat_id = content["arguments"]["chatId"]
+            message = content["arguments"]["message"]
+            reply_to = content["arguments"].get("replyToId")
+
+            token = get_delegated_access_token()
+            if not token:
+                return (
+                    "Authentication failed. "
+                    "Agent credentials not configured."
+                )
+
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
+
+            data = {"body": {"content": message}}
+
+            if reply_to:
+                url = (
+                    f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages/"
+                    f"{reply_to}/replies"
+                )
+            else:
+                url = f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages"
+
+            response = requests.post(url, headers=headers, json=data, timeout=10)
+
+            if response.status_code in (200, 201):
+                return "Message posted successfully as agent"
+            return f"Error: {response.status_code} - {response.text}"
+
+        except Exception as e:  # pragma: no cover - network errors
+            logging.error(f"Error posting chat message: {str(e)}")
+            return f"Error posting chat message: {str(e)}"
     
     print("Delegated access MCP tools registered successfully!") 
