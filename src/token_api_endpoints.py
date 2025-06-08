@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 
 import azure.functions as func
+
 from mcp_redis_config import get_redis_token_manager
 
 logger = logging.getLogger(__name__)
