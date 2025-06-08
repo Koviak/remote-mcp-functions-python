@@ -818,6 +818,8 @@ class WebhookDrivenPlannerSync:
                 
                 # Process each task to see if it needs syncing
                 for task in tasks:
+                    if task.get("percentComplete", 0) == 100 or task.get("completedDateTime"):
+                        continue
                     task_id = task.get("id")
                     if task_id:
                         # Check if this task needs to be synced
@@ -905,14 +907,31 @@ class WebhookDrivenPlannerSync:
         try:
             annika_tasks = await self.adapter.get_all_annika_tasks()
             
+            current_ids = set()
             for task in annika_tasks:
                 annika_id = task.get("id")
                 if not annika_id or annika_id in self.processing_upload:
                     continue
-                
+                current_ids.add(annika_id)
+
                 # Check if task needs upload
                 if await self._task_needs_upload(task):
                     await self._queue_upload(task)
+
+            # Detect deletions
+            pattern = f"{PLANNER_ID_MAP_PREFIX}Task-*"
+            cursor = 0
+            while True:
+                cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=100)
+                for key in keys:
+                    annika_id = key.replace(PLANNER_ID_MAP_PREFIX, "")
+                    if annika_id not in current_ids:
+                        planner_id = await self.redis_client.get(key)
+                        if planner_id:
+                            await self._delete_planner_task(planner_id)
+                        await self._remove_mapping(annika_id, planner_id)
+                if cursor == 0:
+                    break
                     
         except Exception as e:
             logger.error(f"Error detecting changes: {e}")
@@ -1012,6 +1031,21 @@ class WebhookDrivenPlannerSync:
         except Exception:
             pass
         return None
+
+    async def _cleanup_deleted_planner_tasks(self, seen_ids: Set[str]):
+        """Remove Annika tasks whose Planner counterparts were deleted."""
+        pattern = f"{PLANNER_ID_MAP_PREFIX}Task-*"
+        cursor = 0
+        while True:
+            cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=100)
+            for key in keys:
+                annika_id = key.replace(PLANNER_ID_MAP_PREFIX, "")
+                planner_id = await self.redis_client.get(key)
+                if planner_id and planner_id not in seen_ids:
+                    await self._delete_annika_task(annika_id)
+                    await self._remove_mapping(annika_id, planner_id)
+            if cursor == 0:
+                break
     
     async def _queue_operation(self, operation_type: str, task_id: str):
         """Queue an operation for later processing."""
@@ -1460,7 +1494,73 @@ class WebhookDrivenPlannerSync:
                 str(e)
             )
             return False
-    
+
+    async def _delete_planner_task(self, planner_id: str) -> bool:
+        """Delete a task in Planner."""
+        if self.rate_limiter.is_rate_limited():
+            logger.debug("Rate limited - skipping Planner deletion")
+            return False
+
+        try:
+            token = get_agent_token()
+            if not token:
+                logger.error("No token available for task deletion")
+                return False
+
+            headers = {"Authorization": f"Bearer {token}"}
+            response = requests.delete(
+                f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
+                headers=headers,
+                timeout=10,
+            )
+
+            if response.status_code in (200, 204):
+                annika_id = await self._get_annika_id(planner_id)
+                if annika_id:
+                    await self._remove_mapping(annika_id, planner_id)
+                await self._log_sync_operation(
+                    SyncOperation.DELETE.value,
+                    annika_id,
+                    planner_id,
+                    "success",
+                )
+                logger.debug(f"✅ Deleted Planner task: {planner_id}")
+                self.rate_limiter.reset()
+                return True
+            elif response.status_code == 404:
+                annika_id = await self._get_annika_id(planner_id)
+                if annika_id:
+                    await self._remove_mapping(annika_id, planner_id)
+                logger.debug(f"Planner task {planner_id} already deleted")
+                return True
+            elif response.status_code == 429:
+                retry_after = int(response.headers.get("Retry-After", 60))
+                self.rate_limiter.handle_rate_limit(retry_after)
+                return False
+            else:
+                logger.error(
+                    f"Failed to delete Planner task {planner_id}: {response.status_code}"
+                )
+                await self._log_sync_operation(
+                    SyncOperation.DELETE.value,
+                    None,
+                    planner_id,
+                    "error",
+                    f"HTTP {response.status_code}",
+                )
+                return False
+
+        except Exception as e:
+            logger.error(f"Error deleting Planner task {planner_id}: {e}")
+            await self._log_sync_operation(
+                SyncOperation.DELETE.value,
+                None,
+                planner_id,
+                "error",
+                str(e),
+            )
+            return False
+
     async def _delete_annika_task(self, annika_id: str):
         """Delete task from Annika."""
         try:
@@ -1486,8 +1586,19 @@ class WebhookDrivenPlannerSync:
                 
                 if deleted:
                     await self.redis_client.execute_command(
-                        "JSON.SET", "annika:conscious_state", "$",
-                        json.dumps(state)
+                        "JSON.SET",
+                        "annika:conscious_state",
+                        "$",
+                        json.dumps(state),
+                    )
+                    planner_id = await self._get_planner_id(annika_id)
+                    if planner_id:
+                        await self._remove_mapping(annika_id, planner_id)
+                    await self._log_sync_operation(
+                        SyncOperation.DELETE.value,
+                        annika_id,
+                        planner_id,
+                        "success",
                     )
                     logger.debug(f"✅ Deleted Annika task: {annika_id}")
                 else:
@@ -1558,6 +1669,7 @@ class WebhookDrivenPlannerSync:
             tasks_checked = 0
             tasks_updated = 0
             tasks_created = 0
+            seen_planner_ids: Set[str] = set()
             
             # Poll each plan for tasks
             for plan in all_plans:
@@ -1580,9 +1692,12 @@ class WebhookDrivenPlannerSync:
                         logger.debug(f"📋 Plan '{plan_title}': {len(tasks)} tasks")
                         
                         for task in tasks:
+                            if task.get("percentComplete", 0) == 100 or task.get("completedDateTime"):
+                                continue
                             task_id = task.get("id")
                             if not task_id:
                                 continue
+                            seen_planner_ids.add(task_id)
                             
                             tasks_checked += 1
                             
@@ -1606,8 +1721,12 @@ class WebhookDrivenPlannerSync:
                     logger.error(f"Error polling plan '{plan_title}': {e}")
                     continue
             
+            await self._cleanup_deleted_planner_tasks(seen_planner_ids)
+
             # Log polling results
-            logger.info(f"✅ Planner polling complete: {tasks_checked} tasks checked, {tasks_created} created, {tasks_updated} updated")
+            logger.info(
+                f"✅ Planner polling complete: {tasks_checked} tasks checked, {tasks_created} created, {tasks_updated} updated"
+            )
             
             # Log the polling operation
             await self._log_sync_operation(
