@@ -111,17 +111,67 @@ class ChatSubscriptionManager:
         return None
 
     async def subscribe_to_all_existing_chats(self) -> int:
-        """Create subscriptions for all discovered chats."""
-        chats = await self.discover_all_chats()
-        count = 0
-        for chat_id in chats:
-            if await self.create_chat_subscription(chat_id):
-                count += 1
-        logger.info("Subscribed to %d/%d existing chats", count, len(chats))
-        return count
+        """Create a single subscription for all chat messages."""
+        if not self.redis_client:
+            await self.initialize()
+
+        existing = await self.redis_client.hgetall(f"{REDIS_PREFIX}global")
+        if existing.get("subscription_id"):
+            logger.info("Global chat subscription already exists")
+            return 1
+
+        token = get_agent_token()
+        if not token:
+            logger.warning("Cannot create chat subscription without token")
+            return 0
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        sub = {
+            "changeType": "created,updated",
+            "notificationUrl": WEBHOOK_URL,
+            "resource": "/me/chats/getAllMessages",
+            "expirationDateTime": (
+                datetime.now(UTC) + timedelta(hours=1)
+            ).isoformat().replace("+00:00", "Z"),
+            "clientState": "chat_global",
+            "lifecycleNotificationUrl": WEBHOOK_URL,
+        }
+
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{GRAPH_API_ENDPOINT}/subscriptions",
+                    headers=headers,
+                    json=sub,
+                    timeout=10,
+                )
+            if resp.status_code == 201:
+                data = resp.json()
+                await self.redis_client.hset(
+                    f"{REDIS_PREFIX}global",
+                    mapping={
+                        "subscription_id": data.get("id"),
+                        "created_at": datetime.now(UTC).isoformat(),
+                        "expires_at": data.get("expirationDateTime"),
+                        "status": "active",
+                    },
+                )
+                logger.info("Created global chat subscription")
+                return 1
+            logger.error(
+                "Failed to create global chat subscription: %s", resp.status_code
+            )
+        except Exception as exc:
+            logger.error("Error creating global chat subscription: %s", exc)
+        return 0
 
     async def handle_new_chat_created(self, chat_id: str) -> None:
-        await self.create_chat_subscription(chat_id)
+        # Global subscription covers all chats; nothing to do
+        logger.debug("New chat %s created; global subscription already active", chat_id)
 
     async def renew_expiring_subscriptions(self) -> None:
         """Renew subscriptions that expire within 15 minutes."""
