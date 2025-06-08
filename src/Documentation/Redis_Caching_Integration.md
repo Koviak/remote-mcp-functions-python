@@ -12,7 +12,7 @@ We've implemented a comprehensive Redis caching layer for Microsoft Graph data t
 annika:graph:users:{user_id}      # User metadata (24-hour TTL)
 annika:graph:groups:{group_id}    # Group metadata (24-hour TTL) 
 annika:graph:plans:{plan_id}      # Plan metadata (24-hour TTL)
-annika:graph:tasks:{task_id}      # Task metadata (24-hour TTL)
+annika:graph:tasks:{task_id}      # Task metadata (never expires)
 annika:graph:buckets:{bucket_id}  # Bucket metadata (24-hour TTL)
 
 annika:tasks:{id}                 # Primary task storage (no expiry)
