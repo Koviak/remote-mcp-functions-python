@@ -9,8 +9,9 @@ in real-time via Redis pub/sub channels.
 import asyncio
 import json
 import logging
-import redis.asyncio as redis
 from datetime import datetime
+
+import redis.asyncio as redis
 
 # Configure logging
 logging.basicConfig(
@@ -26,13 +27,14 @@ async def listen_for_chat_messages():
     
     try:
         # Connect to Redis
-        redis_client = await redis.Redis(
+        redis_client = redis.Redis(
             host="localhost",
             port=6379,
             password="password",
             decode_responses=True
         )
-        
+        await redis_client.ping()
+
         # Test connection
         await redis_client.ping()
         logger.info("✅ Connected to Redis")
@@ -124,7 +126,7 @@ async def show_message_history():
     
     try:
         # Connect to Redis
-        redis_client = await redis.Redis(
+        redis_client = redis.Redis(
             host="localhost",
             port=6379,
             password="password",

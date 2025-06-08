@@ -14,23 +14,21 @@ Key improvements over V4:
 import asyncio
 import json
 import logging
-import redis.asyncio as redis
-import time
 import os
-from pathlib import Path
-from typing import Dict, Optional, List, Set
-from datetime import datetime, timedelta
-from agent_auth_manager import get_agent_token
-from dual_auth_manager import (
-    get_token_for_operation, 
-    get_application_token, 
-    get_delegated_token
-)
-from annika_task_adapter import AnnikaTaskAdapter
-import requests
+import time
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from enum import Enum
+from pathlib import Path
+from typing import Dict, List, Optional, Set
+
+import redis.asyncio as redis
+import requests
+
+from agent_auth_manager import get_agent_token
+from annika_task_adapter import AnnikaTaskAdapter
+from dual_auth_manager import get_application_token, get_delegated_token, get_token_for_operation
 
 # Load environment variables from .env file
 env_file = Path(__file__).parent / '.env'
@@ -203,12 +201,13 @@ class WebhookDrivenPlannerSync:
         logger.info("🚀 Starting Webhook-Driven Planner Sync Service V5...")
         
         # Initialize Redis
-        self.redis_client = await redis.Redis(
+        self.redis_client = redis.Redis(
             host=REDIS_HOST,
             port=REDIS_PORT,
             password=REDIS_PASSWORD,
             decode_responses=True
         )
+        await self.redis_client.ping()
         
         # Initialize adapter
         self.adapter = AnnikaTaskAdapter(self.redis_client)

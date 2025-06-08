@@ -9,8 +9,8 @@ and that messages are being saved to Redis channels.
 import asyncio
 import json
 import logging
-import sys
 import os
+import sys
 
 # Add src directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -31,12 +31,13 @@ async def test_redis_channels():
     
     try:
         # Connect to Redis
-        redis_client = await redis.Redis(
+        redis_client = redis.Redis(
             host="localhost",
             port=6379,
             password="password",
             decode_responses=True
         )
+        await redis_client.ping()
         
         # Test connection
         await redis_client.ping()

@@ -4,17 +4,22 @@ Comprehensive startup script for all services.
 Starts ngrok, Function App, sets up webhooks, and runs Planner sync service.
 """
 import asyncio
+import logging
+import os
+import signal
 import subprocess
 import sys
-import logging
-import httpx
-import os
 from pathlib import Path
-import signal
 from typing import Optional
+
+import httpx
 
 # Add this import for token acquisition
 from agent_auth_manager import get_agent_token
+from chat_subscription_manager import (
+    chat_subscription_manager,
+    initialize_chat_subscription_manager,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -30,6 +35,7 @@ class ServiceManager:
         self.background_tasks = []  # Track background async tasks
         self.sync_service = None  # Track the sync service instance
         self.webhook_url = None
+        self.chat_subscription_manager = chat_subscription_manager
         
     async def find_ngrok_tunnel(self) -> Optional[str]:
         """Find ngrok tunnel URL."""
@@ -266,12 +272,30 @@ class ServiceManager:
         
         # 4. Setup webhooks
         await self.setup_webhooks()
-        
-        # 5. Wait a bit for token service to be ready
+
+        # 5. Initialize chat subscriptions for existing chats
+        try:
+            await initialize_chat_subscription_manager()
+            await self.chat_subscription_manager.subscribe_to_all_existing_chats()
+            # Start periodic renewal task
+            async def renew_loop():
+                while True:
+                    try:
+                        await self.chat_subscription_manager.renew_expiring_subscriptions()
+                    except Exception as e:
+                        logger.error(f"Renewal error: {e}")
+                    await asyncio.sleep(600)
+
+            renew_task = asyncio.create_task(renew_loop())
+            self.background_tasks.append(renew_task)
+        except Exception as e:
+            logger.error(f"Chat subscription setup failed: {e}")
+
+        # 6. Wait a bit for token service to be ready
         logger.info("⏳ Waiting for token service to initialize...")
         await asyncio.sleep(5)
-        
-        # 6. Ensure token is available before starting sync
+
+        # 7. Ensure token is available before starting sync
         if not await self.ensure_token_available():
             logger.error(
                 "❌ Cannot start sync service without "
@@ -284,7 +308,7 @@ class ServiceManager:
             # Don't fail completely, just skip sync service
             return True
         
-        # 7. Start sync service
+        # 8. Start sync service
         self.start_sync_service()
         
         logger.info("✅ All services started successfully!")

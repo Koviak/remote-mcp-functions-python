@@ -7,9 +7,10 @@ and routes them to the appropriate sync services via Redis pub/sub.
 
 import json
 import logging
-import redis.asyncio as redis
-from typing import Dict, List
 from datetime import datetime
+from typing import Dict, List
+
+import redis.asyncio as redis
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +27,13 @@ class GraphWebhookHandler:
         
     async def initialize(self):
         """Initialize Redis connection."""
-        self.redis_client = await redis.Redis(
+        self.redis_client = redis.Redis(
             host=REDIS_HOST,
             port=REDIS_PORT,
             password=REDIS_PASSWORD,
-            decode_responses=True
+            decode_responses=True,
         )
+        await self.redis_client.ping()
     
     async def handle_webhook_notification(self, notification: Dict) -> bool:
         """
@@ -286,12 +288,20 @@ class GraphWebhookHandler:
             
             # Keep only last 50 chat notifications in history
             await self.redis_client.ltrim("annika:teams:chats:history", 0, 49)
-            
+
             logger.info(
                 f"💬 Saved chat notification: "
                 f"chat={chat_id[:8]}, type={change_type}"
             )
-            
+
+            if change_type == "created" and chat_id != "unknown":
+                try:
+                    from chat_subscription_manager import chat_subscription_manager
+
+                    await chat_subscription_manager.handle_new_chat_created(chat_id)
+                except Exception as e:
+                    logger.error(f"Chat subscription manager error: {e}")
+
         except Exception as e:
             logger.error(f"Error processing chat notification: {e}")
     

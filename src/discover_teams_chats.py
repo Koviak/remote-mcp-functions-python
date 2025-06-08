@@ -126,12 +126,13 @@ async def check_webhook_notifications():
         import redis.asyncio as redis
         
         # Connect to Redis
-        redis_client = await redis.Redis(
+        redis_client = redis.Redis(
             host="localhost",
             port=6379,
             password="password",
             decode_responses=True
         )
+        await redis_client.ping()
         
         # Check for recent webhook notifications
         webhook_key = "annika:webhooks:notifications"

@@ -1,13 +1,15 @@
-import os
+import asyncio
 import json
+import logging
+import os
+from datetime import datetime
+from typing import Any, Dict
+
+import azure.functions as func
 import requests
 from azure.identity import ClientSecretCredential
-import azure.functions as func
-import logging
-from typing import Dict, Any
-from datetime import datetime
+
 from graph_metadata_manager import GraphMetadataManager
-import asyncio
 
 # Global app instance - will be set by register_http_endpoints
 app = None
@@ -4014,6 +4016,7 @@ def graph_webhook_http(req: func.HttpRequest) -> func.HttpResponse:
         
         # Import and use our new webhook handler
         import asyncio
+
         from webhook_handler import handle_graph_webhook
         
         # Process each notification through our V5 handler
@@ -4324,6 +4327,7 @@ def trigger_planner_poll_http(req: func.HttpRequest) -> func.HttpResponse:
     try:
         # Import the sync service
         import asyncio
+
         from planner_sync_service_v5 import WebhookDrivenPlannerSync
         
         # Create a temporary sync service instance to trigger polling
@@ -4332,12 +4336,13 @@ def trigger_planner_poll_http(req: func.HttpRequest) -> func.HttpResponse:
             
             # Initialize Redis connection
             import redis.asyncio as redis
-            sync_service.redis_client = await redis.Redis(
+            sync_service.redis_client = redis.Redis(
                 host="localhost",
                 port=6379,
                 password="password",
                 decode_responses=True
             )
+            await sync_service.redis_client.ping()
             
             # Initialize adapter
             from annika_task_adapter import AnnikaTaskAdapter

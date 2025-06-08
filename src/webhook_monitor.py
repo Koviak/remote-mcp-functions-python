@@ -9,8 +9,8 @@ and displays them in the CLI, including Teams chat messages.
 import asyncio
 import json
 import logging
-import sys
 import os
+import sys
 from datetime import datetime
 
 # Add src directory to path
@@ -35,12 +35,13 @@ async def monitor_webhooks():
     
     try:
         # Connect to Redis
-        redis_client = await redis.Redis(
+        redis_client = redis.Redis(
             host="localhost",
             port=6379,
             password="password",
             decode_responses=True
         )
+        await redis_client.ping()
         
         # Subscribe to all webhook-related channels
         pubsub = redis_client.pubsub()
@@ -156,12 +157,13 @@ async def show_recent_activity():
     
     try:
         # Connect to Redis
-        redis_client = await redis.Redis(
+        redis_client = redis.Redis(
             host="localhost",
             port=6379,
             password="password",
             decode_responses=True
         )
+        await redis_client.ping()
         
         # Check recent webhook notifications
         webhook_key = "annika:webhooks:notifications"
