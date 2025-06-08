@@ -10,21 +10,21 @@ Key Changes:
 - Includes health monitoring and auto-restart
 """
 
+import asyncio
 import json
 import logging
 import os
-import time
 import threading
-import asyncio
+import time
 
 import azure.functions as func
 from azure.identity import OnBehalfOfCredential
 
 from additional_tools import register_additional_tools
-from http_endpoints import register_http_endpoints
 from additional_tools_delegated import register_delegated_tools
-from token_refresh_service import start_token_refresh_service
+from http_endpoints import register_http_endpoints
 from token_api_endpoints import register_token_api_endpoints
+from token_refresh_service import start_token_refresh_service
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
@@ -79,8 +79,12 @@ except Exception as e:
 
 # Initialize webhook handler for V5 sync service
 try:
+    from chat_subscription_manager import (
+        chat_subscription_manager,
+        initialize_chat_subscription_manager,
+    )
     from webhook_handler import initialize_webhook_handler
-    
+
     def init_webhook_handler():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -99,9 +103,35 @@ try:
         name="WebhookInit"
     )
     webhook_thread.start()
-    
+
 except Exception as e:
     logger.error(f"Failed to start webhook handler initialization: {e}")
+
+# Initialize chat subscription manager
+try:
+    def init_chat_sub_manager():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(initialize_chat_subscription_manager())
+            loop.run_until_complete(
+                chat_subscription_manager.subscribe_to_all_existing_chats()
+            )
+            logger.info("✅ Chat subscription manager initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize chat subscriptions: {e}")
+        finally:
+            loop.close()
+
+    chat_thread = threading.Thread(
+        target=init_chat_sub_manager,
+        daemon=True,
+        name="ChatSubsInit",
+    )
+    chat_thread.start()
+
+except Exception as e:
+    logger.error(f"Failed to start chat subscription initialization: {e}")
 
 
 # Start Enhanced Local Development Services (includes everything)
@@ -166,6 +196,14 @@ if os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None:
                     json.dumps(status),
                     status_code=status_code,
                     mimetype="application/json"
+                )
+
+            @app.route(route="health/chats")
+            async def chat_sub_health(req: func.HttpRequest) -> func.HttpResponse:
+                """Return chat subscription manager health."""
+                health = await chat_subscription_manager.get_subscription_health()
+                return func.HttpResponse(
+                    json.dumps(health), mimetype="application/json"
                 )
         else:
             logger.error(

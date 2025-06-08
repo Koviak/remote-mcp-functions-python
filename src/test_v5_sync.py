@@ -43,12 +43,13 @@ async def test_v5_initialization():
         # Initialize Redis connection
         logger.info("3. Initializing Redis connection...")
         import redis.asyncio as redis
-        sync_service.redis_client = await redis.Redis(
+        sync_service.redis_client = redis.Redis(
             host="localhost",
             port=6379,
             password="password",
             decode_responses=True
         )
+        await sync_service.redis_client.ping()
         logger.info("✅ Redis connection initialized")
         
         # Test loading existing state

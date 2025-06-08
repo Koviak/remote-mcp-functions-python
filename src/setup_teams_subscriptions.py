@@ -8,8 +8,8 @@ Teams chat messages sent to Annika and saves them to Redis channels.
 
 import asyncio
 import logging
-import sys
 import os
+import sys
 
 # Add src directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -107,12 +107,13 @@ async def test_redis_subscription():
     
     try:
         # Connect to Redis
-        redis_client = await redis.Redis(
+        redis_client = redis.Redis(
             host="localhost",
             port=6379,
             password="password",
             decode_responses=True
         )
+        await redis_client.ping()
         
         # Subscribe to chat messages channel
         pubsub = redis_client.pubsub()

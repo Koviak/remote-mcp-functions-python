@@ -9,8 +9,8 @@ and checking if it gets processed correctly.
 import asyncio
 import json
 import logging
-import sys
 import os
+import sys
 from datetime import datetime
 
 # Add src directory to path
@@ -32,12 +32,13 @@ async def test_webhook_flow():
     
     try:
         # Connect to Redis
-        redis_client = await redis.Redis(
+        redis_client = redis.Redis(
             host="localhost",
             port=6379,
             password="password",
             decode_responses=True
         )
+        await redis_client.ping()
         
         # Create a test Teams chat message notification
         test_notification = {
@@ -152,12 +153,13 @@ async def monitor_real_time():
     
     try:
         # Connect to Redis
-        redis_client = await redis.Redis(
+        redis_client = redis.Redis(
             host="localhost",
             port=6379,
             password="password",
             decode_responses=True
         )
+        await redis_client.ping()
         
         # Subscribe to webhook channels
         pubsub = redis_client.pubsub()

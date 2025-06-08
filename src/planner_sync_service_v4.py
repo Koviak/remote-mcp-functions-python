@@ -13,14 +13,16 @@ Combines the best of V2 and V3:
 import asyncio
 import json
 import logging
-import redis.asyncio as redis
 import time
-from typing import Dict, Optional, List, Set
+import uuid
 from datetime import datetime
+from typing import Dict, List, Optional, Set
+
+import redis.asyncio as redis
+import requests
+
 from agent_auth_manager import get_agent_token
 from annika_task_adapter import AnnikaTaskAdapter
-import requests
-import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +66,13 @@ class BidirectionalPlannerSync:
         logger.info("🚀 Starting Bidirectional Planner Sync Service V4...")
         
         # Initialize Redis
-        self.redis_client = await redis.Redis(
+        self.redis_client = redis.Redis(
             host=REDIS_HOST,
             port=REDIS_PORT,
             password=REDIS_PASSWORD,
             decode_responses=True
         )
+        await self.redis_client.ping()
         
         # Initialize adapter
         self.adapter = AnnikaTaskAdapter(self.redis_client)
