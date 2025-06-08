@@ -1981,6 +1981,9 @@ def register_http_endpoints(function_app):
         list_channels_http)
     app.route(route="teams/messages", methods=["POST"])(
         post_channel_message_http)
+    app.route(route="me/chats", methods=["GET"])(list_chats_http)
+    app.route(route="me/chats/messages", methods=["POST"])(
+        post_chat_message_http)
     
     # Files & Sites
     app.route(route="me/drives", methods=["GET"])(list_drives_http)
@@ -3368,6 +3371,106 @@ def post_channel_message_http(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             f"Error: {str(e)}",
             status_code=500
+        )
+
+
+def list_chats_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list Teams chats."""
+    try:
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401,
+            )
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/me/chats",
+            headers=headers,
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json",
+            )
+        return func.HttpResponse(
+            f"Error: {response.status_code} - {response.text}",
+            status_code=response.status_code,
+        )
+
+    except Exception as e:  # pragma: no cover - network errors
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500,
+        )
+
+
+def post_chat_message_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to post message to a Teams chat."""
+    try:
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse(
+                "Request body required",
+                status_code=400,
+            )
+
+        chat_id = req_body.get("chatId")
+        message = req_body.get("message")
+        reply_to = req_body.get("replyToId")
+
+        if not all([chat_id, message]):
+            return func.HttpResponse(
+                "Missing required fields: chatId, message",
+                status_code=400,
+            )
+
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401,
+            )
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        data = {"body": {"content": message}}
+
+        if reply_to:
+            url = (
+                f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages/"
+                f"{reply_to}/replies"
+            )
+        else:
+            url = f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages"
+
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+
+        if response.status_code in (200, 201):
+            return func.HttpResponse(
+                f"Message posted successfully to chat {chat_id}",
+                status_code=201,
+            )
+        return func.HttpResponse(
+            f"Error: {response.status_code} - {response.text}",
+            status_code=response.status_code,
+        )
+
+    except Exception as e:  # pragma: no cover - network errors
+        return func.HttpResponse(
+            f"Error: {str(e)}",
+            status_code=500,
         )
 
 
