@@ -169,12 +169,63 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
 |----------|--------|---------|-------------|----------------|
 | `/me/chats` | ✅ | List user chats | GET | `list_chats_http()` |
-| `/chats/{chat-id}/messages` | ✅🔗 | List/Send chat messages | GET/POST | `send_chat_message_http()` + webhooks |
+| `/chats/{chat-id}/messages` | ✅🔗 | List/Send chat messages | GET/POST | `post_chat_message_http()` + webhooks |
+| `/chats/{chat-id}/messages/{message-id}/replies` | ✅ | Reply to chat message | POST | `post_chat_message_http()` (with replyToId) |
+| `/me/chats/{chat-id}/messages` | ✅ | List chat messages for user | GET | Direct Graph API access |
+| `/me/chats/{chat-id}/members` | ✅ | List chat members | GET | Chat discovery functionality |
 | `/me/chats/getAllMessages` | 🔗 | All chat messages (webhook) | GET | Webhook subscription |
+| `/chats/getAllMessages` | 🔗 | All tenant chat messages (webhook) | GET | Webhook subscription (app permissions) |
 
 ---
 
-## 8. Files & SharePoint
+## 8. Teams Chat Management (Enhanced)
+
+### Chat Discovery & Management
+| Endpoint | Status | Purpose | HTTP Method | Implementation |
+|----------|--------|---------|-------------|----------------|
+| `/me/chats` | ✅ | List user's chats | GET | `list_chats_http()` |
+| `/me/chats/{chat-id}/members` | ✅ | List chat members | GET | Chat discovery service |
+| `/chats/{chat-id}` | 📋 | Get specific chat details | GET | Available but not implemented |
+
+### Chat Message Operations
+| Endpoint | Status | Purpose | HTTP Method | Implementation |
+|----------|--------|---------|-------------|----------------|
+| `/chats/{chat-id}/messages` | ✅🔗 | Send message to chat | POST | `post_chat_message_http()` |
+| `/chats/{chat-id}/messages/{message-id}/replies` | ✅ | Reply to specific message | POST | `post_chat_message_http()` (with replyToId) |
+| `/me/chats/{chat-id}/messages` | ✅ | List messages in user's chat | GET | Direct API access |
+
+### Chat Webhook Subscriptions
+| Endpoint | Status | Purpose | HTTP Method | Implementation |
+|----------|--------|---------|-------------|----------------|
+| `/me/chats/getAllMessages` | 🔗 | Subscribe to user's chat messages | POST | `create_teams_chat_message_subscriptions()` |
+| `/chats/getAllMessages` | 🔗 | Subscribe to all tenant chat messages | POST | Requires app permissions |
+| `/chats/{chat-id}/messages` | 🔗 | Subscribe to specific chat | POST | Individual chat subscriptions |
+
+### Chat Message Format
+```json
+{
+  "body": {
+    "content": "Hello from Annika!",
+    "contentType": "text"
+  },
+  "importance": "normal"
+}
+```
+
+### Reply Message Format
+```json
+{
+  "body": {
+    "content": "This is a reply to your message",
+    "contentType": "text"
+  },
+  "replyToId": "message-id-to-reply-to"
+}
+```
+
+---
+
+## 9. Files & SharePoint
 
 ### OneDrive Operations
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -190,7 +241,7 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 
 ---
 
-## 9. Webhook Subscriptions
+## 10. Webhook Subscriptions
 
 ### Subscription Management
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -204,11 +255,13 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 | `/groups` | `annika_groups_webhook_v5` | Group changes | Planner sync trigger |
 | `/chats` | `annika_teams_chats_v5` | Chat events | Teams integration |
 | `/teams/getAllChannels` | `annika_teams_channels_v5` | Channel events | Teams integration |
-| `/me/chats/getAllMessages` | `chat_global` | Chat messages | Message monitoring |
+| `/me/chats/getAllMessages` | `annika_user_chat_messages` | User chat messages | Message monitoring (delegated) |
+| `/chats/getAllMessages` | `annika_tenant_chat_messages` | Tenant chat messages | Message monitoring (app permissions) |
+| `/chats/{chat-id}/messages` | `annika_chat_{chat-id}` | Specific chat messages | Individual chat monitoring |
 
 ---
 
-## 10. Reports & Analytics
+## 11. Reports & Analytics
 
 ### Usage Reports
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -217,7 +270,7 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 
 ---
 
-## 11. Security & Compliance
+## 12. Security & Compliance
 
 ### Security Operations
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -226,7 +279,7 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 
 ---
 
-## 12. Device Management
+## 13. Device Management
 
 ### Intune Operations
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -235,7 +288,7 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 
 ---
 
-## 13. Specialized Query Parameters
+## 14. Specialized Query Parameters
 
 ### Common OData Parameters
 ```text
@@ -263,7 +316,7 @@ If-Match: W/"JzEtVGFzayAgQEBAQEBAQEBAQEBAQEBAWCc="
 
 ---
 
-## 14. Error Handling & Rate Limits
+## 15. Error Handling & Rate Limits
 
 ### Common HTTP Status Codes
 - `200 OK` - Success
@@ -283,7 +336,7 @@ If-Match: W/"JzEtVGFzayAgQEBAQEBAQEBAQEBAQEBAWCc="
 
 ---
 
-## 15. Implementation Architecture
+## 16. Implementation Architecture
 
 ### Token Management
 - **Agent Tokens**: Stored in `annika:tokens:agent:{scope}`
@@ -307,7 +360,7 @@ If-Match: W/"JzEtVGFzayAgQEBAQEBAQEBAQEBAQEBAWCc="
 
 ---
 
-## 16. Security & Permissions
+## 17. Security & Permissions
 
 ### Authentication Methods
 - **Application Permissions**: For background services
@@ -326,7 +379,9 @@ Planner Operations:
 - Tasks.Read, Tasks.ReadWrite, Group.Read.All, Group.ReadWrite.All
 
 Teams Operations:
-- Chat.Read, Chat.ReadWrite, ChannelMessage.Read.All
+- Chat.Read, Chat.ReadWrite, Chat.ReadBasic
+- Chat.Create, Chat.ReadWrite.All (for app permissions)
+- ChannelMessage.Read.All, ChannelMessage.UpdatePolicyViolation.All
 
 User/Group Management:
 - User.Read.All, Group.Read.All, Directory.Read.All
@@ -334,7 +389,7 @@ User/Group Management:
 
 ---
 
-## 17. Performance Optimizations
+## 18. Performance Optimizations
 
 ### Batch Operations
 - **Batch Requests**: Combine multiple operations
