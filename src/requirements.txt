@@ -10,4 +10,6 @@ requests
 httpx
 
 redis[asyncio]>=4.5.0
+fakeredis
+respx
 

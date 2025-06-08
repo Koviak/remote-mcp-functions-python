@@ -5,10 +5,14 @@ This script demonstrates and tests the agent authentication manager
 with various authentication methods.
 """
 
-import os
 import json
 import logging
-from agent_auth_manager import get_auth_manager, get_agent_token
+import os
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from agent_auth_manager import get_agent_token, get_auth_manager
 
 # Set up logging
 logging.basicConfig(
@@ -162,7 +166,7 @@ def test_delegated_mcp_tools():
 if __name__ == "__main__":
     # Load settings from local.settings.json
     try:
-        with open("local.settings.json", "r") as f:
+        with open("local.settings.json") as f:
             settings = json.load(f)
             for key, value in settings["Values"].items():
                 if key.startswith("AZURE") or key.startswith("AGENT"):

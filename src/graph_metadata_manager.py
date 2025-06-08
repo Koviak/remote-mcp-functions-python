@@ -4,15 +4,17 @@ Microsoft Graph Metadata Manager
 Manages caching and retrieval of MS Graph metadata in Redis
 """
 
-import os
 import json
 import logging
-from typing import Optional, Dict, Any
+import os
 from datetime import datetime, timedelta
+from typing import Any
+
+import redis.asyncio as redis
 import requests
 from azure.identity import ClientSecretCredential
+
 from mcp_redis_config import get_redis_token_manager
-import redis.asyncio as redis
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,7 @@ REDIS_PLAN_KEY = "annika:graph:plans:{plan_id}"
 REDIS_TASK_KEY = "annika:graph:tasks:{task_id}"
 REDIS_BUCKET_KEY = "annika:graph:buckets:{bucket_id}"
 REDIS_METADATA_TTL = 86400  # 24 hour cache
+REDIS_TASK_TTL = None  # Tasks persist indefinitely
 
 # Pub/Sub channels
 TASK_UPDATE_CHANNEL = "annika:pubsub:tasks"
@@ -51,7 +54,7 @@ class GraphMetadataManager:
         except Exception as e:
             logger.error(f"Failed to initialize async Redis: {e}")
     
-    def _get_graph_token(self) -> Optional[str]:
+    def _get_graph_token(self) -> str | None:
         """Get or refresh Microsoft Graph access token"""
         # First try to get delegated token
         from agent_auth_manager import get_agent_token
@@ -84,7 +87,7 @@ class GraphMetadataManager:
         self.token_expires = datetime.now() + timedelta(minutes=50)
         return self.graph_token
     
-    async def cache_user_metadata(self, user_id: str) -> Dict[str, Any]:
+    async def cache_user_metadata(self, user_id: str) -> dict[str, Any]:
         """Fetch and cache user metadata from MS Graph"""
         token = self._get_graph_token()
         if not token:
@@ -123,7 +126,7 @@ class GraphMetadataManager:
         
         return {}
     
-    async def cache_group_metadata(self, group_id: str) -> Dict[str, Any]:
+    async def cache_group_metadata(self, group_id: str) -> dict[str, Any]:
         """Fetch and cache group metadata including Planner plans"""
         token = self._get_graph_token()
         if not token:
@@ -177,7 +180,7 @@ class GraphMetadataManager:
         
         return group_data
     
-    async def cache_plan_metadata(self, plan_id: str) -> Dict[str, Any]:
+    async def cache_plan_metadata(self, plan_id: str) -> dict[str, Any]:
         """Fetch and cache plan metadata"""
         token = self._get_graph_token()
         if not token:
@@ -225,7 +228,7 @@ class GraphMetadataManager:
         
         return plan_data
     
-    async def cache_task_metadata(self, task_id: str) -> Dict[str, Any]:
+    async def cache_task_metadata(self, task_id: str) -> dict[str, Any]:
         """Fetch and cache task details"""
         token = self._get_graph_token()
         if not token:
@@ -254,11 +257,10 @@ class GraphMetadataManager:
         if details_response.status_code == 200:
             task_data["details"] = details_response.json()
         
-        # Cache in Redis
+        # Cache in Redis (no expiry for tasks)
         key = REDIS_TASK_KEY.format(task_id=task_id)
-        await self.redis_client.setex(
+        await self.redis_client.set(
             key,
-            REDIS_METADATA_TTL,
             json.dumps(task_data)
         )
         
@@ -276,7 +278,7 @@ class GraphMetadataManager:
     
     async def get_cached_metadata(
             self, resource_type: str, resource_id: str
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Retrieve cached metadata from Redis"""
         key_patterns = {
             "user": REDIS_USER_KEY,
