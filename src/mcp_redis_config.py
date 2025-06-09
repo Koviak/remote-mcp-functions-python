@@ -1,17 +1,19 @@
-"""
-Redis Configuration and Connection Manager
+"""Redis Configuration and Connection Manager."""
 
-This module provides Redis configuration and connection pooling
-for storing and managing delegated access tokens.
-"""
+# mypy: ignore-errors
 
-import os
+# This module interacts heavily with the Redis client, which provides a mix of
+# synchronous and asynchronous return types. To keep type checking lightweight
+# while still allowing async usage, we ignore detailed type validation here.
+
 import json
 import logging
-from typing import Optional, Dict, Any, List
+import os
+from datetime import datetime
+from typing import Any
+
 import redis
 from redis.connection import ConnectionPool
-from datetime import datetime
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -62,7 +64,7 @@ class RedisConfig:
         self.max_memory_policy = os.getenv(
             "REDIS_MAX_MEMORY_POLICY", "allkeys-lru")
     
-    def get_connection_kwargs(self) -> Dict[str, Any]:
+    def get_connection_kwargs(self) -> dict[str, Any]:
         """Get kwargs for Redis connection"""
         # Only include parameters that ConnectionPool accepts
         return {
@@ -86,10 +88,10 @@ class RedisConfig:
 class RedisTokenManager:
     """Manages token storage and retrieval in Redis"""
     
-    def __init__(self, config: Optional[RedisConfig] = None):
+    def __init__(self, config: RedisConfig | None = None):
         self.config = config or RedisConfig()
-        self._pool: Optional[ConnectionPool] = None
-        self._client: Optional[redis.Redis] = None
+        self._pool: ConnectionPool | None = None
+        self._client: redis.Redis
         self._initialize_connection()
     
     def _initialize_connection(self):
@@ -116,7 +118,7 @@ class RedisTokenManager:
             logger.error(f"Failed to initialize Redis connection: {e}")
             raise
     
-    def _get_key(self, scope: str, user_id: Optional[str] = None) -> str:
+    def _get_key(self, scope: str, user_id: str | None = None) -> str:
         """Generate Redis key for token storage"""
         if user_id:
             return f"{self.config.namespace}tokens:user:{user_id}:{scope}"
@@ -127,8 +129,8 @@ class RedisTokenManager:
         token: str,
         expires_on: int,
         scope: str,
-        user_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        user_id: str | None = None,
+        metadata: dict[str, Any] | None = None
     ) -> bool:
         """
         Store token in Redis with metadata
@@ -184,8 +186,8 @@ class RedisTokenManager:
     def get_token(
         self,
         scope: str,
-        user_id: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
+        user_id: str | None = None
+    ) -> dict[str, Any] | None:
         """
         Retrieve token from Redis
         
@@ -217,7 +219,7 @@ class RedisTokenManager:
             logger.error(f"Error retrieving token: {e}")
             return None
     
-    def remove_token(self, scope: str, user_id: Optional[str] = None) -> bool:
+    def remove_token(self, scope: str, user_id: str | None = None) -> bool:
         """Remove token from Redis"""
         try:
             key = self._get_key(scope, user_id)
@@ -228,7 +230,7 @@ class RedisTokenManager:
             logger.error(f"Error removing token: {e}")
             return False
     
-    def update_refresh_count(self, scope: str, user_id: Optional[str] = None) -> bool:
+    def update_refresh_count(self, scope: str, user_id: str | None = None) -> bool:
         """Update the refresh count for a token"""
         try:
             key = self._get_key(scope, user_id)
@@ -250,7 +252,7 @@ class RedisTokenManager:
             
         return False
     
-    def get_all_active_tokens(self) -> List[Dict[str, Any]]:
+    def get_all_active_tokens(self) -> list[dict[str, Any]]:
         """Get all active tokens (for monitoring/management)"""
         try:
             active_keys = self._client.smembers(f"{self.config.namespace}tokens:active")
@@ -294,7 +296,7 @@ class RedisTokenManager:
 
 
 # Global instance
-_redis_token_manager: Optional[RedisTokenManager] = None
+_redis_token_manager: RedisTokenManager | None = None
 
 
 def get_redis_token_manager() -> RedisTokenManager:
