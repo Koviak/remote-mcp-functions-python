@@ -1,6 +1,10 @@
-# Comprehensive Microsoft Graph Endpoints
+# Comprehensive Microsoft Graph Endpoints (with Agent-Facing Annotations)
 
-This document provides a complete, intelligently organized catalog of Microsoft Graph API endpoints used in the MCP Functions project, organized by functional areas and implementation status.
+This document provides a complete, intelligently organized catalog of endpoints used in the MCP Functions project, annotated for remote agent developers.
+
+**Legend:**
+- **[AGENT-FACING]**: Call this MCP HTTP API endpoint from your agent code.
+- **[INTERNAL]**: MCP server calls this Microsoft Graph endpoint internally; agents do NOT call this directly.
 
 **Base URL**: `https://graph.microsoft.com/v1.0`  
 **Beta URL**: `https://graph.microsoft.com/beta`
@@ -17,10 +21,11 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 ## 1. Authentication & Token Management
 
 ### Core Authentication
-| Endpoint | Status | Purpose | Implementation |
-|----------|--------|---------|----------------|
-| `/me` | ✅ | Get current user profile | Used for token validation |
-| `/organization` | ✅ | Get tenant information | Organization details |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | GET | `/api/auth/me` | `GET /api/auth/me` | Get current agent profile |
+| [INTERNAL] | GET | `/me` | | MCP calls Graph for user info |
+| [INTERNAL] | GET | `/organization` | | MCP calls Graph for tenant info |
 
 ### Token Scopes Used
 - `https://graph.microsoft.com/.default` - Application permissions
@@ -35,12 +40,13 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 ## 2. User & Identity Management
 
 ### User Operations
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/users` | ✅ | List all users | GET | `list_users_http()` |
-| `/users/{user-id}` | ✅📊 | Get specific user | GET | `get_user_http()` + Redis cache |
-| `/users/{user-id}/memberOf` | 🔄 | Get user's group memberships | GET | Sync service polling |
-| `/directory/deletedItems/microsoft.graph.user` | ✅ | List deleted users | GET | `list_deleted_users_http()` |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | GET | `/api/users` | `GET /api/users` | List all users |
+| [AGENT-FACING] | GET | `/api/users/{user_id}` | `GET /api/users/123` | Get specific user |
+| [INTERNAL] | GET | `/users` | | MCP calls Graph for user list |
+| [INTERNAL] | GET | `/users/{user-id}` | | MCP calls Graph for user details |
+| [INTERNAL] | GET | `/users/{user-id}/memberOf` | | MCP calls Graph for group memberships |
 
 ### User Profile Extensions
 ```text
@@ -52,12 +58,12 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 ## 3. Group & Team Management
 
 ### Group Operations
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/groups` | ✅🔗 | List all groups | GET | `list_groups_http()` + webhooks |
-| `/groups/{group-id}` | 📊 | Get specific group | GET | Redis metadata cache |
-| `/groups/{group-id}/members` | ✅ | List group members | GET | `list_group_members_http()` |
-| `/groups/{group-id}/members/$ref` | ✅ | Add user to group | POST | `add_user_to_group_http()` |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | GET | `/api/groups` | `GET /api/groups` | List all groups |
+| [AGENT-FACING] | GET | `/api/groups/{group_id}` | `GET /api/groups/456` | Get specific group |
+| [INTERNAL] | GET | `/groups` | | MCP calls Graph for group list |
+| [INTERNAL] | GET | `/groups/{group-id}` | | MCP calls Graph for group details |
 
 ### Group Filtering
 ```text
@@ -69,23 +75,23 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 ## 4. Microsoft Planner (Task Management)
 
 ### Plan Management
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/me/planner/plans` | 🔄 | List user's plans | GET | Sync service polling |
-| `/groups/{group-id}/planner/plans` | ✅📊 | List group plans | GET | `list_plans_http()` + cache |
-| `/planner/plans` | ✅ | Create new plan | POST | `create_plan_http()` |
-| `/planner/plans/{plan-id}` | ✅📊 | Get/Update/Delete plan | GET/PATCH/DELETE | Full CRUD operations |
-| `/planner/plans/{plan-id}/details` | ✅ | Get plan details | GET | `get_plan_details_http()` |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | GET | `/api/planner/plans` | `GET /api/planner/plans` | List all plans |
+| [AGENT-FACING] | GET | `/api/planner/plans/{plan_id}` | `GET /api/planner/plans/789` | Get specific plan |
+| [INTERNAL] | GET | `/planner/plans` | | MCP calls Graph for plan list |
+| [INTERNAL] | GET | `/planner/plans/{plan-id}` | | MCP calls Graph for plan details |
 
 ### Task Management
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/planner/tasks` | ✅🔄 | Create task | POST | `create_task_http()` + sync |
-| `/planner/tasks/{task-id}` | ✅🔄📊 | Get/Update/Delete task | GET/PATCH/DELETE | Full CRUD + sync + cache |
-| `/planner/tasks/{task-id}/details` | ✅📊 | Get/Update task details | GET/PATCH | Detailed task info |
-| `/planner/plans/{plan-id}/tasks` | 🔄 | List plan tasks | GET | Sync service polling |
-| `/me/planner/tasks` | ✅ | List user's tasks | GET | `list_my_tasks_http()` |
-| `/users/{user-id}/planner/tasks` | ✅ | List user tasks | GET | `list_user_tasks_http()` |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | GET | `/api/planner/tasks` | `GET /api/planner/tasks` | List all tasks |
+| [AGENT-FACING] | POST | `/api/planner/tasks` | `POST /api/planner/tasks` | Create a new task |
+| [AGENT-FACING] | GET | `/api/planner/tasks/{task_id}` | `GET /api/planner/tasks/202` | Get specific task |
+| [AGENT-FACING] | PATCH | `/api/planner/tasks/{task_id}` | `PATCH /api/planner/tasks/202` | Update a task |
+| [INTERNAL] | GET | `/planner/tasks` | | MCP calls Graph for task list |
+| [INTERNAL] | POST | `/planner/tasks` | | MCP calls Graph to create task |
+| [INTERNAL] | GET | `/planner/tasks/{task-id}` | | MCP calls Graph for task details |
 
 ### Bucket Management
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -106,12 +112,13 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 ## 5. Mail & Messaging
 
 ### Core Mail Operations
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/me/messages` | ✅ | List inbox messages | GET | `list_inbox_messages_http()` |
-| `/me/messages/{message-id}` | ✅ | Get specific message | GET | `get_message_http()` |
-| `/me/sendMail` | ✅ | Send email | POST | `send_email_http()` |
-| `/me/messages/{message-id}/send` | ✅ | Send draft message | POST | `send_draft_message_http()` |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | GET | `/api/mail/messages` | `GET /api/mail/messages` | List inbox messages |
+| [AGENT-FACING] | POST | `/api/mail/messages` | `POST /api/mail/messages` | Send a new message |
+| [AGENT-FACING] | GET | `/api/mail/messages/{message_id}` | `GET /api/mail/messages/abc` | Get specific message |
+| [INTERNAL] | GET | `/me/messages` | | MCP calls Graph for messages |
+| [INTERNAL] | POST | `/me/sendMail` | | MCP calls Graph to send mail |
 
 ### Message Actions
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -139,16 +146,17 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 ## 6. Calendar & Events
 
 ### Calendar Management
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/me/calendars` | ✅ | List/Create calendars | GET/POST | `list_calendars_http()` |
-| `/me/calendar/calendarView` | ✅ | Get calendar view | GET | `get_calendar_view_http()` |
-| `/me/findMeetingTimes` | ✅ | Find meeting times | POST | `find_meeting_times_http()` |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | GET | `/api/calendar/events` | `GET /api/calendar/events` | List calendar events |
+| [AGENT-FACING] | POST | `/api/calendar/events` | `POST /api/calendar/events` | Create a new event |
+| [AGENT-FACING] | GET | `/api/calendar/events/{event_id}` | `GET /api/calendar/events/evt1` | Get specific event |
+| [INTERNAL] | GET | `/me/events` | | MCP calls Graph for events |
+| [INTERNAL] | POST | `/me/events` | | MCP calls Graph to create event |
 
 ### Event Management
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
 |----------|--------|---------|-------------|----------------|
-| `/me/events` | ✅ | List/Create events | GET/POST | `create_event_http()` |
 | `/me/events/{event-id}` | ✅ | Get/Update/Delete event | GET/PATCH/DELETE | Full CRUD operations |
 | `/me/events/{event-id}/accept` | ✅ | Accept event | POST | `accept_event_http()` |
 | `/me/events/{event-id}/decline` | ✅ | Decline event | POST | `decline_event_http()` |
@@ -158,48 +166,48 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 ## 7. Microsoft Teams Integration
 
 ### Teams & Channels
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/teams` | ✅ | List teams | GET | `list_teams_http()` |
-| `/teams/{team-id}/channels` | ✅ | List team channels | GET | `list_team_channels_http()` |
-| `/teams/{team-id}/channels/{channel-id}/messages` | ✅ | Send channel message | POST | `send_channel_message_http()` |
-| `/teams/getAllChannels` | 🔗 | All channels (webhook) | GET | Webhook subscription |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | GET | `/api/teams` | `GET /api/teams` | List all teams |
+| [AGENT-FACING] | GET | `/api/teams/{team_id}/channels` | `GET /api/teams/123/channels` | List team channels |
+| [INTERNAL] | GET | `/teams` | | MCP calls Graph for teams |
+| [INTERNAL] | GET | `/teams/{team-id}/channels` | | MCP calls Graph for channels |
 
 ### Chats & Messages
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/me/chats` | ✅ | List user chats | GET | `list_chats_http()` |
-| `/chats/{chat-id}/messages` | ✅🔗 | List/Send chat messages | GET/POST | `post_chat_message_http()` + webhooks |
-| `/chats/{chat-id}/messages/{message-id}/replies` | ✅ | Reply to chat message | POST | `post_chat_message_http()` (with replyToId) |
-| `/me/chats/{chat-id}/messages` | ✅ | List chat messages for user | GET | Direct Graph API access |
-| `/me/chats/{chat-id}/members` | ✅ | List chat members | GET | Chat discovery functionality |
-| `/me/chats/getAllMessages` | 🔗 | All chat messages (webhook) | GET | Webhook subscription |
-| `/chats/getAllMessages` | 🔗 | All tenant chat messages (webhook) | GET | Webhook subscription (app permissions) |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | GET | `/api/teams/chats` | `GET /api/teams/chats` | List user chats |
+| [AGENT-FACING] | POST | `/api/teams/chats/messages` | `POST /api/teams/chats/messages` | Send message to chat |
+| [AGENT-FACING] | POST | `/api/teams/chats/messages/reply` | `POST /api/teams/chats/messages/reply` | Reply to chat message |
+| [INTERNAL] | GET | `/me/chats` | | MCP calls Graph for chats |
+| [INTERNAL] | POST | `/chats/{chat-id}/messages` | | MCP calls Graph to send message |
+| [INTERNAL] | POST | `/chats/{chat-id}/messages/{message-id}/replies` | | MCP calls Graph to reply |
 
----
-
-## 8. Teams Chat Management (Enhanced)
+### Teams Chat Management (Enhanced)
 
 ### Chat Discovery & Management
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/me/chats` | ✅ | List user's chats | GET | `list_chats_http()` |
-| `/me/chats/{chat-id}/members` | ✅ | List chat members | GET | Chat discovery service |
-| `/chats/{chat-id}` | 📋 | Get specific chat details | GET | Available but not implemented |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | GET | `/api/teams/chats` | `GET /api/teams/chats` | List user's chats |
+| [AGENT-FACING] | GET | `/api/teams/chats/{chat_id}/members` | `GET /api/teams/chats/123/members` | List chat members |
+| [INTERNAL] | GET | `/me/chats/{chat-id}/members` | | MCP calls Graph for chat members |
 
 ### Chat Message Operations
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/chats/{chat-id}/messages` | ✅🔗 | Send message to chat | POST | `post_chat_message_http()` |
-| `/chats/{chat-id}/messages/{message-id}/replies` | ✅ | Reply to specific message | POST | `post_chat_message_http()` (with replyToId) |
-| `/me/chats/{chat-id}/messages` | ✅ | List messages in user's chat | GET | Direct API access |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [AGENT-FACING] | POST | `/api/teams/chats/messages` | `POST /api/teams/chats/messages` | Send message to chat |
+| [AGENT-FACING] | POST | `/api/teams/chats/messages/reply` | `POST /api/teams/chats/messages/reply` | Reply to chat message |
+| [AGENT-FACING] | GET | `/api/teams/chats/{chat_id}/messages` | `GET /api/teams/chats/123/messages` | List messages in chat |
+| [INTERNAL] | POST | `/chats/{chat-id}/messages` | | MCP calls Graph to send message |
+| [INTERNAL] | POST | `/chats/{chat-id}/messages/{message-id}/replies` | | MCP calls Graph to reply |
+| [INTERNAL] | GET | `/me/chats/{chat-id}/messages` | | MCP calls Graph for chat messages |
 
 ### Chat Webhook Subscriptions
-| Endpoint | Status | Purpose | HTTP Method | Implementation |
-|----------|--------|---------|-------------|----------------|
-| `/me/chats/getAllMessages` | 🔗 | Subscribe to user's chat messages | POST | `create_teams_chat_message_subscriptions()` |
-| `/chats/getAllMessages` | 🔗 | Subscribe to all tenant chat messages | POST | Requires app permissions |
-| `/chats/{chat-id}/messages` | 🔗 | Subscribe to specific chat | POST | Individual chat subscriptions |
+| MCP API Endpoint | Method | Path | Example | Notes |
+|------------------|--------|------|---------|-------|
+| [INTERNAL] | POST | `/me/chats/getAllMessages` | | MCP sets up webhook for user chat messages |
+| [INTERNAL] | POST | `/chats/getAllMessages` | | MCP sets up webhook for tenant chat messages |
+| [INTERNAL] | POST | `/chats/{chat-id}/messages` | | MCP sets up webhook for specific chat |
 
 ### Chat Message Format
 ```json
@@ -225,7 +233,7 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 
 ---
 
-## 9. Files & SharePoint
+## 8. Files & SharePoint
 
 ### OneDrive Operations
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -241,7 +249,7 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 
 ---
 
-## 10. Webhook Subscriptions
+## 9. Webhook Subscriptions
 
 ### Subscription Management
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -261,7 +269,7 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 
 ---
 
-## 11. Reports & Analytics
+## 10. Reports & Analytics
 
 ### Usage Reports
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -270,7 +278,7 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 
 ---
 
-## 12. Security & Compliance
+## 11. Security & Compliance
 
 ### Security Operations
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -279,7 +287,7 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 
 ---
 
-## 13. Device Management
+## 12. Device Management
 
 ### Intune Operations
 | Endpoint | Status | Purpose | HTTP Method | Implementation |
@@ -288,7 +296,7 @@ This document provides a complete, intelligently organized catalog of Microsoft 
 
 ---
 
-## 14. Specialized Query Parameters
+## 13. Specialized Query Parameters
 
 ### Common OData Parameters
 ```text
@@ -316,7 +324,7 @@ If-Match: W/"JzEtVGFzayAgQEBAQEBAQEBAQEBAQEBAWCc="
 
 ---
 
-## 15. Error Handling & Rate Limits
+## 14. Error Handling & Rate Limits
 
 ### Common HTTP Status Codes
 - `200 OK` - Success
@@ -336,7 +344,7 @@ If-Match: W/"JzEtVGFzayAgQEBAQEBAQEBAQEBAQEBAWCc="
 
 ---
 
-## 16. Implementation Architecture
+## 15. Implementation Architecture
 
 ### Token Management
 - **Agent Tokens**: Stored in `annika:tokens:agent:{scope}`
@@ -360,7 +368,7 @@ If-Match: W/"JzEtVGFzayAgQEBAQEBAQEBAQEBAQEBAWCc="
 
 ---
 
-## 17. Security & Permissions
+## 16. Security & Permissions
 
 ### Authentication Methods
 - **Application Permissions**: For background services
@@ -389,7 +397,7 @@ User/Group Management:
 
 ---
 
-## 18. Performance Optimizations
+## 17. Performance Optimizations
 
 ### Batch Operations
 - **Batch Requests**: Combine multiple operations
