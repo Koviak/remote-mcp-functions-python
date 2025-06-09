@@ -117,10 +117,12 @@ class ChatSubscriptionManager:
         if not self.redis_client:
             await self.initialize()
 
+
         assert self.redis_client is not None
         existing = await cast(Any, self.redis_client.hgetall)(
             f"{REDIS_PREFIX}global"
         )
+
         if existing.get("subscription_id") and existing.get("expires_at"):
             try:
                 exp = datetime.fromisoformat(
@@ -220,13 +222,17 @@ class ChatSubscriptionManager:
                         timeout=10,
                     )
                 if resp.status_code == 200:
+
                     await cast(Any, self.redis_client.hset)(
+
                         key,
                         mapping={"expires_at": new_exp, "status": "active"},
                     )
                 elif resp.status_code == 404:
                     logger.warning("Chat subscription missing, recreating")
+
                     await cast(Any, self.redis_client.delete)(key)
+
                     await self.subscribe_to_all_existing_chats()
                 else:
                     await cast(Any, self.redis_client.hset)(key, mapping={"status": "failed"})
