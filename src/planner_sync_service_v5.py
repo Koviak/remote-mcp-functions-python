@@ -189,6 +189,7 @@ class WebhookDrivenPlannerSync:
         
         # Webhook management
         self.webhook_subscriptions = {}
+        self.webhook_configs = {}
         self.webhook_renewal_interval = 3600  # 1 hour
         
         # Batch processing
@@ -366,56 +367,88 @@ class WebhookDrivenPlannerSync:
                 }
             }
         ]
-        
-        # Create each webhook subscription
+
+        # Store configs for renewal/recreation
+        self.webhook_configs = {
+            cfg["name"]: {"name": cfg["name"], "token": cfg["token"], "config": cfg["config"]}
+            for cfg in webhook_configs
+        }
+
         for webhook_info in webhook_configs:
             webhook_name = webhook_info["name"]
-            webhook_config = webhook_info["config"]
             webhook_token = webhook_info["token"]
-            
+
+            existing = await self.redis_client.hget(WEBHOOK_STATUS_KEY, webhook_name)
+            if existing:
+                try:
+                    data = json.loads(existing)
+                    exp = data.get("expires_at")
+                    if exp:
+                        exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                        if exp_dt > datetime.utcnow() + timedelta(minutes=5):
+                            self.webhook_subscriptions[webhook_name] = data.get("subscription_id")
+                            logger.info(
+                                f"{webhook_name} webhook already active: {data.get('subscription_id')}"
+                            )
+                            continue
+                except Exception:
+                    pass
+
             if not webhook_token:
-                logger.warning(
-                    f"No token available for {webhook_name} webhook"
-                )
+                logger.warning(f"No token available for {webhook_name} webhook")
                 continue
-            
-            headers = {
-                "Authorization": f"Bearer {webhook_token}",
-                "Content-Type": "application/json"
-            }
-            
-            try:
-                response = requests.post(
-                    f"{GRAPH_API_ENDPOINT}/subscriptions",
-                    headers=headers,
-                    json=webhook_config,
-                    timeout=30
-                )
-                
-                if response.status_code == 201:
-                    subscription = response.json()
-                    subscription_id = subscription["id"]
-                    self.webhook_subscriptions[webhook_name] = subscription_id
-                    
-                    # Store webhook status in Redis
-                    await self.redis_client.hset(
-                        WEBHOOK_STATUS_KEY,
-                        webhook_name,
-                        json.dumps({
-                            "subscription_id": subscription_id,
+
+            await self._create_webhook(webhook_info)
+
+    async def _create_webhook(self, cfg: dict) -> None:
+        """Create a single webhook subscription and store its state."""
+        webhook_name = cfg.get("name")
+        token = cfg.get("token")
+        config = cfg.get("config")
+
+        if not token:
+            logger.warning(f"No token available for {webhook_name} webhook")
+            return
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            response = requests.post(
+                f"{GRAPH_API_ENDPOINT}/subscriptions",
+                headers=headers,
+                json=config,
+                timeout=30,
+            )
+
+            if response.status_code == 201:
+                sub = response.json()
+                sub_id = sub["id"]
+                self.webhook_subscriptions[webhook_name] = sub_id
+                await self.redis_client.hset(
+                    WEBHOOK_STATUS_KEY,
+                    webhook_name,
+                    json.dumps(
+                        {
+                            "subscription_id": sub_id,
                             "created_at": datetime.utcnow().isoformat(),
-                            "expires_at": subscription["expirationDateTime"],
-                            "resource": webhook_config["resource"]
-                        })
-                    )
-                    
-                    logger.info(f"✅ {webhook_name} webhook subscription created: {subscription_id}")
-                else:
-                    logger.error(f"Failed to create {webhook_name} webhook: {response.status_code}")
-                    logger.error(f"Response: {response.text}")
-                    
-            except Exception as e:
-                logger.error(f"Error setting up {webhook_name} webhook: {e}")
+                            "expires_at": sub["expirationDateTime"],
+                            "resource": config["resource"],
+                        }
+                    ),
+                )
+                logger.info(
+                    f"✅ {webhook_name} webhook subscription created: {sub_id}"
+                )
+            else:
+                logger.error(
+                    f"Failed to create {webhook_name} webhook: {response.status_code}"
+                )
+                logger.error(f"Response: {response.text}")
+        except Exception as exc:
+            logger.error(f"Error setting up {webhook_name} webhook: {exc}")
     
     async def _webhook_renewal_loop(self):
         """Periodically renew webhook subscriptions."""
@@ -453,11 +486,22 @@ class WebhookDrivenPlannerSync:
                     json=update_data,
                     timeout=30
                 )
-                
+
                 if response.status_code == 200:
                     logger.info(f"✅ Renewed webhook: {webhook_type}")
+                elif response.status_code == 404:
+                    logger.warning(
+                        f"Webhook {webhook_type} missing, recreating..."
+                    )
+                    cfg = self.webhook_configs.get(webhook_type)
+                    if cfg:
+                        await self.redis_client.hdel(WEBHOOK_STATUS_KEY, webhook_type)
+                        self.webhook_subscriptions.pop(webhook_type, None)
+                        await self._create_webhook(cfg)
                 else:
-                    logger.error(f"Failed to renew webhook {webhook_type}: {response.status_code}")
+                    logger.error(
+                        f"Failed to renew webhook {webhook_type}: {response.status_code}"
+                    )
                     
             except Exception as e:
                 logger.error(f"Error renewing webhook {webhook_type}: {e}")
