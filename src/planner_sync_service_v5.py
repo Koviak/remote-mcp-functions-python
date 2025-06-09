@@ -23,6 +23,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
+import httpx
 import redis.asyncio as redis
 import requests
 
@@ -416,12 +417,13 @@ class WebhookDrivenPlannerSync:
         }
 
         try:
-            response = requests.post(
-                f"{GRAPH_API_ENDPOINT}/subscriptions",
-                headers=headers,
-                json=config,
-                timeout=30,
-            )
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{GRAPH_API_ENDPOINT}/subscriptions",
+                    headers=headers,
+                    json=config,
+                    timeout=30,
+                )
 
             if response.status_code == 201:
                 sub = response.json()
@@ -480,12 +482,13 @@ class WebhookDrivenPlannerSync:
                     "expirationDateTime": new_expiration
                 }
                 
-                response = requests.patch(
-                    f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
-                    headers=headers,
-                    json=update_data,
-                    timeout=30
-                )
+                async with httpx.AsyncClient() as client:
+                    response = await client.patch(
+                        f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
+                        headers=headers,
+                        json=update_data,
+                        timeout=30,
+                    )
 
                 if response.status_code == 200:
                     logger.info(f"✅ Renewed webhook: {webhook_type}")
@@ -518,11 +521,12 @@ class WebhookDrivenPlannerSync:
         
         for webhook_type, subscription_id in self.webhook_subscriptions.items():
             try:
-                response = requests.delete(
-                    f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
-                    headers=headers,
-                    timeout=30
-                )
+                async with httpx.AsyncClient() as client:
+                    response = await client.delete(
+                        f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
+                        headers=headers,
+                        timeout=30,
+                    )
                 
                 if response.status_code == 204:
                     logger.info(f"✅ Cleaned up webhook: {webhook_type}")

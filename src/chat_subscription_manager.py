@@ -116,9 +116,16 @@ class ChatSubscriptionManager:
             await self.initialize()
 
         existing = await self.redis_client.hgetall(f"{REDIS_PREFIX}global")
-        if existing.get("subscription_id"):
-            logger.info("Global chat subscription already exists")
-            return 1
+        if existing.get("subscription_id") and existing.get("expires_at"):
+            try:
+                exp = datetime.fromisoformat(
+                    existing["expires_at"].replace("Z", "+00:00")
+                )
+                if exp > datetime.now(UTC) - timedelta(minutes=5):
+                    logger.info("Global chat subscription already exists")
+                    return 1
+            except Exception:
+                pass
 
         token = get_agent_token()
         if not token:
@@ -207,8 +214,13 @@ class ChatSubscriptionManager:
                     )
                 if resp.status_code == 200:
                     await self.redis_client.hset(
-                        key, mapping={"expires_at": new_exp, "status": "active"}
+                        key,
+                        mapping={"expires_at": new_exp, "status": "active"},
                     )
+                elif resp.status_code == 404:
+                    logger.warning("Chat subscription missing, recreating")
+                    await self.redis_client.delete(key)
+                    await self.subscribe_to_all_existing_chats()
                 else:
                     await self.redis_client.hset(key, mapping={"status": "failed"})
 
