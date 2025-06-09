@@ -29,7 +29,7 @@ import requests
 
 from agent_auth_manager import get_agent_token
 from annika_task_adapter import AnnikaTaskAdapter
-from dual_auth_manager import get_application_token, get_delegated_token, get_token_for_operation
+from dual_auth_manager import get_application_token, get_delegated_token
 
 # Load environment variables from .env file
 env_file = Path(__file__).parent / '.env'
@@ -444,6 +444,31 @@ class WebhookDrivenPlannerSync:
                 logger.info(
                     f"✅ {webhook_name} webhook subscription created: {sub_id}"
                 )
+            elif response.status_code == 403:
+                logger.warning(
+                    f"Webhook limit reached for {webhook_name}, attempting to reuse"
+                )
+                existing = await self._fetch_existing_webhook(
+                    config["resource"], token
+                )
+                if existing:
+                    sub_id = existing["id"]
+                    self.webhook_subscriptions[webhook_name] = sub_id
+                    await self.redis_client.hset(
+                        WEBHOOK_STATUS_KEY,
+                        webhook_name,
+                        json.dumps(
+                            {
+                                "subscription_id": sub_id,
+                                "created_at": datetime.utcnow().isoformat(),
+                                "expires_at": existing["expirationDateTime"],
+                                "resource": config["resource"],
+                            }
+                        ),
+                    )
+                    logger.info(
+                        f"✅ Reused {webhook_name} webhook subscription: {sub_id}"
+                    )
             else:
                 logger.error(
                     f"Failed to create {webhook_name} webhook: {response.status_code}"
@@ -451,6 +476,25 @@ class WebhookDrivenPlannerSync:
                 logger.error(f"Response: {response.text}")
         except Exception as exc:
             logger.error(f"Error setting up {webhook_name} webhook: {exc}")
+
+    async def _fetch_existing_webhook(self, resource: str, token: str) -> Optional[dict]:
+        """Return existing subscription for the given resource if present."""
+        headers = {"Authorization": f"Bearer {token}"}
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{GRAPH_API_ENDPOINT}/subscriptions",
+                    headers=headers,
+                    timeout=30,
+                )
+            if resp.status_code == 200:
+                subs = resp.json().get("value", [])
+                for sub in subs:
+                    if sub.get("resource") == resource:
+                        return sub
+        except Exception as exc:
+            logger.error(f"Error fetching existing webhook: {exc}")
+        return None
     
     async def _webhook_renewal_loop(self):
         """Periodically renew webhook subscriptions."""
