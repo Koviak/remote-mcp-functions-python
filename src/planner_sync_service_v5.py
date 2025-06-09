@@ -21,19 +21,20 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, cast
 
+import httpx
 import redis.asyncio as redis
-import requests
+import requests  # type: ignore
 
 from agent_auth_manager import get_agent_token
 from annika_task_adapter import AnnikaTaskAdapter
-from dual_auth_manager import get_application_token, get_delegated_token, get_token_for_operation
+from dual_auth_manager import get_application_token, get_delegated_token
 
 # Load environment variables from .env file
 env_file = Path(__file__).parent / '.env'
 if env_file.exists():
-    with open(env_file, 'r') as f:
+    with open(env_file) as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith('#') and '=' in line:
@@ -44,7 +45,7 @@ if env_file.exists():
 settings_file = Path(__file__).parent / "local.settings.json"
 if settings_file.exists():
     try:
-        with open(settings_file, 'r') as f:
+        with open(settings_file) as f:
             settings = json.load(f)
             values = settings.get("Values", {})
             for key, value in values.items():
@@ -86,11 +87,11 @@ class ConflictResolution(Enum):
 class SyncLogEntry:
     timestamp: str
     operation: str
-    annika_id: Optional[str]
-    planner_id: Optional[str]
+    annika_id: str | None
+    planner_id: str | None
     status: str
-    error: Optional[str] = None
-    conflict_resolution: Optional[str] = None
+    error: str | None = None
+    conflict_resolution: str | None = None
 
 
 class RateLimitHandler:
@@ -105,7 +106,7 @@ class RateLimitHandler:
         """Check if we're currently in a rate limit backoff period."""
         return time.time() < self.retry_after
     
-    def handle_rate_limit(self, retry_after_seconds: int = None):
+    def handle_rate_limit(self, retry_after_seconds: int | None = None):
         """Handle a rate limit response."""
         self.consecutive_failures += 1
         
@@ -132,8 +133,8 @@ class ConflictResolver:
     
     def resolve_conflict(
         self, 
-        annika_task: Dict, 
-        planner_task: Dict
+        annika_task: dict, 
+        planner_task: dict
     ) -> ConflictResolution:
         """Determine which version should win in a conflict."""
         
@@ -400,11 +401,11 @@ class WebhookDrivenPlannerSync:
 
             await self._create_webhook(webhook_info)
 
-    async def _create_webhook(self, cfg: dict) -> None:
+    async def _create_webhook(self, cfg: dict[str, Any]) -> None:
         """Create a single webhook subscription and store its state."""
         webhook_name = cfg.get("name")
         token = cfg.get("token")
-        config = cfg.get("config")
+        config = cast(dict[str, Any], cfg.get("config"))
 
         if not token:
             logger.warning(f"No token available for {webhook_name} webhook")
@@ -416,15 +417,16 @@ class WebhookDrivenPlannerSync:
         }
 
         try:
-            response = requests.post(
-                f"{GRAPH_API_ENDPOINT}/subscriptions",
-                headers=headers,
-                json=config,
-                timeout=30,
-            )
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{GRAPH_API_ENDPOINT}/subscriptions",
+                    headers=headers,
+                    json=config,
+                    timeout=30,
+                )
 
             if response.status_code == 201:
-                sub = response.json()
+                sub = cast(dict[str, Any], response.json())
                 sub_id = sub["id"]
                 self.webhook_subscriptions[webhook_name] = sub_id
                 await self.redis_client.hset(
@@ -442,6 +444,31 @@ class WebhookDrivenPlannerSync:
                 logger.info(
                     f"✅ {webhook_name} webhook subscription created: {sub_id}"
                 )
+            elif response.status_code == 403:
+                logger.warning(
+                    f"Webhook limit reached for {webhook_name}, attempting to reuse"
+                )
+                existing = await self._fetch_existing_webhook(
+                    cast(str, config["resource"]), token
+                )
+                if existing:
+                    sub_id = cast(dict[str, Any], existing)["id"]
+                    self.webhook_subscriptions[webhook_name] = sub_id
+                    await self.redis_client.hset(
+                        WEBHOOK_STATUS_KEY,
+                        webhook_name,
+                        json.dumps(
+                            {
+                                "subscription_id": sub_id,
+                                "created_at": datetime.utcnow().isoformat(),
+                                "expires_at": existing["expirationDateTime"],
+                                "resource": config["resource"],
+                            }
+                        ),
+                    )
+                    logger.info(
+                        f"✅ Reused {webhook_name} webhook subscription: {sub_id}"
+                    )
             else:
                 logger.error(
                     f"Failed to create {webhook_name} webhook: {response.status_code}"
@@ -449,6 +476,25 @@ class WebhookDrivenPlannerSync:
                 logger.error(f"Response: {response.text}")
         except Exception as exc:
             logger.error(f"Error setting up {webhook_name} webhook: {exc}")
+
+    async def _fetch_existing_webhook(self, resource: str, token: str) -> dict | None:
+        """Return existing subscription for the given resource if present."""
+        headers = {"Authorization": f"Bearer {token}"}
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{GRAPH_API_ENDPOINT}/subscriptions",
+                    headers=headers,
+                    timeout=30,
+                )
+            if resp.status_code == 200:
+                subs = resp.json().get("value", [])
+                for sub in subs:
+                    if sub.get("resource") == resource:
+                        return sub
+        except Exception as exc:
+            logger.error(f"Error fetching existing webhook: {exc}")
+        return None
     
     async def _webhook_renewal_loop(self):
         """Periodically renew webhook subscriptions."""
@@ -480,12 +526,13 @@ class WebhookDrivenPlannerSync:
                     "expirationDateTime": new_expiration
                 }
                 
-                response = requests.patch(
-                    f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
-                    headers=headers,
-                    json=update_data,
-                    timeout=30
-                )
+                async with httpx.AsyncClient() as client:
+                    response = await client.patch(
+                        f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
+                        headers=headers,
+                        json=update_data,
+                        timeout=30,
+                    )
 
                 if response.status_code == 200:
                     logger.info(f"✅ Renewed webhook: {webhook_type}")
@@ -518,11 +565,12 @@ class WebhookDrivenPlannerSync:
         
         for webhook_type, subscription_id in self.webhook_subscriptions.items():
             try:
-                response = requests.delete(
-                    f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
-                    headers=headers,
-                    timeout=30
-                )
+                async with httpx.AsyncClient() as client:
+                    response = await client.delete(
+                        f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
+                        headers=headers,
+                        timeout=30,
+                    )
                 
                 if response.status_code == 204:
                     logger.info(f"✅ Cleaned up webhook: {webhook_type}")
@@ -554,14 +602,12 @@ class WebhookDrivenPlannerSync:
                 except Exception as e:
                     logger.error(f"Error processing webhook notification: {e}")
     
-    async def _handle_webhook_notification(self, notification: Dict):
+    async def _handle_webhook_notification(self, notification: dict):
         """Handle a single webhook notification from Microsoft Graph."""
         try:
             change_type = notification.get("changeType")
             resource = notification.get("resource", "")
             client_state = notification.get("clientState", "")
-            resource_data = notification.get("resourceData", {})
-            resource_id = resource_data.get("id")
             
             logger.info(f"📨 Webhook: {change_type} for {resource} (client: {client_state})")
             
@@ -591,7 +637,7 @@ class WebhookDrivenPlannerSync:
                 str(e)
             )
     
-    async def _handle_group_notification(self, notification: Dict):
+    async def _handle_group_notification(self, notification: dict):
         """Handle group change notifications - trigger Planner polling for the group."""
         try:
             change_type = notification.get("changeType")
@@ -620,7 +666,7 @@ class WebhookDrivenPlannerSync:
         except Exception as e:
             logger.error(f"Error handling group notification: {e}")
     
-    async def _handle_teams_chat_notification(self, notification: Dict):
+    async def _handle_teams_chat_notification(self, notification: dict):
         """Handle Teams chat notifications - save to Redis for Annika."""
         try:
             change_type = notification.get("changeType")
@@ -710,7 +756,7 @@ class WebhookDrivenPlannerSync:
         except Exception as e:
             logger.error(f"Error handling Teams chat notification: {e}")
     
-    async def _handle_teams_channel_notification(self, notification: Dict):
+    async def _handle_teams_channel_notification(self, notification: dict):
         """Handle Teams channel notifications - save to Redis for Annika."""
         try:
             change_type = notification.get("changeType")
@@ -735,7 +781,13 @@ class WebhookDrivenPlannerSync:
                     if channel_match:
                         channel_id = channel_match.group(1).strip("'\"()")
                 
-                logger.info(f"📺 Teams channel message {change_type}: team={team_id[:8]}, channel={channel_id[:8]}, msg={message_id[:8]}")
+                logger.info(
+                    "📺 Teams channel message %s: team=%s, channel=%s, msg=%s",
+                    change_type,
+                    team_id[:8],
+                    channel_id[:8],
+                    message_id[:8],
+                )
                 
                 # Create message notification for Annika
                 message_notification = {
@@ -766,7 +818,12 @@ class WebhookDrivenPlannerSync:
                 # Keep only last 100 messages in history
                 await self.redis_client.ltrim("annika:teams:channel_messages:history", 0, 99)
                 
-                logger.info(f"📺 Saved channel message to Redis: team={team_id[:8]}, channel={channel_id[:8]}, msg={message_id[:8]}")
+                logger.info(
+                    "📺 Saved channel message to Redis: team=%s, channel=%s, msg=%s",
+                    team_id[:8],
+                    channel_id[:8],
+                    message_id[:8],
+                )
                 
             else:
                 # General channel notification (channel created/updated)
@@ -880,7 +937,7 @@ class WebhookDrivenPlannerSync:
         except Exception as e:
             logger.error(f"Error polling plan {plan_id} tasks: {e}")
     
-    async def _sync_existing_task(self, planner_id: str, planner_task: Dict):
+    async def _sync_existing_task(self, planner_id: str, planner_task: dict):
         """Sync an existing task if it has been modified."""
         try:
             annika_id = await self._get_annika_id(planner_id)
@@ -980,9 +1037,11 @@ class WebhookDrivenPlannerSync:
         except Exception as e:
             logger.error(f"Error detecting changes: {e}")
     
-    async def _task_needs_upload(self, annika_task: Dict) -> bool:
+    async def _task_needs_upload(self, annika_task: dict) -> bool:
         """Check if a task needs to be uploaded to Planner."""
         annika_id = annika_task.get("id")
+        if not isinstance(annika_id, str):
+            return True
         planner_id = await self._get_planner_id(annika_id)
         
         if not planner_id:
@@ -1000,10 +1059,10 @@ class WebhookDrivenPlannerSync:
             annika_time = datetime.fromisoformat(annika_modified.replace('Z', '+00:00'))
             sync_time = datetime.fromisoformat(last_sync)
             return annika_time > sync_time
-        except:
+        except Exception:
             return True
     
-    async def _queue_upload(self, annika_task: Dict):
+    async def _queue_upload(self, annika_task: dict):
         """Queue a task for batch upload."""
         self.pending_uploads.append(annika_task)
         
@@ -1053,7 +1112,7 @@ class WebhookDrivenPlannerSync:
     
     # ========== HELPER METHODS ==========
     
-    async def _get_state_hash(self) -> Optional[str]:
+    async def _get_state_hash(self) -> str | None:
         """Get hash of conscious_state for change detection."""
         try:
             state_json = await self.redis_client.execute_command(
@@ -1065,7 +1124,7 @@ class WebhookDrivenPlannerSync:
             pass
         return None
     
-    async def _get_annika_task(self, annika_id: str) -> Optional[Dict]:
+    async def _get_annika_task(self, annika_id: str) -> dict | None:
         """Get Annika task by ID."""
         try:
             annika_tasks = await self.adapter.get_all_annika_tasks()
@@ -1076,7 +1135,7 @@ class WebhookDrivenPlannerSync:
             pass
         return None
 
-    async def _cleanup_deleted_planner_tasks(self, seen_ids: Set[str]):
+    async def _cleanup_deleted_planner_tasks(self, seen_ids: set[str]):
         """Remove Annika tasks whose Planner counterparts were deleted."""
         pattern = f"{PLANNER_ID_MAP_PREFIX}Task-*"
         cursor = 0
@@ -1107,11 +1166,11 @@ class WebhookDrivenPlannerSync:
     async def _log_sync_operation(
         self,
         operation: str,
-        annika_id: Optional[str],
-        planner_id: Optional[str],
+        annika_id: str | None,
+        planner_id: str | None,
         status: str,
-        error: Optional[str] = None,
-        conflict_resolution: Optional[str] = None
+        error: str | None = None,
+        conflict_resolution: str | None = None
     ):
         """Log a sync operation for debugging and monitoring."""
         log_entry = SyncLogEntry(
@@ -1158,7 +1217,7 @@ class WebhookDrivenPlannerSync:
             except Exception as e:
                 logger.error(f"Error in health monitoring: {e}")
     
-    async def _collect_health_metrics(self) -> Dict:
+    async def _collect_health_metrics(self) -> dict:
         """Collect health metrics."""
         return {
             "timestamp": datetime.utcnow().isoformat(),
@@ -1191,7 +1250,7 @@ class WebhookDrivenPlannerSync:
                         mod_time = datetime.fromisoformat(modified_at.replace('Z', '+00:00'))
                         if mod_time > cutoff_time:
                             recent_tasks.append(task)
-                    except:
+                    except Exception:
                         # If we can't parse the time, include it to be safe
                         recent_tasks.append(task)
             
@@ -1224,13 +1283,13 @@ class WebhookDrivenPlannerSync:
             annika_id
         )
     
-    async def _get_planner_id(self, annika_id: str) -> Optional[str]:
+    async def _get_planner_id(self, annika_id: str) -> str | None:
         """Get Planner ID for Annika task."""
         return await self.redis_client.get(
             f"{PLANNER_ID_MAP_PREFIX}{annika_id}"
         )
     
-    async def _get_annika_id(self, planner_id: str) -> Optional[str]:
+    async def _get_annika_id(self, planner_id: str) -> str | None:
         """Get Annika ID for Planner task."""
         return await self.redis_client.get(
             f"{PLANNER_ID_MAP_PREFIX}{planner_id}"
@@ -1250,7 +1309,7 @@ class WebhookDrivenPlannerSync:
     
     # ========== TASK OPERATIONS (Complete implementations) ==========
     
-    async def _create_annika_task_from_planner(self, planner_task: Dict):
+    async def _create_annika_task_from_planner(self, planner_task: dict):
         """Create task in Annika from Planner task."""
         planner_id = planner_task["id"]
         annika_id = f"Task-{uuid.uuid4().hex[:8]}"
@@ -1318,7 +1377,7 @@ class WebhookDrivenPlannerSync:
                 str(e)
             )
     
-    async def _update_annika_task_from_planner(self, annika_id: str, planner_task: Dict):
+    async def _update_annika_task_from_planner(self, annika_id: str, planner_task: dict):
         """Update Annika task from Planner changes."""
         try:
             # Convert updates
@@ -1372,7 +1431,7 @@ class WebhookDrivenPlannerSync:
                 str(e)
             )
     
-    async def _create_planner_task(self, annika_task: Dict) -> bool:
+    async def _create_planner_task(self, annika_task: dict) -> bool:
         """Create task in Planner from Annika task."""
         if self.rate_limiter.is_rate_limited():
             logger.debug("Rate limited - queuing task creation")
@@ -1409,9 +1468,9 @@ class WebhookDrivenPlannerSync:
             )
             
             if response.status_code == 201:
-                planner_task = response.json()
+                planner_task = cast(dict[str, Any], response.json())
                 planner_id = planner_task["id"]
-                annika_id = annika_task.get("id")
+                annika_id = str(annika_task.get("id", ""))
                 
                 # Store mapping and ETag
                 await self._store_id_mapping(annika_id, planner_id)
@@ -1459,7 +1518,7 @@ class WebhookDrivenPlannerSync:
             )
             return False
     
-    async def _update_planner_task(self, planner_id: str, annika_task: Dict) -> bool:
+    async def _update_planner_task(self, planner_id: str, annika_task: dict) -> bool:
         """Update Planner task from Annika changes."""
         if self.rate_limiter.is_rate_limited():
             logger.debug("Rate limited - queuing task update")
@@ -1651,7 +1710,7 @@ class WebhookDrivenPlannerSync:
         except Exception as e:
             logger.error(f"Error deleting Annika task {annika_id}: {e}")
     
-    async def _determine_plan_for_task(self, annika_task: Dict) -> Optional[str]:
+    async def _determine_plan_for_task(self, annika_task: dict) -> str | None:
         """Determine which plan a task should go to."""
         # You can customize this logic based on task properties
         # For now, use default plan from environment or Redis config
@@ -1713,7 +1772,7 @@ class WebhookDrivenPlannerSync:
             tasks_checked = 0
             tasks_updated = 0
             tasks_created = 0
-            seen_planner_ids: Set[str] = set()
+            seen_planner_ids: set[str] = set()
             
             # Poll each plan for tasks
             for plan in all_plans:
@@ -1769,7 +1828,10 @@ class WebhookDrivenPlannerSync:
 
             # Log polling results
             logger.info(
-                f"✅ Planner polling complete: {tasks_checked} tasks checked, {tasks_created} created, {tasks_updated} updated"
+                "✅ Planner polling complete: %s tasks checked, %s created, %s updated",
+                tasks_checked,
+                tasks_created,
+                tasks_updated,
             )
             
             # Log the polling operation
@@ -1779,7 +1841,10 @@ class WebhookDrivenPlannerSync:
                 None,
                 "success",
                 None,
-                f"Polled {len(all_plans)} plans, {tasks_checked} tasks checked, {tasks_created} created, {tasks_updated} updated"
+                (
+                    f"Polled {len(all_plans)} plans, {tasks_checked} tasks checked,"
+                    f" {tasks_created} created, {tasks_updated} updated"
+                )
             )
             
         except Exception as e:
@@ -1792,7 +1857,7 @@ class WebhookDrivenPlannerSync:
                 str(e)
             )
     
-    async def _task_needs_sync_from_planner(self, planner_id: str, planner_task: Dict) -> bool:
+    async def _task_needs_sync_from_planner(self, planner_id: str, planner_task: dict) -> bool:
         """Check if a Planner task needs to be synced to Annika."""
         try:
             # Check stored ETag to see if task has changed
@@ -1832,7 +1897,7 @@ class WebhookDrivenPlannerSync:
             logger.error(f"Error checking if task needs sync: {e}")
             return True  # Err on the side of syncing
 
-    async def _get_all_plans_for_polling(self, headers: Dict) -> List[Dict]:
+    async def _get_all_plans_for_polling(self, headers: dict) -> list[dict]:
         """Get all accessible plans (personal + group plans) - based on V4 approach."""
         all_plans = []
         

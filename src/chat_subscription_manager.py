@@ -1,6 +1,7 @@
 import logging
 import os
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 import httpx
 import redis.asyncio as redis
@@ -90,7 +91,8 @@ class ChatSubscriptionManager:
                 )
             if resp.status_code == 201:
                 data = resp.json()
-                await self.redis_client.hset(
+                assert self.redis_client is not None
+                await cast(Any, self.redis_client.hset)(
                     f"{REDIS_PREFIX}{chat_id}",
                     mapping={
                         "subscription_id": data.get("id"),
@@ -115,10 +117,20 @@ class ChatSubscriptionManager:
         if not self.redis_client:
             await self.initialize()
 
-        existing = await self.redis_client.hgetall(f"{REDIS_PREFIX}global")
-        if existing.get("subscription_id"):
-            logger.info("Global chat subscription already exists")
-            return 1
+        assert self.redis_client is not None
+        existing = await cast(Any, self.redis_client.hgetall)(
+            f"{REDIS_PREFIX}global"
+        )
+        if existing.get("subscription_id") and existing.get("expires_at"):
+            try:
+                exp = datetime.fromisoformat(
+                    existing["expires_at"].replace("Z", "+00:00")
+                )
+                if exp > datetime.now(UTC) - timedelta(minutes=5):
+                    logger.info("Global chat subscription already exists")
+                    return 1
+            except Exception:
+                pass
 
         token = get_agent_token()
         if not token:
@@ -151,7 +163,8 @@ class ChatSubscriptionManager:
                 )
             if resp.status_code == 201:
                 data = resp.json()
-                await self.redis_client.hset(
+                assert self.redis_client is not None
+                await cast(Any, self.redis_client.hset)(
                     f"{REDIS_PREFIX}global",
                     mapping={
                         "subscription_id": data.get("id"),
@@ -178,14 +191,15 @@ class ChatSubscriptionManager:
         token = get_agent_token()
         if not token or not self.redis_client:
             return
+        assert self.redis_client is not None
 
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
-        keys = await self.redis_client.keys(f"{REDIS_PREFIX}*")
+        keys = await cast(Any, self.redis_client.keys)(f"{REDIS_PREFIX}*")
         for key in keys:
-            data = await self.redis_client.hgetall(key)
+            data = await cast(Any, self.redis_client.hgetall)(key)
             sub_id = data.get("subscription_id")
             expires = data.get("expires_at")
             if not sub_id or not expires:
@@ -206,29 +220,36 @@ class ChatSubscriptionManager:
                         timeout=10,
                     )
                 if resp.status_code == 200:
-                    await self.redis_client.hset(
-                        key, mapping={"expires_at": new_exp, "status": "active"}
+                    await cast(Any, self.redis_client.hset)(
+                        key,
+                        mapping={"expires_at": new_exp, "status": "active"},
                     )
+                elif resp.status_code == 404:
+                    logger.warning("Chat subscription missing, recreating")
+                    await cast(Any, self.redis_client.delete)(key)
+                    await self.subscribe_to_all_existing_chats()
                 else:
-                    await self.redis_client.hset(key, mapping={"status": "failed"})
+                    await cast(Any, self.redis_client.hset)(key, mapping={"status": "failed"})
 
     async def cleanup_failed_subscriptions(self) -> None:
         if not self.redis_client:
             return
-        keys = await self.redis_client.keys(f"{REDIS_PREFIX}*")
+        assert self.redis_client is not None
+        keys = await cast(Any, self.redis_client.keys)(f"{REDIS_PREFIX}*")
         for key in keys:
-            data = await self.redis_client.hgetall(key)
+            data = await cast(Any, self.redis_client.hgetall)(key)
             if data.get("status") == "failed":
-                await self.redis_client.delete(key)
+                await cast(Any, self.redis_client.delete)(key)
 
     async def get_subscription_health(self) -> dict[str, int]:
         if not self.redis_client:
             return {"tracked": 0, "active": 0, "expired": 0}
-        keys = await self.redis_client.keys(f"{REDIS_PREFIX}*")
+        assert self.redis_client is not None
+        keys = await cast(Any, self.redis_client.keys)(f"{REDIS_PREFIX}*")
         active = 0
         expired = 0
         for key in keys:
-            data = await self.redis_client.hgetall(key)
+            data = await cast(Any, self.redis_client.hgetall)(key)
             expires = data.get("expires_at")
             if not expires:
                 continue
