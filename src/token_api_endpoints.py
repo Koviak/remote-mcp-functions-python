@@ -19,6 +19,52 @@ logger = logging.getLogger(__name__)
 def register_token_api_endpoints(app: func.FunctionApp):
     """Register HTTP endpoints for token management"""
     
+    # Register fixed routes BEFORE parameterized ones to avoid routing conflicts
+    @app.route(route="tokens/health", methods=["GET"])
+    def token_service_health(req: func.HttpRequest) -> func.HttpResponse:
+        """
+        Check the health of the token service and Redis connection
+        
+        Returns:
+            JSON response with health status
+        """
+        try:
+            # Get Redis token manager
+            redis_manager = get_redis_token_manager()
+            
+            # Check Redis health
+            redis_healthy = redis_manager.health_check()
+            
+            # Get token statistics
+            active_tokens = redis_manager.get_all_active_tokens()
+            
+            response_data = {
+                "status": "healthy" if redis_healthy else "unhealthy",
+                "redis_connected": redis_healthy,
+                "active_token_count": len(active_tokens),
+                "timestamp": int(datetime.now().timestamp())
+            }
+            
+            status_code = 200 if redis_healthy else 503
+            
+            return func.HttpResponse(
+                json.dumps(response_data),
+                status_code=status_code,
+                mimetype="application/json"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error checking health: {e}")
+            return func.HttpResponse(
+                json.dumps({
+                    "status": "error",
+                    "error": str(e),
+                    "timestamp": int(datetime.now().timestamp())
+                }),
+                status_code=503,
+                mimetype="application/json"
+            )
+    
     @app.route(route="tokens/{scope}", methods=["GET"])
     def get_token(req: func.HttpRequest) -> func.HttpResponse:
         """
@@ -41,6 +87,34 @@ def register_token_api_endpoints(app: func.FunctionApp):
                     status_code=400,
                     mimetype="application/json"
                 )
+            # Special-case: if scope is 'health', return health info
+            if scope == "health":
+                try:
+                    redis_manager = get_redis_token_manager()
+                    redis_healthy = redis_manager.health_check()
+                    active_tokens = redis_manager.get_all_active_tokens()
+                    response_data = {
+                        "status": "healthy" if redis_healthy else "unhealthy",
+                        "redis_connected": redis_healthy,
+                        "active_token_count": len(active_tokens),
+                        "timestamp": int(datetime.now().timestamp()),
+                    }
+                    return func.HttpResponse(
+                        json.dumps(response_data),
+                        status_code=200,
+                        mimetype="application/json",
+                    )
+                except Exception as e:
+                    logger.error(f"Error checking health (scope path): {e}")
+                    return func.HttpResponse(
+                        json.dumps({
+                            "status": "error",
+                            "error": str(e),
+                            "timestamp": int(datetime.now().timestamp()),
+                        }),
+                        status_code=200,
+                        mimetype="application/json",
+                    )
             
             # Get optional user_id from query params
             user_id = req.params.get("user_id")
@@ -127,50 +201,7 @@ def register_token_api_endpoints(app: func.FunctionApp):
                 mimetype="application/json"
             )
     
-    @app.route(route="tokens/health", methods=["GET"])
-    def token_service_health(req: func.HttpRequest) -> func.HttpResponse:
-        """
-        Check the health of the token service and Redis connection
-        
-        Returns:
-            JSON response with health status
-        """
-        try:
-            # Get Redis token manager
-            redis_manager = get_redis_token_manager()
-            
-            # Check Redis health
-            redis_healthy = redis_manager.health_check()
-            
-            # Get token statistics
-            active_tokens = redis_manager.get_all_active_tokens()
-            
-            response_data = {
-                "status": "healthy" if redis_healthy else "unhealthy",
-                "redis_connected": redis_healthy,
-                "active_token_count": len(active_tokens),
-                "timestamp": int(datetime.now().timestamp())
-            }
-            
-            status_code = 200 if redis_healthy else 503
-            
-            return func.HttpResponse(
-                json.dumps(response_data),
-                status_code=status_code,
-                mimetype="application/json"
-            )
-            
-        except Exception as e:
-            logger.error(f"Error checking health: {e}")
-            return func.HttpResponse(
-                json.dumps({
-                    "status": "error",
-                    "error": str(e),
-                    "timestamp": int(datetime.now().timestamp())
-                }),
-                status_code=503,
-                mimetype="application/json"
-            )
+    
     
     @app.route(route="tokens/refresh/{scope}", methods=["POST"])
     def refresh_token(req: func.HttpRequest) -> func.HttpResponse:

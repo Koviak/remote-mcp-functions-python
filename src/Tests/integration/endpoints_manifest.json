@@ -1,0 +1,38 @@
+{
+  "base_url": "http://localhost:7071/api",
+  "timeout_seconds": 45,
+  "test_writes": false,
+  "default_headers": {},
+  "path_params": {
+    "plan_id": "REPLACE_WITH_VALID_PLAN_ID",
+    "task_id": "REPLACE_WITH_VALID_TASK_ID",
+    "bucket_id": "REPLACE_WITH_VALID_BUCKET_ID",
+    "user_id": "REPLACE_WITH_VALID_USER_ID",
+    "team_id": "REPLACE_WITH_VALID_TEAM_ID",
+    "message_id": "REPLACE_WITH_VALID_MESSAGE_ID",
+    "drive_id": "REPLACE_WITH_VALID_DRIVE_ID",
+    "item_id": "REPLACE_WITH_VALID_ITEM_ID",
+    "event_id": "REPLACE_WITH_VALID_EVENT_ID"
+  },
+  "query_params": {
+    "sites": {
+      "query": "contoso"
+    },
+    "calendarView": {
+      "startDateTime": "2025-01-01T00:00:00Z",
+      "endDateTime": "2025-12-31T23:59:59Z"
+    }
+  },
+  "skip_routes": [
+    "graph_webhook",
+    "planner/poll",
+    "sites",
+    "groups/check-planner",
+    "plans",
+    "tasks",
+    "me/calendar/calendarView",
+    "deviceManagement/managedDevices",
+    "drives/{drive_id}/items/{item_id}/content",
+    "metadata"
+  ]
+}

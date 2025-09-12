@@ -1,0 +1,39 @@
+---
+alwaysApply: true
+description: Canonical Azure AD (Entra ID) and Microsoft Graph endpoints to use across the codebase
+---
+
+### Azure AD (Entra ID) v2.0 endpoints
+
+- Authority (tenant-scoped): `https://login.microsoftonline.com/{TENANT_ID}`
+- OAuth 2.0 authorize (v2.0): `https://login.microsoftonline.com/organizations/oauth2/v2.0/authorize`
+- OAuth 2.0 token (v2.0): `https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token`
+- OpenID metadata (v2.0): `https://login.microsoftonline.com/organizations/v2.0/.well-known/openid-configuration`
+
+Notes
+- Prefer v2.0 endpoints and tenant-scoped token URLs (`{TENANT_ID}`) for ROPC and backend flows. The code uses this form in
+  [src/agent_auth_manager.py](mdc:src/agent_auth_manager.py) and logs show discovery against
+  `.../v2.0/.well-known/openid-configuration`.
+- The organizations variants in the Azure Portal UI are functionally compatible for authorize flows; token requests should remain tenant-scoped.
+
+### Microsoft Graph
+
+- Base API: `https://graph.microsoft.com`
+- Resource (audience) in tokens: `api://00000003-0000-0000-c000-000000000000` (via v2 scopes) or `https://graph.microsoft.com` (audience)
+
+### Required delegated scopes for /me endpoints
+
+When acquiring delegated tokens (ROPC or interactive), ensure these scopes have consent:
+- `openid`, `profile`, `offline_access`
+- `User.Read`
+- `Mail.Read`, `Mail.ReadWrite`, `Mail.Send`
+- `Calendars.Read`
+- `Files.Read.All`, `Files.ReadWrite.All`
+- `Chat.Read`, `Chat.ReadWrite`
+- `Tasks.ReadWrite`
+
+Code references
+- Delegated acquisition and scopes: [src/agent_auth_manager.py](mdc:src/agent_auth_manager.py)
+- Token warmup/refresh: [src/token_refresh_service.py](mdc:src/token_refresh_service.py)
+- HTTP endpoints that require delegated tokens: [src/http_endpoints.py](mdc:src/http_endpoints.py)
+

@@ -49,7 +49,11 @@ class AgentAuthManager:
         self._token_cache: Dict[str, AccessToken] = {}
     
     def get_agent_user_token(
-        self, scope: str = "https://graph.microsoft.com/.default"
+        self,
+        scope: str = (
+            "openid profile offline_access "
+            "User.Read Mail.Read Mail.ReadWrite Calendars.ReadWrite Files.ReadWrite.All Chat.Read Chat.ReadWrite"
+        ),
     ) -> Optional[str]:
         """
         Get a user token for the autonomous agent
@@ -118,9 +122,10 @@ class AgentAuthManager:
                 "grant_type": "password",
                 "client_id": self.client_id,
                 "client_secret": self.client_secret,
+                # space-separated delegated scopes
                 "scope": scope,
                 "username": self.agent_username,
-                "password": self.agent_password
+                "password": self.agent_password,
             }
             
             response = requests.post(token_endpoint, data=data, timeout=30)
@@ -263,12 +268,16 @@ def get_auth_manager() -> AgentAuthManager:
 
 
 def get_agent_token(
-    scope: str = "https://graph.microsoft.com/.default"
+    scope: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Convenience function to get agent token
+    Convenience function to get agent token.
     
-    This is what MCP tools should use to get user tokens
+    Defaults to delegated user scopes (ROPC) when no scope is provided,
+    avoiding the application-permission `.default` audience which is not
+    valid for `/me` endpoints.
     """
     auth_manager = get_auth_manager()
-    return auth_manager.get_agent_user_token(scope) 
+    if scope is None or str(scope).strip() == "":
+        return auth_manager.get_agent_user_token()
+    return auth_manager.get_agent_user_token(scope)

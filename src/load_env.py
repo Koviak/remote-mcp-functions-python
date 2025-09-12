@@ -4,10 +4,14 @@ import os
 from pathlib import Path
 
 # Try to find .env file
+# Include the directory of this file (src/) to support src/.env placement
+current_dir_env = Path(__file__).resolve().parent / '.env'
 possible_paths = [
+    current_dir_env,
     Path('.env'),
     Path('../.env'),
     Path('../../.env'),
+    # Fallback absolute path (OneDrive repo root)
     Path(r'C:\Users\JoshuaKoviak\OneDrive - Koviak Built\Documents\GitHub\remote-mcp-functions-python\.env')
 ]
 
@@ -20,7 +24,7 @@ for path in possible_paths:
 
 if env_file:
     # Load environment variables
-    with open(env_file, 'r') as f:
+    with open(env_file, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith('#') and '=' in line:

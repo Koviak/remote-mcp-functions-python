@@ -1,0 +1,68 @@
+---
+description: Microsoft Graph permissions inventory and guidance (delegated and application) for this app
+alwaysApply: false
+---
+### Graph Permissions Inventory and Guidance
+
+Use this rule to verify and align Microsoft Graph permissions required by our code. When an individual (non-ALL) permission is not enabled, prefer the corresponding `*.Read.All` / `*.ReadWrite.All` (or other `ALL`) variant as requested. Grant tenant-wide admin consent where needed for headless agents and ROPC.
+
+References in code
+- Delegated acquisition and scopes: [src/agent_auth_manager.py](mdc:src/agent_auth_manager.py)
+- Token warmup/refresh: [src/token_refresh_service.py](mdc:src/token_refresh_service.py)
+- HTTP endpoints that use delegated tokens (all `/me` routes): [src/http_endpoints.py](mdc:src/http_endpoints.py)
+
+### Baseline delegated scopes (required for all /me endpoints)
+- openid, profile, offline_access
+- User.Read
+- Mail.Read, Mail.ReadWrite, Mail.Send
+- Calendars.Read or Calendars.ReadWrite
+- Files.Read.All or Files.ReadWrite.All
+- Chat.Read, Chat.ReadWrite
+- Tasks.ReadWrite
+
+### Teams / Chats / Channels
+- Delegated: Chat.Read, Chat.ReadWrite, Chat.Create, ChannelMessage.Read.All, ChannelMessage.Read, ChannelMessage.Send (as available), ChatMessage.Read, ChatMessage.Send, ChatMember.ReadWrite, TeamSettings.ReadWrite.All, TeamsActivity.Read, TeamsActivity.Send, TeamsTab.* (as applicable)
+- Application: Chat.Read.All, Chat.ReadWrite.All, Channel.ReadBasic.All, Channel.Create, Channel.Delete.All, ChannelMember.ReadWrite.All, ChannelMessage.Read.All, ChannelMessage.UpdatePolicyViolation.All, ChannelSettings.ReadWrite.All, Team.ReadBasic.All, Team.Create, TeamMember.ReadWrite.All, TeamMember.ReadWriteNonOwnerRole.All, TeamsAppInstallation.* (Read*, ReadWrite*, Consent* variants), TeamsTab.ReadWrite.All, TeamsUserConfiguration.Read.All, Teamwork.* (Read/ReadWrite)*
+
+### Mail / Calendar / Contacts (Exchange)
+- Delegated: Mail.Read, Mail.ReadWrite, Mail.Send, Mail.ReadWrite.Shared, Mail.Read.Shared, Mail.ReadBasic(.Shared), EAS.AccessAsUser.All, EWS.AccessAsUser.All, Calendars.Read or Calendars.ReadWrite (and Shared variants), Contacts.ReadWrite (and Shared)
+- Application: Mail.ReadWrite, Mail.Send, Calendars.ReadWrite, Contacts.ReadWrite
+
+### Files / SharePoint / OneDrive / Sites
+- Delegated: Files.Read.All, Files.ReadWrite.All, Files.Read.Selected, Files.ReadWrite.Selected, Sites.FullControl.All, Sites.Manage.All, Sites.ReadWrite.All, Sites.Read.All, Sites.Selected
+- Application: Files.Read.All, Files.ReadWrite.All, Sites.FullControl.All, Sites.Read.All, Sites.ReadWrite.All, Sites.Selected
+
+### Planner / Tasks
+- Delegated: Tasks.ReadWrite, Tasks.ReadWrite.Shared
+- Application: Tasks.ReadWrite.All
+
+### Directory / Groups / Users (AAD)
+- Delegated: Directory.ReadWrite.All, Directory.AccessAsUser.All, Group.ReadWrite.All, User.ReadWrite, User.Read.All, User.ReadWrite.All
+- Application: Directory.ReadWrite.All, Group.ReadWrite.All, User.ReadWrite.All
+
+### Bookings / Online Meetings (as configured)
+- Delegated: Bookings.Manage.All, Bookings.ReadWrite.All, OnlineMeetings.ReadWrite
+- Application: Bookings.Read.All, BookingsAppointment.ReadWrite.All, OnlineMeetings.ReadWrite.All, OnlineMeetingRecording.Read.All, OnlineMeetingTranscript.Read.All
+
+### OneNote
+- Delegated: Notes.Create, Notes.Read, Notes.ReadWrite, Notes.ReadWrite.All, Notes.ReadWrite.CreatedByApp
+- Application: Notes.ReadWrite.All
+
+### Print / Cloud PC / Device / Security (as configured)
+- Application (examples in tenant): Printer.ReadWrite.All, PrintJob.* (Manage/ReadWrite), CloudPC.ReadWrite.All, Device.ReadWrite.All, SecurityEvents.ReadWrite.All, SecurityIncident.ReadWrite.All, Reports.Read.All
+- Delegated (examples in tenant): RoleManagement.* (Directory/CloudPC), IdentityRiskyUser.*
+
+### People / Profile / Photos
+- Delegated: People.Read, People.Read.All, profile, email
+- Application: People.Read.All, ProfilePhoto.Read.All / ReadWrite.All
+
+### SharePoint / Org Settings (as configured)
+- Application examples: SharePointTenantSettings.ReadWrite.All, OrganizationalBranding.ReadWrite.All, OrgSettings-* (Forms/AppsAndServices/Microsoft365Install/Todo)
+
+### SMTP/POP/IMAP (if needed for legacy protocols)
+- Delegated: SMTP.Send, POP.AccessAsUser.All, IMAP.AccessAsUser.All
+
+### Guidance
+- For headless agent flows (ROPC), admin consent for delegated scopes is mandatory; otherwise AADSTS65001 will block token acquisition even if scopes are listed.
+- If a feature is failing due to insufficient privilege, prefer adding the `*.Read.All` or `*.ReadWrite.All` variant versus narrower scopes, per project policy.
+

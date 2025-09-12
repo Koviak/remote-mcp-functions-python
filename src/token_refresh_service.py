@@ -87,10 +87,15 @@ class TokenRefreshService:
         """Acquire initial tokens for common scopes"""
         try:
             # Common scopes that should have tokens
+            # Include comprehensive delegated scopes required by /me endpoints
             scopes = [
                 "https://graph.microsoft.com/.default",
-                "User.Read Mail.Send Files.ReadWrite.All",
-                "Tasks.ReadWrite"
+                (
+                    "openid profile offline_access "
+                    "User.Read Mail.Read Mail.ReadWrite Mail.Send "
+                    "Calendars.Read Files.Read.All Files.ReadWrite.All "
+                    "Chat.Read Chat.ReadWrite Tasks.ReadWrite"
+                ),
             ]
             
             for scope in scopes:

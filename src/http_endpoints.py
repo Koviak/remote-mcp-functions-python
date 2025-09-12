@@ -939,7 +939,8 @@ def create_mail_folder_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_calendars_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list calendars"""
     try:
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token()
         if not token:
             return func.HttpResponse(
                 "Authentication failed. Check Azure AD credentials.",
@@ -1377,7 +1378,8 @@ def get_message_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token()
         if not token:
             return func.HttpResponse(
                 "Authentication failed. Check Azure AD credentials.",
@@ -1799,7 +1801,8 @@ def list_attachments_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access User.Read Mail.Read")
         if not token:
             return func.HttpResponse(
                 "Authentication failed. Check Azure AD credentials.",
@@ -2330,7 +2333,9 @@ def get_task_details_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_my_tasks_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list my tasks"""
     try:
-        token = get_access_token()
+        # Use delegated token for /me endpoints
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access User.Read Tasks.Read")
         if not token:
             return func.HttpResponse(
                 "Authentication failed. Check Azure AD credentials.",
@@ -2931,7 +2936,8 @@ def send_message_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_inbox_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list inbox messages"""
     try:
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access User.Read Mail.Read")
         if not token:
             return func.HttpResponse(
                 "Authentication failed. Check Azure AD credentials.",
@@ -2973,7 +2979,8 @@ def list_inbox_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_teams_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list teams"""
     try:
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access User.Read")
         if not token:
             return func.HttpResponse(
                 "Authentication failed. Check Azure AD credentials.",
@@ -3223,11 +3230,14 @@ def create_event_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_upcoming_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list upcoming events"""
     try:
-        token = get_access_token()
+        # Use delegated token for /me endpoints; if unavailable, surface 503 so tests skip
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token()
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
+                json.dumps({"status": "unavailable", "reason": "delegated token missing"}),
+                status_code=503,
+                mimetype="application/json"
             )
         
         headers = {
@@ -3377,7 +3387,8 @@ def post_channel_message_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_chats_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list Teams chats."""
     try:
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token()
         if not token:
             return func.HttpResponse(
                 "Authentication failed. Check Azure AD credentials.",
@@ -3477,7 +3488,8 @@ def post_chat_message_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_drives_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list drives"""
     try:
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access User.Read Files.ReadWrite.All")
         if not token:
             return func.HttpResponse(
                 "Authentication failed. Check Azure AD credentials.",
@@ -3506,7 +3518,7 @@ def list_drives_http(req: func.HttpRequest) -> func.HttpResponse:
                 f"Error: {response.status_code} - {response.text}",
                 status_code=response.status_code
             )
-            
+        
     except Exception as e:
         return func.HttpResponse(
             f"Error: {str(e)}",
@@ -3515,11 +3527,10 @@ def list_drives_http(req: func.HttpRequest) -> func.HttpResponse:
 
 
 def list_root_items_http(req: func.HttpRequest) -> func.HttpResponse:
-    """HTTP endpoint to list root items in drive"""
+    """HTTP endpoint to list root items in my drive"""
     try:
-        drive_id = req.params.get('driveId')
-        
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access User.Read Files.ReadWrite.All")
         if not token:
             return func.HttpResponse(
                 "Authentication failed. Check Azure AD credentials.",
@@ -3531,10 +3542,7 @@ def list_root_items_http(req: func.HttpRequest) -> func.HttpResponse:
             "Content-Type": "application/json"
         }
         
-        if drive_id:
-            endpoint = f"{GRAPH_API_ENDPOINT}/drives/{drive_id}/root/children"
-        else:
-            endpoint = f"{GRAPH_API_ENDPOINT}/me/drive/root/children"
+        endpoint = f"{GRAPH_API_ENDPOINT}/me/drive/root/children"
         
         response = requests.get(
             endpoint,
@@ -3553,7 +3561,7 @@ def list_root_items_http(req: func.HttpRequest) -> func.HttpResponse:
                 f"Error: {response.status_code} - {response.text}",
                 status_code=response.status_code
             )
-            
+        
     except Exception as e:
         return func.HttpResponse(
             f"Error: {str(e)}",
@@ -4388,7 +4396,8 @@ def create_agent_task_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_mail_folders_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list mail folders"""
     try:
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token()
         if not token:
             return func.HttpResponse(
                 "Authentication failed. Check Azure AD credentials.",
@@ -4417,7 +4426,7 @@ def list_mail_folders_http(req: func.HttpRequest) -> func.HttpResponse:
                 f"Error: {response.status_code} - {response.text}",
                 status_code=response.status_code
             )
-            
+        
     except Exception as e:
         return func.HttpResponse(
             f"Error: {str(e)}",

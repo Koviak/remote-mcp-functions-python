@@ -1,0 +1,1332 @@
+{
+	"id": "37457991-6cb1-40db-a7ff-7c0625f2e1ee",
+	"acceptMappedClaims": null,
+	"accessTokenAcceptedVersion": null,
+	"addIns": [],
+	"allowPublicClient": true,
+	"appId": "fd79a94d-f572-4439-bba2-6465e0c40122",
+	"appRoles": [],
+	"oauth2AllowUrlPathMatching": false,
+	"createdDateTime": "2024-06-08T00:57:30Z",
+	"description": null,
+	"certification": null,
+	"disabledByMicrosoftStatus": null,
+	"groupMembershipClaims": null,
+	"identifierUris": [],
+	"informationalUrls": {
+		"termsOfService": null,
+		"support": null,
+		"privacy": null,
+		"marketing": null
+	},
+	"keyCredentials": [],
+	"knownClientApplications": [],
+	"logoUrl": null,
+	"logoutUrl": null,
+	"name": "Agency-Swarm",
+	"notes": null,
+	"oauth2AllowIdTokenImplicitFlow": false,
+	"oauth2AllowImplicitFlow": false,
+	"oauth2Permissions": [],
+	"oauth2RequirePostResponse": false,
+	"optionalClaims": null,
+	"orgRestrictions": [],
+	"parentalControlSettings": {
+		"countriesBlockedForMinors": [],
+		"legalAgeGroupRule": "Allow"
+	},
+	"passwordCredentials": [
+		{
+			"customKeyIdentifier": null,
+			"endDate": "2027-06-04T16:40:24.047Z",
+			"keyId": "0e0fd6c6-b46a-4271-8560-7704b0f1e147",
+			"startDate": "2025-06-04T16:40:24.047Z",
+			"value": null,
+			"createdOn": "2025-06-04T16:40:38.4613948Z",
+			"hint": "sux",
+			"displayName": "MS-MCP 2.0"
+		},
+		{
+			"customKeyIdentifier": null,
+			"endDate": "2027-05-24T17:46:14.075Z",
+			"keyId": "d4ed7e72-c292-4d96-9134-eca04cbca610",
+			"startDate": "2025-05-24T17:46:14.075Z",
+			"value": null,
+			"createdOn": "2025-05-24T17:46:29.0708804Z",
+			"hint": "UbN",
+			"displayName": "MS-MCP"
+		},
+		{
+			"customKeyIdentifier": null,
+			"endDate": "2026-06-08T01:37:51.437Z",
+			"keyId": "850f41c4-27fe-4805-8880-19bb613a2857",
+			"startDate": "2024-06-08T01:37:51.437Z",
+			"value": null,
+			"createdOn": "2024-06-08T01:39:09.5975996Z",
+			"hint": "fou",
+			"displayName": "Agency-Swarm Secret"
+		}
+	],
+	"preAuthorizedApplications": [],
+	"publisherDomain": "koviakbuilt.com",
+	"replyUrlsWithType": [
+		{
+			"url": "http://localhost:8000/callback",
+			"type": "Web"
+		},
+		{
+			"url": "https://localhost/myapp",
+			"type": "Web"
+		}
+	],
+	"requiredResourceAccess": [
+		{
+			"resourceAppId": "00000003-0000-0000-c000-000000000000",
+			"resourceAccess": [
+				{
+					"id": "7f36b48e-542f-4d3b-9bcb-8406f0ab9fdb",
+					"type": "Scope"
+				},
+				{
+					"id": "948eb538-f19d-4ec5-9ccc-f059e1ea4c72",
+					"type": "Scope"
+				},
+				{
+					"id": "98b17b35-f3b1-4849-a85f-9f13733002f0",
+					"type": "Scope"
+				},
+				{
+					"id": "83b34c85-95bf-497b-a04e-b58eca9d49d0",
+					"type": "Scope"
+				},
+				{
+					"id": "1ec239c2-d7c9-4623-a91a-a9775856bb36",
+					"type": "Scope"
+				},
+				{
+					"id": "12466101-c9b8-439a-8589-dd09ee67e8e9",
+					"type": "Scope"
+				},
+				{
+					"id": "767156cb-16ae-4d10-8f8b-41b657c8c8c8",
+					"type": "Scope"
+				},
+				{
+					"id": "38826093-1258-4dea-98f0-00003be2b8d0",
+					"type": "Scope"
+				},
+				{
+					"id": "bb64e6fc-6b6d-4752-aea0-dd922dbba588",
+					"type": "Scope"
+				},
+				{
+					"id": "f501c180-9344-439a-bca0-6cbf209fd270",
+					"type": "Scope"
+				},
+				{
+					"id": "9547fcb5-d03f-419d-9948-5928bbf71b0f",
+					"type": "Scope"
+				},
+				{
+					"id": "9ff7295e-131b-4d94-90e1-69fde507ac11",
+					"type": "Scope"
+				},
+				{
+					"id": "7e9a077b-3711-42b9-b7cb-5fa5f3f7fea7",
+					"type": "Scope"
+				},
+				{
+					"id": "dea13482-7ea6-488f-8b98-eb5bbecf033d",
+					"type": "Scope"
+				},
+				{
+					"id": "cdcdac3a-fd45-410d-83ef-554db620e5c7",
+					"type": "Scope"
+				},
+				{
+					"id": "116b7235-7cc6-461e-b163-8e55691d839e",
+					"type": "Scope"
+				},
+				{
+					"id": "9e69467d-e0e2-402b-a926-3d796990197f",
+					"type": "Scope"
+				},
+				{
+					"id": "d56682ec-c09e-4743-aaf4-1a3aac4caa21",
+					"type": "Scope"
+				},
+				{
+					"id": "afb6c84b-06be-49af-80bb-8f3f77004eab",
+					"type": "Scope"
+				},
+				{
+					"id": "8dfcf82f-15d0-43b3-bc78-a958a13a5792",
+					"type": "Scope"
+				},
+				{
+					"id": "0e263e50-5827-48a4-b97c-d940288653c7",
+					"type": "Scope"
+				},
+				{
+					"id": "c5366453-9fb0-48a5-a156-24f0c49a4b84",
+					"type": "Scope"
+				},
+				{
+					"id": "ff91d191-45a0-43fd-b837-bd682c4a0b0f",
+					"type": "Scope"
+				},
+				{
+					"id": "64a6cdd6-aab1-4aaf-94b8-3cc8405e90d0",
+					"type": "Scope"
+				},
+				{
+					"id": "9769c687-087d-48ac-9cb3-c37dde652038",
+					"type": "Scope"
+				},
+				{
+					"id": "4367b9d7-cee7-4995-853c-a0bdfe95c1f9",
+					"type": "Scope"
+				},
+				{
+					"id": "c6068dc7-a791-46a4-a811-b8228e6649ab",
+					"type": "Scope"
+				},
+				{
+					"id": "3a1e4806-a744-4c70-80fc-223bf8582c46",
+					"type": "Scope"
+				},
+				{
+					"id": "5447fe39-cb82-4c1a-b977-520e67e724eb",
+					"type": "Scope"
+				},
+				{
+					"id": "863451e7-0667-486c-a5d6-d135439485f0",
+					"type": "Scope"
+				},
+				{
+					"id": "8019c312-3263-48e6-825e-2b833497195b",
+					"type": "Scope"
+				},
+				{
+					"id": "17dde5bd-8c17-420f-a486-969730c1b827",
+					"type": "Scope"
+				},
+				{
+					"id": "085ca537-6565-41c2-aca7-db852babc212",
+					"type": "Scope"
+				},
+				{
+					"id": "f534bf13-55d4-45a9-8f3c-c92fe64d6131",
+					"type": "Scope"
+				},
+				{
+					"id": "2edeb9fd-4228-480c-a26d-2ed52011cf3d",
+					"type": "Scope"
+				},
+				{
+					"id": "4e46008b-f24c-477d-8fff-7bb4ec7aafe0",
+					"type": "Scope"
+				},
+				{
+					"id": "f81125ac-d3b7-4573-a3b2-7099cc39df9e",
+					"type": "Scope"
+				},
+				{
+					"id": "d04bb851-cb7c-4146-97c7-ca3e71baf56c",
+					"type": "Scope"
+				},
+				{
+					"id": "e0a7cdbb-08b0-4697-8264-0069786e9674",
+					"type": "Scope"
+				},
+				{
+					"id": "652390e4-393a-48de-9484-05f9b1212954",
+					"type": "Scope"
+				},
+				{
+					"id": "570282fd-fa5c-430d-a7fd-fc8dc98a9dca",
+					"type": "Scope"
+				},
+				{
+					"id": "7b9103a5-4610-446b-9670-80643382c1fa",
+					"type": "Scope"
+				},
+				{
+					"id": "a4b8392a-d8d1-4954-a029-8e668a39a170",
+					"type": "Scope"
+				},
+				{
+					"id": "b11fa0e7-fdb7-4dc9-b1f1-59facd463480",
+					"type": "Scope"
+				},
+				{
+					"id": "024d486e-b451-40bb-833d-3e66d98c5c73",
+					"type": "Scope"
+				},
+				{
+					"id": "5df07973-7d5d-46ed-9847-1271055cbd51",
+					"type": "Scope"
+				},
+				{
+					"id": "e383f46e-2787-4529-855e-0e479a3ffac0",
+					"type": "Scope"
+				},
+				{
+					"id": "a367ab51-6b49-43bf-a716-a1fb06d2a174",
+					"type": "Scope"
+				},
+				{
+					"id": "818c620a-27a9-40bd-a6a5-d96f7d610b4b",
+					"type": "Scope"
+				},
+				{
+					"id": "b31fa710-c9b3-4d9e-8f5e-8036eecddab9",
+					"type": "Scope"
+				},
+				{
+					"id": "9d822255-d64d-4b7a-afdb-833b9a97ed02",
+					"type": "Scope"
+				},
+				{
+					"id": "dfabfca6-ee36-4db2-8208-7a28381419b3",
+					"type": "Scope"
+				},
+				{
+					"id": "615e26af-c38a-4150-ae3e-c3b0d4cb1d6a",
+					"type": "Scope"
+				},
+				{
+					"id": "64ac0503-b4fa-45d9-b544-71a463f05da0",
+					"type": "Scope"
+				},
+				{
+					"id": "7427e0e9-2fba-42fe-b0c0-848c9e6a8182",
+					"type": "Scope"
+				},
+				{
+					"id": "190c2bb6-1fdd-4fec-9aa2-7d571b5e1fe3",
+					"type": "Scope"
+				},
+				{
+					"id": "a65f2972-a4f8-4f5e-afd7-69ccb046d5dc",
+					"type": "Scope"
+				},
+				{
+					"id": "30b87d18-ebb1-45db-97f8-82ccb1f0190c",
+					"type": "Scope"
+				},
+				{
+					"id": "37f7f235-527c-4136-accd-4a02d197296e",
+					"type": "Scope"
+				},
+				{
+					"id": "087502c2-5263-433e-abe3-8f77231a0627",
+					"type": "Scope"
+				},
+				{
+					"id": "ba47897c-39ec-4d83-8086-ee8256fa737d",
+					"type": "Scope"
+				},
+				{
+					"id": "b89f9189-71a5-4e70-b041-9887f0bc7e4a",
+					"type": "Scope"
+				},
+				{
+					"id": "e67e6727-c080-415e-b521-e3f35d5248e9",
+					"type": "Scope"
+				},
+				{
+					"id": "4c06a06a-098a-4063-868e-5dfee3827264",
+					"type": "Scope"
+				},
+				{
+					"id": "eafd6a71-e95a-4f8a-bb6e-fb84ab7fbd9e",
+					"type": "Scope"
+				},
+				{
+					"id": "d7b7f2d9-0f45-4ea1-9d42-e50810c06991",
+					"type": "Scope"
+				},
+				{
+					"id": "14dad69e-099b-42c9-810b-d002981feec1",
+					"type": "Scope"
+				},
+				{
+					"id": "f5b24df7-511e-48bb-ae88-643f023b55e1",
+					"type": "Scope"
+				},
+				{
+					"id": "50fd364f-9d93-4ae1-b170-300e87cccf84",
+					"type": "Scope"
+				},
+				{
+					"id": "f1d91a8f-88e7-4774-8401-b668d5bca0c5",
+					"type": "Scope"
+				},
+				{
+					"id": "8c026be3-8e26-4774-9372-8d5d6f21daff",
+					"type": "Scope"
+				},
+				{
+					"id": "62ade113-f8e0-4bf9-a6ba-5acb31db32fd",
+					"type": "Scope"
+				},
+				{
+					"id": "9619b88a-8a25-48a7-9571-d23be0337a79",
+					"type": "Scope"
+				},
+				{
+					"id": "501d06f8-07b8-4f18-b5c6-c191a4af7a82",
+					"type": "Scope"
+				},
+				{
+					"id": "d01b97e9-cbc0-49fe-810a-750afd5527a3",
+					"type": "Scope"
+				},
+				{
+					"id": "c1499fe0-52b1-4b22-bed2-7a244e0e879f",
+					"type": "Scope"
+				},
+				{
+					"id": "435644c6-a5b1-40bf-8f52-fe8e5b53e19c",
+					"type": "Scope"
+				},
+				{
+					"id": "0da165c7-3f15-4236-b733-c0b0f6abe41d",
+					"type": "Scope"
+				},
+				{
+					"id": "1ff1be21-34eb-448c-9ac9-ce1f506b2a68",
+					"type": "Scope"
+				},
+				{
+					"id": "63f27281-c9d9-4f29-94dd-6942f7f1feb0",
+					"type": "Scope"
+				},
+				{
+					"id": "07919803-6073-4cd8-bc55-28077db0ee10",
+					"type": "Scope"
+				},
+				{
+					"id": "b1a7d408-cab0-47d2-a2a5-a74a3733600d",
+					"type": "Scope"
+				},
+				{
+					"id": "dc38509c-b87d-4da0-bd92-6bec988bac4a",
+					"type": "Scope"
+				},
+				{
+					"id": "471f2a7f-2a42-4d45-a2bf-594d0838070d",
+					"type": "Scope"
+				},
+				{
+					"id": "48eb8c83-6e58-46e7-a6d3-8805822f5940",
+					"type": "Scope"
+				},
+				{
+					"id": "347e3c16-30f3-4ac7-9b52-fc3c053de9c9",
+					"type": "Scope"
+				},
+				{
+					"id": "404d76f0-e10e-460a-92be-ef19600c54d1",
+					"type": "Scope"
+				},
+				{
+					"id": "aa07f155-3612-49b8-a147-6c590df35536",
+					"type": "Scope"
+				},
+				{
+					"id": "328438b7-4c01-4c07-a840-e625a749bb89",
+					"type": "Scope"
+				},
+				{
+					"id": "5a54b8b3-347c-476d-8f8e-42d5c7424d29",
+					"type": "Scope"
+				},
+				{
+					"id": "65e50fdc-43b7-4915-933e-e8138f11f40a",
+					"type": "Scope"
+				},
+				{
+					"id": "89fe6a52-be36-487e-b7d8-d061c450a026",
+					"type": "Scope"
+				},
+				{
+					"id": "f89c84ef-20d0-4b54-87e9-02e856d66d53",
+					"type": "Scope"
+				},
+				{
+					"id": "258f6531-6087-4cc4-bb90-092c5fb3ed3f",
+					"type": "Scope"
+				},
+				{
+					"id": "5f88184c-80bb-4d52-9ff2-757288b2e9b7",
+					"type": "Scope"
+				},
+				{
+					"id": "7bb27fa3-ea8f-4d67-a916-87715b6188bd",
+					"type": "Scope"
+				},
+				{
+					"id": "1a2e7420-4e92-4d2b-94cb-fb2952e9ddf7",
+					"type": "Scope"
+				},
+				{
+					"id": "2219042f-cab5-40cc-b0d2-16b1540b4c5f",
+					"type": "Scope"
+				},
+				{
+					"id": "c5ddf11b-c114-4886-8558-8a4e557cd52b",
+					"type": "Scope"
+				},
+				{
+					"id": "7825d5d6-6049-4ce7-bdf6-3b8d53f4bcd0",
+					"type": "Scope"
+				},
+				{
+					"id": "485be79e-c497-4b35-9400-0e3fa7f2a5d4",
+					"type": "Scope"
+				},
+				{
+					"id": "4a06efd2-f825-4e34-813e-82a57b03d1ee",
+					"type": "Scope"
+				},
+				{
+					"id": "2104a4db-3a2f-4ea0-9dba-143d457dc666",
+					"type": "Scope"
+				},
+				{
+					"id": "0e755559-83fb-4b44-91d0-4cc721b9323e",
+					"type": "Scope"
+				},
+				{
+					"id": "7ab1d787-bae7-4d5d-8db6-37ea32df9186",
+					"type": "Scope"
+				},
+				{
+					"id": "e1408a66-8f82-451b-a2f3-3c3e38f7413f",
+					"type": "Scope"
+				},
+				{
+					"id": "946349d5-2a9d-4535-abc0-7beeacaedd1d",
+					"type": "Scope"
+				},
+				{
+					"id": "2da62c49-dfbd-40df-ba16-fef3529d391c",
+					"type": "Scope"
+				},
+				{
+					"id": "a0e0e18b-8fb2-458f-8130-da2d7cab9c75",
+					"type": "Scope"
+				},
+				{
+					"id": "4a6bbf29-a0e1-4a4d-a7d1-cef17f772975",
+					"type": "Scope"
+				},
+				{
+					"id": "7a349935-c54d-44ab-ab66-1b460d315be7",
+					"type": "Scope"
+				},
+				{
+					"id": "aa85bf13-d771-4d5d-a9e6-bca04ce44edf",
+					"type": "Scope"
+				},
+				{
+					"id": "2e25a044-2580-450d-8859-42eeb6e996c0",
+					"type": "Scope"
+				},
+				{
+					"id": "093f8818-d05f-49b8-95bc-9d2a73e9a43c",
+					"type": "Scope"
+				},
+				{
+					"id": "0ce33576-30e8-43b7-99e5-62f8569a4002",
+					"type": "Scope"
+				},
+				{
+					"id": "0f4595f7-64b1-4e13-81bc-11a249df07a9",
+					"type": "Scope"
+				},
+				{
+					"id": "207e0cb1-3ce7-4922-b991-5a760c346ebc",
+					"type": "Scope"
+				},
+				{
+					"id": "39d65650-9d3e-4223-80db-a335590d027e",
+					"type": "Scope"
+				},
+				{
+					"id": "a9ff19c2-f369-4a95-9a25-ba9d460efc8e",
+					"type": "Scope"
+				},
+				{
+					"id": "b98bfd41-87c6-45cc-b104-e2de4f0dafb9",
+					"type": "Scope"
+				},
+				{
+					"id": "ee928332-e9c2-4747-b4a0-f8c164b68de6",
+					"type": "Scope"
+				},
+				{
+					"id": "c975dd04-a06e-4fbb-9704-62daad77bb49",
+					"type": "Scope"
+				},
+				{
+					"id": "c37c9b61-7762-4bff-a156-afc0005847a0",
+					"type": "Scope"
+				},
+				{
+					"id": "0c219d04-3abf-47f7-912d-5cca239e90e6",
+					"type": "Scope"
+				},
+				{
+					"id": "f266662f-120a-4314-b26a-99b08617c7ef",
+					"type": "Scope"
+				},
+				{
+					"id": "395dfec1-a0b9-465f-a783-8250a430cb8c",
+					"type": "Scope"
+				},
+				{
+					"id": "5c469ce4-dab5-4afd-b9de-14f1ba4004a7",
+					"type": "Scope"
+				},
+				{
+					"id": "cd87405c-5792-4f15-92f7-debc0db6d1d6",
+					"type": "Scope"
+				},
+				{
+					"id": "594f4bb6-c083-4cf9-8aa8-213823bdf351",
+					"type": "Scope"
+				},
+				{
+					"id": "87c556f0-2bd9-4eed-bd74-5dd8af6eaf7e",
+					"type": "Scope"
+				},
+				{
+					"id": "ddd97ecb-5c31-43db-a235-0ee20e635c40",
+					"type": "Scope"
+				},
+				{
+					"id": "539dabd7-b5b6-4117-b164-d60cd15a8671",
+					"type": "Scope"
+				},
+				{
+					"id": "b4d26916-07e0-4daf-9096-9f6d9174aa96",
+					"type": "Scope"
+				},
+				{
+					"id": "6c37c71d-f50f-4bff-8fd3-8a41da390140",
+					"type": "Scope"
+				},
+				{
+					"id": "cac97e40-6730-457d-ad8d-4852fddab7ad",
+					"type": "Scope"
+				},
+				{
+					"id": "f92e74e7-2563-467f-9dd0-902688cb5863",
+					"type": "Scope"
+				},
+				{
+					"id": "405a51b5-8d8d-430b-9842-8be4b0e9f324",
+					"type": "Scope"
+				},
+				{
+					"id": "63dd7cd9-b489-4adf-a28c-ac38b9a0f962",
+					"type": "Scope"
+				},
+				{
+					"id": "637d7bec-b31e-4deb-acc9-24275642a2c9",
+					"type": "Scope"
+				},
+				{
+					"id": "e1fe6dd8-ba31-4d61-89e7-88639da4683d",
+					"type": "Scope"
+				},
+				{
+					"id": "a154be20-db9c-4678-8ab7-66f6cc099a59",
+					"type": "Scope"
+				},
+				{
+					"id": "b340eb25-3456-403f-be2f-af7a0d370277",
+					"type": "Scope"
+				},
+				{
+					"id": "b4e74841-8e56-480b-be8b-910348b18b4c",
+					"type": "Scope"
+				},
+				{
+					"id": "204e0828-b5ca-4ad8-b9f3-f32a958e7cc4",
+					"type": "Scope"
+				},
+				{
+					"id": "834bcc1c-762f-41b0-bb91-1cdc323ee4bf",
+					"type": "Scope"
+				},
+				{
+					"id": "367492fc-594d-4972-a9b5-0d58c622c91c",
+					"type": "Scope"
+				},
+				{
+					"id": "2ccc2926-a528-4b17-b8bb-860eed29d64c",
+					"type": "Scope"
+				},
+				{
+					"id": "20d02fff-a0ef-49e7-a46e-019d4a6523b7",
+					"type": "Scope"
+				},
+				{
+					"id": "d38d189c-e29b-4344-8b3b-829bfa81380b",
+					"type": "Scope"
+				},
+				{
+					"id": "dc149144-f292-421e-b185-5953f2e98d7f",
+					"type": "Role"
+				},
+				{
+					"id": "3be0012a-cc4e-426b-895b-f9c836bf6381",
+					"type": "Role"
+				},
+				{
+					"id": "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9",
+					"type": "Role"
+				},
+				{
+					"id": "18a4783c-866b-4cc7-a460-3d5e5662c884",
+					"type": "Role"
+				},
+				{
+					"id": "6e98f277-b046-4193-a4f2-6bf6a78cd491",
+					"type": "Role"
+				},
+				{
+					"id": "9769393e-5a9f-4302-9e3d-7e018ecb64a7",
+					"type": "Role"
+				},
+				{
+					"id": "be95e614-8ef3-49eb-8464-1c9503433b86",
+					"type": "Role"
+				},
+				{
+					"id": "ef54d2bf-783f-4e0f-bca1-3210c0444d99",
+					"type": "Role"
+				},
+				{
+					"id": "a7a681dc-756e-4909-b988-f160edc6655f",
+					"type": "Role"
+				},
+				{
+					"id": "284383ee-7f6e-4e40-a2a8-e85dcb029101",
+					"type": "Role"
+				},
+				{
+					"id": "4c277553-8a09-487b-8023-29ee378d8324",
+					"type": "Role"
+				},
+				{
+					"id": "f6b49018-60ab-4f81-83bd-22caeabfed2d",
+					"type": "Role"
+				},
+				{
+					"id": "fd7ccf6b-3d28-418b-9701-cd10f5cd2fd4",
+					"type": "Role"
+				},
+				{
+					"id": "f3a65bd4-b703-46df-8f7e-0174fea562aa",
+					"type": "Role"
+				},
+				{
+					"id": "6a118a39-1227-45d4-af0c-ea7b40d210bc",
+					"type": "Role"
+				},
+				{
+					"id": "59a6b24b-4225-4393-8165-ebaec5f55d7a",
+					"type": "Role"
+				},
+				{
+					"id": "35930dcf-aceb-4bd1-b99a-8ffed403c974",
+					"type": "Role"
+				},
+				{
+					"id": "7b2449af-6ccd-4f4d-9f78-e550c193f0d1",
+					"type": "Role"
+				},
+				{
+					"id": "4d02b0cc-d90b-441f-8d82-4fb55c34d6bb",
+					"type": "Role"
+				},
+				{
+					"id": "243cded2-bd16-4fd6-a953-ff8177894c3d",
+					"type": "Role"
+				},
+				{
+					"id": "d9c48af6-9ad9-47ad-82c3-63757137b9af",
+					"type": "Role"
+				},
+				{
+					"id": "9c7abde0-eacd-4319-bf9e-35994b1a1717",
+					"type": "Role"
+				},
+				{
+					"id": "6b7d71aa-70aa-4810-a8d9-5d9fb2830017",
+					"type": "Role"
+				},
+				{
+					"id": "1c1b4c8e-3cc7-4c58-8470-9b92c9d5848b",
+					"type": "Role"
+				},
+				{
+					"id": "b2e060da-3baf-4687-9611-f4ebc0f0cbde",
+					"type": "Role"
+				},
+				{
+					"id": "818ba5bd-5b3e-4fe0-bbe6-aa4686669073",
+					"type": "Role"
+				},
+				{
+					"id": "294ce7c9-31ba-490a-ad7d-97a7d075e4ed",
+					"type": "Role"
+				},
+				{
+					"id": "ad73ce80-f3cd-40ce-b325-df12c33df713",
+					"type": "Role"
+				},
+				{
+					"id": "7e847308-e030-4183-9899-5235d7270f58",
+					"type": "Role"
+				},
+				{
+					"id": "93e7c9e4-54c5-4a41-b796-f2a5adaacda7",
+					"type": "Role"
+				},
+				{
+					"id": "57257249-34ce-4810-a8a2-a03adf0c5693",
+					"type": "Role"
+				},
+				{
+					"id": "e32c2cd9-0124-4e44-88fc-772cd98afbdb",
+					"type": "Role"
+				},
+				{
+					"id": "b9bb2381-47a4-46cd-aafb-00cb12f68504",
+					"type": "Role"
+				},
+				{
+					"id": "64a59178-dad3-4673-89db-84fdcd622fec",
+					"type": "Role"
+				},
+				{
+					"id": "3b4349e1-8cf5-45a3-95b7-69d1751d3e6a",
+					"type": "Role"
+				},
+				{
+					"id": "6918b873-d17a-4dc1-b314-35f528134491",
+					"type": "Role"
+				},
+				{
+					"id": "1138cb37-bd11-4084-a2b7-9f71582aeddb",
+					"type": "Role"
+				},
+				{
+					"id": "19dbc75e-c2e2-444c-a770-ec69d8559fc7",
+					"type": "Role"
+				},
+				{
+					"id": "dbb9058a-0e50-45d7-ae91-66909b5d4664",
+					"type": "Role"
+				},
+				{
+					"id": "7e05723c-0bb0-42da-be95-ae9f08a6e53c",
+					"type": "Role"
+				},
+				{
+					"id": "01d4889c-1287-42c6-ac1f-5d1e02578ef6",
+					"type": "Role"
+				},
+				{
+					"id": "75359482-378d-4052-8f01-80520e7db3cd",
+					"type": "Role"
+				},
+				{
+					"id": "b47b160b-1054-4efd-9ca0-e2f614696086",
+					"type": "Role"
+				},
+				{
+					"id": "bd61925e-3bf4-4d62-bc0b-06b06c96d95c",
+					"type": "Role"
+				},
+				{
+					"id": "40dc41bc-0f7e-42ff-89bd-d9516947e474",
+					"type": "Role"
+				},
+				{
+					"id": "bf7b1a76-6e77-406b-b258-bf5c7720e98f",
+					"type": "Role"
+				},
+				{
+					"id": "5b567255-7703-4780-807c-7be8301ae99b",
+					"type": "Role"
+				},
+				{
+					"id": "62a82d76-70ea-41e2-9197-370581804d09",
+					"type": "Role"
+				},
+				{
+					"id": "dbaae8cf-10b5-4b86-a4a1-f871c94c6695",
+					"type": "Role"
+				},
+				{
+					"id": "656f6061-f9fe-4807-9708-6a2e0934df76",
+					"type": "Role"
+				},
+				{
+					"id": "e2a3a72e-5f79-4c64-b1b1-878b674786c9",
+					"type": "Role"
+				},
+				{
+					"id": "b633e1c5-b582-4048-a93e-9f11b44c7e96",
+					"type": "Role"
+				},
+				{
+					"id": "6931bccd-447a-43d1-b442-00a195474933",
+					"type": "Role"
+				},
+				{
+					"id": "40049381-3cc1-42af-94ec-5ce755db4b0d",
+					"type": "Role"
+				},
+				{
+					"id": "b10642fc-a6cf-4c46-87f9-e1f96c2a18aa",
+					"type": "Role"
+				},
+				{
+					"id": "8137102d-ec16-4191-aaf8-7aeda8026183",
+					"type": "Role"
+				},
+				{
+					"id": "0c458cef-11f3-48c2-a568-c66751c238c0",
+					"type": "Role"
+				},
+				{
+					"id": "df01ed3b-eb61-4eca-9965-6b3d789751b2",
+					"type": "Role"
+				},
+				{
+					"id": "a4a08342-c95d-476b-b943-97e100569c8d",
+					"type": "Role"
+				},
+				{
+					"id": "b8bb2037-6e08-44ac-a4ea-4674e010e2a4",
+					"type": "Role"
+				},
+				{
+					"id": "a4a80d8d-d283-4bd8-8504-555ec3870630",
+					"type": "Role"
+				},
+				{
+					"id": "292d869f-3427-49a8-9dab-8c70152b74e9",
+					"type": "Role"
+				},
+				{
+					"id": "d2ebfbc1-a5f8-424b-83a6-56ab5927a73c",
+					"type": "Role"
+				},
+				{
+					"id": "4a8e4191-c1c8-45f8-b801-f9a1a5ee6ad3",
+					"type": "Role"
+				},
+				{
+					"id": "2cb92fee-97a3-4034-8702-24a6f5d0d1e9",
+					"type": "Role"
+				},
+				{
+					"id": "6cdf1fb1-b46f-424f-9493-07247caa22e2",
+					"type": "Role"
+				},
+				{
+					"id": "83f7232f-763c-47b2-a097-e35d2cbe1da5",
+					"type": "Role"
+				},
+				{
+					"id": "5febc9da-e0d0-4576-bd13-ae70b2179a39",
+					"type": "Role"
+				},
+				{
+					"id": "b528084d-ad10-4598-8b93-929746b4d7d6",
+					"type": "Role"
+				},
+				{
+					"id": "b6890674-9dd5-4e42-bb15-5af07f541ae1",
+					"type": "Role"
+				},
+				{
+					"id": "2d510721-5c4e-43cd-bfdb-ac0f8819fb92",
+					"type": "Role"
+				},
+				{
+					"id": "f5b3f73d-6247-44df-a74c-866173fddab0",
+					"type": "Role"
+				},
+				{
+					"id": "58a52f47-9e36-4b17-9ebe-ce4ef7f3e6c8",
+					"type": "Role"
+				},
+				{
+					"id": "5114b07b-2898-4de7-a541-53b0004e2e13",
+					"type": "Role"
+				},
+				{
+					"id": "b5991872-94cf-4652-9765-29535087c6d8",
+					"type": "Role"
+				},
+				{
+					"id": "456b71a7-0ee0-4588-9842-c123fcc8f664",
+					"type": "Role"
+				},
+				{
+					"id": "e24d31aa-e1ab-4c80-85fe-23018690335d",
+					"type": "Role"
+				},
+				{
+					"id": "27baa7f6-5dfb-4ba8-b1d3-1e812c143013",
+					"type": "Role"
+				},
+				{
+					"id": "eedb7fdd-7539-4345-a38b-4839e4a84cbd",
+					"type": "Role"
+				},
+				{
+					"id": "60a901ed-09f7-4aa5-a16e-7dd3d6f9de36",
+					"type": "Role"
+				},
+				{
+					"id": "ee49e170-1dd1-4030-b44c-61ad6e98f743",
+					"type": "Role"
+				},
+				{
+					"id": "230c1aed-a721-4c5d-9cb4-a90514e508ef",
+					"type": "Role"
+				},
+				{
+					"id": "0b21c159-dbf4-4dbb-a6f6-490e412c716e",
+					"type": "Role"
+				},
+				{
+					"id": "b7760610-0545-4e8a-9ec3-cce9e63db01c",
+					"type": "Role"
+				},
+				{
+					"id": "7239b71d-b402-4150-b13d-78ecfe8df441",
+					"type": "Role"
+				},
+				{
+					"id": "0e778b85-fefa-466d-9eec-750569d92122",
+					"type": "Role"
+				},
+				{
+					"id": "d903a879-88e0-4c09-b0c9-82f6a1333f84",
+					"type": "Role"
+				},
+				{
+					"id": "34bf0e97-1971-4929-b999-9e2442d941d7",
+					"type": "Role"
+				},
+				{
+					"id": "57b4f899-b8c5-47c7-bdd3-c410c55602b7",
+					"type": "Role"
+				},
+				{
+					"id": "4dfee10b-fa4a-41b5-b34d-ccf54cc0c394",
+					"type": "Role"
+				},
+				{
+					"id": "a82116e5-55eb-4c41-a434-62fe8a61c773",
+					"type": "Role"
+				},
+				{
+					"id": "0c0bf378-bf22-4481-8f81-9e89a9b4960a",
+					"type": "Role"
+				},
+				{
+					"id": "332a536c-c7ef-4017-ab91-336970924f0d",
+					"type": "Role"
+				},
+				{
+					"id": "9492366f-7969-46a4-8d15-ed1a20078fff",
+					"type": "Role"
+				},
+				{
+					"id": "883ea226-0bf2-4a8f-9f9d-92c9162a727d",
+					"type": "Role"
+				},
+				{
+					"id": "9b50c33d-700f-43b1-b2eb-87e89b703581",
+					"type": "Role"
+				},
+				{
+					"id": "db31e92a-b9ea-4d87-bf6a-75a37a9ca35a",
+					"type": "Role"
+				},
+				{
+					"id": "44e666d1-d276-445b-a5fc-8815eeb81d55",
+					"type": "Role"
+				},
+				{
+					"id": "23fc2474-f741-46ce-8465-674744c5c361",
+					"type": "Role"
+				},
+				{
+					"id": "2280dda6-0bfd-44ee-a2f4-cb867cfc4c1e",
+					"type": "Role"
+				},
+				{
+					"id": "0121dc95-1b9f-4aed-8bac-58c5ac466691",
+					"type": "Role"
+				},
+				{
+					"id": "4437522e-9a86-4a41-a7da-e380edd4a97d",
+					"type": "Role"
+				},
+				{
+					"id": "70dec828-f620-4914-aa83-a29117306807",
+					"type": "Role"
+				},
+				{
+					"id": "a267235f-af13-44dc-8385-c1dc93023186",
+					"type": "Role"
+				},
+				{
+					"id": "cc7e7635-2586-41d6-adaa-a8d3bcad5ee5",
+					"type": "Role"
+				},
+				{
+					"id": "1f615aea-6bf9-4b05-84bd-46388e138537",
+					"type": "Role"
+				},
+				{
+					"id": "9ce09611-f4f7-4abd-a629-a05450422a97",
+					"type": "Role"
+				},
+				{
+					"id": "6e74eff9-4a21-45d6-bc03-3a20f61f8281",
+					"type": "Role"
+				},
+				{
+					"id": "b0c13be0-8e20-4bc5-8c55-963c23a39ce9",
+					"type": "Role"
+				},
+				{
+					"id": "32ca478f-f89e-41d0-aaf8-101deb7da510",
+					"type": "Role"
+				},
+				{
+					"id": "ba1ba90b-2d8f-487e-9f16-80728d85bb5c",
+					"type": "Role"
+				},
+				{
+					"id": "1e4be56c-312e-42b8-a2c9-009600d732c0",
+					"type": "Role"
+				},
+				{
+					"id": "a87076cf-6abd-4e56-8559-4dbdf41bef96",
+					"type": "Role"
+				},
+				{
+					"id": "9e19bae1-2623-4c4f-ab6e-2664615ff9a0",
+					"type": "Role"
+				},
+				{
+					"id": "5dad17ba-f6cc-4954-a5a2-a0dcc95154f0",
+					"type": "Role"
+				},
+				{
+					"id": "74ef0291-ca83-4d02-8c7e-d2391e6a444f",
+					"type": "Role"
+				},
+				{
+					"id": "73a45059-f39c-4baf-9182-4954ac0e55cf",
+					"type": "Role"
+				},
+				{
+					"id": "9f67436c-5415-4e7f-8ac1-3014a7132630",
+					"type": "Role"
+				},
+				{
+					"id": "908de74d-f8b2-4d6b-a9ed-2a17b3b78179",
+					"type": "Role"
+				},
+				{
+					"id": "bdd80a03-d9bc-451d-b7c4-ce7c63fe3c8f",
+					"type": "Role"
+				},
+				{
+					"id": "49981c42-fd7b-4530-be03-e77b21aed25e",
+					"type": "Role"
+				},
+				{
+					"id": "a96d855f-016b-47d7-b51c-1218a98d791c",
+					"type": "Role"
+				},
+				{
+					"id": "fd9ce730-a250-40dc-bd44-8dc8d20f39ea",
+					"type": "Role"
+				},
+				{
+					"id": "6163d4f4-fbf8-43da-a7b4-060fe85ed148",
+					"type": "Role"
+				},
+				{
+					"id": "425b4b59-d5af-45c8-832f-bb0b7402348a",
+					"type": "Role"
+				},
+				{
+					"id": "9f62e4a2-a2d6-4350-b28b-d244728c4f86",
+					"type": "Role"
+				},
+				{
+					"id": "91c32b81-0ef0-453f-a5c7-4ce2e562f449",
+					"type": "Role"
+				},
+				{
+					"id": "3c42dec6-49e8-4a0a-b469-36cff0d9da93",
+					"type": "Role"
+				},
+				{
+					"id": "a91eadaf-2c3c-4362-908b-fb172d208fc6",
+					"type": "Role"
+				},
+				{
+					"id": "6323133e-1f6e-46d4-9372-ac33a0870636",
+					"type": "Role"
+				},
+				{
+					"id": "dfb0dd15-61de-45b2-be36-d6a69fba3c79",
+					"type": "Role"
+				},
+				{
+					"id": "75bcfbce-a647-4fba-ad51-b63d73b210f4",
+					"type": "Role"
+				},
+				{
+					"id": "ab5b445e-8f10-45f4-9c79-dd3f8062cc4e",
+					"type": "Role"
+				},
+				{
+					"id": "79c02f5b-bd4f-4713-bc2c-a8a4a66e127b",
+					"type": "Role"
+				},
+				{
+					"id": "a3371ca5-911d-46d6-901c-42c8c7a937d8",
+					"type": "Role"
+				},
+				{
+					"id": "3011c876-62b7-4ada-afa2-506cbbecc68c",
+					"type": "Role"
+				},
+				{
+					"id": "405a51b5-8d8d-430b-9842-8be4b0e9f324",
+					"type": "Role"
+				},
+				{
+					"id": "09850681-111b-4a89-9bed-3f2cae46d706",
+					"type": "Role"
+				},
+				{
+					"id": "c529cfca-c91b-489c-af2b-d92990b66ce6",
+					"type": "Role"
+				},
+				{
+					"id": "741f803b-c850-494e-b5df-cde7c675a1ca",
+					"type": "Role"
+				},
+				{
+					"id": "38d9df27-64da-44fd-b7c5-a6fbac20248f",
+					"type": "Role"
+				},
+				{
+					"id": "50483e42-d915-4231-9639-7fdb7fd190e5",
+					"type": "Role"
+				},
+				{
+					"id": "4e774092-a092-48d1-90bd-baad67c7eb47",
+					"type": "Role"
+				},
+				{
+					"id": "fbcd7ef1-df0d-4e05-bb28-93424a89c6df",
+					"type": "Role"
+				},
+				{
+					"id": "bf46a256-f47d-448f-ab78-f226fff08d40",
+					"type": "Role"
+				},
+				{
+					"id": "97e45b36-1250-48e4-bd70-2df6dab7e94a",
+					"type": "Role"
+				},
+				{
+					"id": "1dccb351-c4e4-4e09-a8d1-7a9ecbf027cc",
+					"type": "Role"
+				},
+				{
+					"id": "23211fc1-f9d1-4e8e-8e9e-08a5d0a109bb",
+					"type": "Role"
+				}
+			]
+		},
+		{
+			"resourceAppId": "c5393580-f805-4401-95e8-94b7a6ef2fc2",
+			"resourceAccess": [
+				{
+					"id": "4807a72c-ad38-4250-94c9-4eabfe26cd55",
+					"type": "Scope"
+				},
+				{
+					"id": "594c1fb6-4f81-4475-ae41-0c394909246c",
+					"type": "Scope"
+				},
+				{
+					"id": "e2cea78f-e743-4d8f-a16a-75b629a038ae",
+					"type": "Scope"
+				}
+			]
+		},
+		{
+			"resourceAppId": "2d4d3d8e-2be3-4bef-9f87-7875a61c29de",
+			"resourceAccess": [
+				{
+					"id": "f554dcfe-c273-4d79-9354-4f18f8464b3e",
+					"type": "Scope"
+				},
+				{
+					"id": "93d1f902-06e8-4c6f-8894-1eab0283b521",
+					"type": "Scope"
+				},
+				{
+					"id": "7edff6c9-f308-4b8b-9a6d-847e041e880a",
+					"type": "Scope"
+				},
+				{
+					"id": "47eb48ff-1c59-42e3-9634-b5c6e17a0a4b",
+					"type": "Scope"
+				},
+				{
+					"id": "c1c07f53-0865-4ba2-8ca8-36d29aba66f9",
+					"type": "Scope"
+				},
+				{
+					"id": "ab111d9c-370c-4905-a23f-788795f510dc",
+					"type": "Scope"
+				}
+			]
+		}
+	],
+	"samlMetadataUrl": null,
+	"signInUrl": null,
+	"signInAudience": "AzureADMultipleOrgs",
+	"tags": [
+		"apiConsumer",
+		"backgroundProcess",
+		"desktopApp"
+	],
+	"tokenEncryptionKeyId": null
+}

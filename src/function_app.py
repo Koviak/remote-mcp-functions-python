@@ -16,6 +16,7 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime
 
 import azure.functions as func
 from azure.identity import OnBehalfOfCredential
@@ -34,6 +35,35 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# Lightweight readiness endpoint for external health checks
+@app.route(route="health/ready")
+def readiness_check(req: func.HttpRequest) -> func.HttpResponse:
+    """Fast readiness probe that does minimal work.
+
+    Returns 200 as soon as the function host is up and routing requests.
+    """
+    try:
+        body = {
+            "status": "ready",
+            "timestamp": int(datetime.utcnow().timestamp())
+        }
+        return func.HttpResponse(
+            json.dumps(body),
+            status_code=200,
+            mimetype="application/json"
+        )
+    except Exception as exc:
+        logging.error("Readiness check failure: %s", exc)
+        return func.HttpResponse(
+            json.dumps({
+                "status": "error",
+                "error": str(exc)
+            }),
+            status_code=503,
+            mimetype="application/json"
+        )
 
 
 def ensure_configuration():
@@ -77,8 +107,13 @@ try:
 except Exception as e:
     logger.error(f"Failed to start token refresh service: {e}")
 
-# Initialize webhook handler for V5 sync service
+# Initialize webhook handler for V5 sync service (skipped if disabled)
+DISABLE_LOCAL = os.getenv("DISABLE_LOCAL_SERVICES", "0") == "1"
+
 try:
+    if DISABLE_LOCAL:
+        logger.info("Local services disabled via DISABLE_LOCAL_SERVICES=1; skipping webhook handler init")
+        raise RuntimeError("Local services disabled")
     from chat_subscription_manager import (
         chat_subscription_manager,
         initialize_chat_subscription_manager,
@@ -105,10 +140,14 @@ try:
     webhook_thread.start()
 
 except Exception as e:
-    logger.error(f"Failed to start webhook handler initialization: {e}")
+    if not DISABLE_LOCAL:
+        logger.error(f"Failed to start webhook handler initialization: {e}")
 
-# Initialize chat subscription manager
+# Initialize chat subscription manager (skipped if disabled)
 try:
+    if DISABLE_LOCAL:
+        logger.info("Local services disabled; skipping chat subscription manager init")
+        raise RuntimeError("Local services disabled")
     def init_chat_sub_manager():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -131,11 +170,12 @@ try:
     chat_thread.start()
 
 except Exception as e:
-    logger.error(f"Failed to start chat subscription initialization: {e}")
+    if not DISABLE_LOCAL:
+        logger.error(f"Failed to start chat subscription initialization: {e}")
 
 
-# Start Enhanced Local Development Services (includes everything)
-if os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None:
+# Start Enhanced Local Development Services (includes everything) unless disabled
+if os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None and not DISABLE_LOCAL:
     # Only start in local development
     try:
         from startup_local_services import start_local_services

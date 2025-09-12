@@ -14,6 +14,9 @@ from typing import Optional
 
 import httpx
 
+# Load environment variables early so auth has credentials
+import load_env  # noqa: F401  # side-effect: loads .env
+
 # Add this import for token acquisition
 from agent_auth_manager import get_agent_token
 from chat_subscription_manager import (
@@ -109,23 +112,39 @@ class ServiceManager:
     async def wait_for_function_app(self, max_attempts=30):
         """Wait for Function App to be ready."""
         logger.info("⏳ Waiting for Function App to be ready...")
-        
-        for attempt in range(max_attempts):
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        "http://localhost:7071/api/hello"
-                    )
-                    if response.status_code == 200:
-                        logger.info("✅ Function App is ready!")
-                        return True
-            except Exception:
-                pass
-            
-            await asyncio.sleep(2)
+
+        # Prefer ultra-light readiness endpoint; fallback to /hello
+        readiness_urls = [
+            "http://localhost:7071/api/health/ready",
+            "http://localhost:7071/api/hello",
+        ]
+
+        base_delay = 0.5
+        for attempt in range(1, max_attempts + 1):
+            for url in readiness_urls:
+                try:
+                    async with httpx.AsyncClient(timeout=5) as client:
+                        response = await client.get(url)
+                        if 200 <= response.status_code < 300:
+                            logger.info("✅ Function App is ready!")
+                            return True
+                except Exception as exc:
+                    # Quietly retry with backoff; log occasionally
+                    if attempt % 5 == 0:
+                        logger.debug(
+                            "Readiness probe failed (attempt %s) on %s: %s",
+                            attempt,
+                            url,
+                            exc,
+                        )
+
+            # Exponential backoff with jitter
+            delay = min(5.0, base_delay * (2 ** (attempt - 1)))
+            delay += 0.1 * (attempt % 3)  # cheap jitter
+            await asyncio.sleep(delay)
             if attempt % 5 == 0:
                 logger.info(f"Still waiting... ({attempt}/{max_attempts})")
-        
+
         return False
     
     async def setup_webhooks(self):
@@ -276,12 +295,15 @@ class ServiceManager:
         # 5. Initialize chat subscriptions for existing chats
         try:
             await initialize_chat_subscription_manager()
-            await self.chat_subscription_manager.subscribe_to_all_existing_chats()
+            await self.chat_subscription_manager.\
+                subscribe_to_all_existing_chats()
+
             # Start periodic renewal task
             async def renew_loop():
                 while True:
                     try:
-                        await self.chat_subscription_manager.renew_expiring_subscriptions()
+                        await self.chat_subscription_manager.\
+                            renew_expiring_subscriptions()
                     except Exception as e:
                         logger.error(f"Renewal error: {e}")
                     await asyncio.sleep(600)
@@ -320,84 +342,171 @@ class ServiceManager:
         
         return True
     
-    def stop_all(self):
-        """Stop all services gracefully."""
+    async def _get_pid_on_port(self, port: int) -> Optional[int]:
+        """Return PID listening on a port, or None if free."""
+        try:
+            if sys.platform == "win32":
+                # Use PowerShell to query the owning process
+                cmd = [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    (
+                        f"$c=Get-NetTCPConnection -State Listen -LocalPort {port} "
+                        f"-ErrorAction SilentlyContinue; "
+                        f"if($c){{ $c.OwningProcess | Select-Object -First 1 }}"
+                    ),
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                out = result.stdout.strip()
+                if out.isdigit():
+                    return int(out)
+                return None
+            else:
+                # Best-effort using lsof
+                result = subprocess.run(
+                    ["lsof", "-i", f":{port}", "-sTCP:LISTEN", "-t"],
+                    capture_output=True,
+                    text=True,
+                )
+                out = result.stdout.strip().splitlines()
+                return int(out[0]) if out and out[0].isdigit() else None
+        except Exception:
+            return None
+
+    async def _ensure_port_closed(
+        self,
+        port: int,
+        expected_pid: Optional[int] = None,
+        timeout_seconds: float = 5.0,
+    ):
+        """Ensure the given port is closed.
+
+        If the port remains busy and expected_pid is provided, attempt to stop
+        that specific process only. Never kill an unrelated process.
+        """
+        import time
+
+        start_time = time.time()
+        while time.time() - start_time < timeout_seconds:
+            pid = await self._get_pid_on_port(port)
+            if pid is None:
+                return
+            await asyncio.sleep(0.2)
+
+        # If still in use, attempt to terminate the owning process (if it matches)
+        pid = await self._get_pid_on_port(port)
+        if pid is not None and expected_pid is not None and pid == expected_pid:
+            try:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        [
+                            "powershell",
+                            "-NoProfile",
+                            "-Command",
+                            f"Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                else:
+                    os.kill(pid, signal.SIGTERM)
+            except Exception:
+                pass
+        elif pid is not None and expected_pid is not None and pid != expected_pid:
+            logger.warning(
+                "Port %s is held by PID %s, "
+                "which does not match expected PID %s. Skipping force kill.",
+                port,
+                pid,
+                expected_pid,
+            )
+
+    async def stop_all(self):
+        """Stop all services gracefully and free occupied ports."""
         if self.shutdown_in_progress:
             return
-            
+
         self.shutdown_in_progress = True
-        logger.info("\n🛑 Stopping all services...")
-        
+        logger.info("\nStopping all services...")
+
         # Stop V5 sync service first
         if self.sync_service:
             logger.info("Stopping Planner sync service V5...")
             try:
-                # Create a task to stop the sync service gracefully
-                async def stop_sync():
-                    await self.sync_service.stop()
-                
-                # Run the stop coroutine
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If we're in an async context, create a task
-                    stop_task = asyncio.create_task(stop_sync())
-                    self.background_tasks.append(stop_task)
-                else:
-                    # If not in async context, run it
-                    asyncio.run(stop_sync())
-                
-                logger.info("✅ Planner sync service V5 stopped gracefully")
+                await self.sync_service.stop()
+                logger.info("Planner sync service V5 stopped.")
             except Exception as e:
                 logger.error(f"Error stopping V5 sync service: {e}")
-        
-        # Cancel any remaining background tasks
-        for task in self.background_tasks:
+
+        # Cancel any remaining background tasks and wait for them
+        for task in list(self.background_tasks):
             if not task.done():
                 task.cancel()
-        
+        if self.background_tasks:
+            await asyncio.gather(
+                *self.background_tasks,
+                return_exceptions=True,
+            )
+
         # Stop ngrok
         if self.ngrok_process:
             logger.info("Stopping ngrok...")
             try:
                 if sys.platform == "win32":
-                    self.ngrok_process.send_signal(signal.CTRL_C_EVENT)
+                    # CTRL_BREAK_EVENT targets the process group
+                    # created with CREATE_NEW_PROCESS_GROUP
+                    self.ngrok_process.send_signal(signal.CTRL_BREAK_EVENT)
                 else:
                     self.ngrok_process.terminate()
-                
+
                 try:
                     self.ngrok_process.wait(timeout=5)
-                    logger.info("✅ ngrok stopped gracefully")
+                    logger.info("ngrok stopped.")
                 except subprocess.TimeoutExpired:
-                    logger.warning("ngrok didn't stop gracefully, forcing...")
+                    logger.warning("ngrok did not stop in time; killing...")
                     self.ngrok_process.kill()
                     self.ngrok_process.wait()
             except Exception as e:
                 logger.error(f"Error stopping ngrok: {e}")
-        
+
         # Stop Function App
         if self.func_process:
             logger.info("Stopping Azure Function App...")
             try:
                 if sys.platform == "win32":
-                    # On Windows, send CTRL_C_EVENT to the process group
-                    self.func_process.send_signal(signal.CTRL_C_EVENT)
+                    # Prefer CTRL_BREAK_EVENT for child process group
+                    self.func_process.send_signal(signal.CTRL_BREAK_EVENT)
                 else:
                     self.func_process.terminate()
-                
-                # Give it more time as it has more cleanup to do
+
                 try:
                     self.func_process.wait(timeout=10)
-                    logger.info("✅ Function App stopped gracefully")
+                    logger.info("Function App stopped.")
                 except subprocess.TimeoutExpired:
-                    logger.warning(
-                        "Function App didn't stop gracefully, forcing..."
-                    )
+                    logger.warning("Function App did not stop in time; killing...")
                     self.func_process.kill()
                     self.func_process.wait()
             except Exception as e:
                 logger.error(f"Error stopping Function App: {e}")
-        
-        logger.info("✅ All services stopped")
+
+        # Ensure local ports are freed (Azure Functions default 7071; ngrok API 4040)
+        try:
+            await self._ensure_port_closed(
+                7071,
+                expected_pid=self.func_process.pid if self.func_process else None,
+                timeout_seconds=6.0,
+            )
+            await self._ensure_port_closed(
+                4040,
+                expected_pid=self.ngrok_process.pid if self.ngrok_process else None,
+                timeout_seconds=3.0,
+            )
+        except Exception:
+            pass
+
+        logger.info("All services stopped.")
 
 
 async def main():
@@ -426,36 +535,36 @@ async def main():
     try:
         # Start everything
         success = await manager.start_all()
-        
+
         if success:
-            logger.info("\n" + "="*50)
-            logger.info("🎉 All services are running!")
+            logger.info("\n" + "=" * 50)
+            logger.info("All services are running.")
             logger.info("Press Ctrl+C to stop all services")
-            logger.info("="*50 + "\n")
-            
+            logger.info("=" * 50 + "\n")
+
             # Keep running until shutdown signal
             await shutdown_event.wait()
-            
+
         else:
-            logger.error("❌ Failed to start all services")
+            logger.error("Failed to start all services")
             sys.exit(1)
-            
+
     except KeyboardInterrupt:
         # This might not be reached due to signal handlers, but just in case
-        logger.info("\n⚠️  Keyboard interrupt received...")
+        logger.info("\nKeyboard interrupt received...")
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         import traceback
         traceback.print_exc()
     finally:
         # Always try to clean up
-        logger.info("\n🧹 Cleaning up...")
-        manager.stop_all()
-        
+        logger.info("\nCleaning up...")
+        await manager.stop_all()
+
         # Give a moment for cleanup to complete
-        await asyncio.sleep(1)
-        
-        logger.info("\n👋 Goodbye!")
+        await asyncio.sleep(0.5)
+
+        logger.info("\nGoodbye!")
 
 
 if __name__ == "__main__":
@@ -468,8 +577,8 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         # Handle any final keyboard interrupt
-        print("\n👋 Exiting...")
+        print("\nExiting...")
         sys.exit(0)
     except Exception as e:
-        print(f"\n❌ Fatal error: {e}")
-        sys.exit(1) 
+        print(f"\nFatal error: {e}")
+        sys.exit(1)
