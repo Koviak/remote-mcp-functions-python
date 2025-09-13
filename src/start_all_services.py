@@ -11,6 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
+import shutil
 
 import httpx
 
@@ -39,7 +40,167 @@ class ServiceManager:
         self.sync_service = None  # Track the sync service instance
         self.webhook_url = None
         self.chat_subscription_manager = chat_subscription_manager
-        
+
+    def _append_dir_to_path(self, directory: Path) -> None:
+        """Ensure the given directory is on PATH for child processes."""
+        try:
+            directory_str = str(directory)
+            current_path = os.environ.get("PATH", "")
+            path_parts = current_path.split(os.pathsep) if current_path else []
+            if directory_str not in path_parts:
+                if current_path:
+                    os.environ["PATH"] = (
+                        directory_str + os.pathsep + current_path
+                    )
+                else:
+                    os.environ["PATH"] = directory_str
+        except Exception:
+            # Non-fatal: if we cannot mutate PATH, we'll still
+            # try absolute invocation
+            pass
+
+    def _resolve_ngrok(self) -> Optional[str]:
+        """Resolve path to ngrok executable and ensure its directory
+        is on PATH.
+
+        Returns full path or command name if discoverable,
+        else None.
+        """
+        # 1) Environment-driven hints (explicit override)
+        env_vars = ["NGROK_EXE", "NGROK_PATH", "NGROK_DIR"]
+        for var in env_vars:
+            val = os.environ.get(var)
+            if not val:
+                continue
+            candidate = Path(val)
+            # If directory provided, look for executable inside
+            if candidate.is_dir():
+                for name in ("ngrok.exe", "ngrok"):
+                    inner = candidate / name
+                    if inner.exists():
+                        self._append_dir_to_path(candidate)
+                        return str(inner)
+            # If direct file path
+            if candidate.is_file():
+                self._append_dir_to_path(candidate.parent)
+                return str(candidate)
+
+        # 2) Repository-local tools folder (no absolute paths hard-coded)
+        for name in ("ngrok.exe", "ngrok"):
+            local = self.base_dir / "tools" / name
+            if local.exists():
+                self._append_dir_to_path(local.parent)
+                return str(local)
+
+        # 3) System PATH last
+        which_path = shutil.which("ngrok")
+        if which_path:
+            self._append_dir_to_path(Path(which_path).parent)
+            return which_path
+
+        return None
+
+    def _resolve_func(self) -> Optional[str]:
+        """Resolve path to Azure Functions Core Tools (func) and
+        ensure on PATH.
+
+        Returns full path or command name if discoverable,
+        else None.
+        """
+        # 1) Environment-driven hints (explicit override)
+        env_vars = [
+            "FUNC_PATH",
+            "FUNCTIONS_CORE_TOOLS_PATH",
+            "AZURE_FUNCTIONS_CORE_TOOLS_PATH",
+        ]
+        for var in env_vars:
+            val = os.environ.get(var)
+            if not val:
+                continue
+            candidate = Path(val)
+            if candidate.is_dir():
+                # Common filenames
+                for name in ("func.exe", "func.cmd", "func"):
+                    inner = candidate / name
+                    if inner.exists():
+                        self._append_dir_to_path(candidate)
+                        return str(inner)
+            if candidate.is_file():
+                self._append_dir_to_path(candidate.parent)
+                return str(candidate)
+
+        # 2) Typical Windows locations via environment expansion
+        #    (no hard-coded literals)
+        if sys.platform == "win32":
+            appdata = os.environ.get("APPDATA")
+            if appdata:
+                npm_cmd = Path(appdata) / "npm" / "func.cmd"
+                if npm_cmd.exists():
+                    self._append_dir_to_path(npm_cmd.parent)
+                    return str(npm_cmd)
+            # Program Files (x64) and (x86)
+            program_files = os.environ.get("ProgramFiles")
+            program_files_x86 = os.environ.get("ProgramFiles(x86)")
+            local_app = os.environ.get("LOCALAPPDATA")
+
+            def first_existing(paths: list[Path]) -> Optional[Path]:
+                for p in paths:
+                    if p and p.exists():
+                        return p
+                return None
+
+            candidate_paths: list[Path] = []
+            # Common vendor folder names and potential version subfolders
+            vendor_folders = [
+                "Azure Functions Core Tools",
+                str(Path("Microsoft") / "Azure Functions Core Tools"),
+            ]
+            version_subfolders = ["", "4"]
+
+            for base in [program_files, program_files_x86]:
+                if not base:
+                    continue
+                base_path = Path(base)
+                for vendor in vendor_folders:
+                    for version in version_subfolders:
+                        sub = base_path / vendor
+                        if version:
+                            sub = sub / version
+                        candidate_paths.append(sub / "func.exe")
+
+            if local_app:
+                la_base = Path(local_app) / "Programs" / "Azure Functions Core Tools"
+                for version in version_subfolders:
+                    sub = la_base
+                    if version:
+                        sub = sub / version
+                    candidate_paths.append(sub / "func.exe")
+
+            found = first_existing([Path(c) for c in candidate_paths])
+            if found:
+                self._append_dir_to_path(found.parent)
+                return str(found)
+
+        # 3) Repository-local tools folder
+        # Prefer nested portable layout: tools/func/func.exe
+        nested_portable = self.base_dir / "tools" / "func" / "func.exe"
+        if nested_portable.exists():
+            self._append_dir_to_path(nested_portable.parent)
+            return str(nested_portable)
+        for name in ("func.exe", "func.cmd", "func"):
+            local = self.base_dir / "tools" / name
+            if local.exists():
+                self._append_dir_to_path(local.parent)
+                return str(local)
+
+        # 4) System PATH last
+        which_path = shutil.which("func")
+        if which_path:
+            self._append_dir_to_path(Path(which_path).parent)
+            return which_path
+
+        return None
+
     async def find_ngrok_tunnel(self) -> Optional[str]:
         """Find ngrok tunnel URL."""
         try:
@@ -59,19 +220,36 @@ class ServiceManager:
             # Check if ngrok is already running
             existing_url = await self.find_ngrok_tunnel()
             if existing_url:
-                logger.info(f"✅ ngrok already running: {existing_url}")
+                logger.info("ngrok already running: %s", existing_url)
                 self.webhook_url = f"{existing_url}/api/graph_webhook"
                 # Update environment variable
                 os.environ["GRAPH_WEBHOOK_URL"] = self.webhook_url
                 return True
             
             # Start ngrok
-            logger.info("🚀 Starting ngrok...")
+            logger.info("Starting ngrok...")
+
+            ngrok_path = self._resolve_ngrok()
+            if not ngrok_path:
+                logger.error(
+                    "ngrok not found. Ensure it is installed and "
+                    "available on PATH, or set "
+                    "NGROK_EXE/NGROK_PATH/NGROK_DIR."
+                )
+                return False
             
-            # Use the agency-swarm domain
+            # Use the agency-swarm domain; include authtoken if available
             cmd = [
-                "ngrok", "http", "--domain", "agency-swarm.ngrok.app", "7071"
+                ngrok_path,
+                "http",
+                "--domain",
+                "agency-swarm.ngrok.app",
+                "7071",
             ]
+            ngrok_token = os.environ.get("NGROK_TOKEN") or os.environ.get("NGROK_AUTHTOKEN")
+            if ngrok_token:
+                cmd.insert(2, "--authtoken")
+                cmd.insert(3, ngrok_token)
             
             # Start ngrok process
             if sys.platform == "win32":
@@ -93,25 +271,25 @@ class ServiceManager:
                 await asyncio.sleep(2)
                 url = await self.find_ngrok_tunnel()
                 if url:
-                    logger.info(f"✅ ngrok started: {url}")
+                    logger.info("ngrok started: %s", url)
                     self.webhook_url = f"{url}/api/graph_webhook"
                     # Update environment variable
                     os.environ["GRAPH_WEBHOOK_URL"] = self.webhook_url
                     return True
                 
                 if i % 5 == 0:
-                    logger.info(f"Still waiting for ngrok... ({i}/15)")
+                    logger.info("Still waiting for ngrok... (%s/15)", i)
             
-            logger.error("❌ ngrok failed to start")
+            logger.error("ngrok failed to start")
             return False
             
         except Exception as e:
-            logger.error(f"Error starting ngrok: {e}")
+            logger.error("Error starting ngrok: %s", e)
             return False
         
     async def wait_for_function_app(self, max_attempts=30):
         """Wait for Function App to be ready."""
-        logger.info("⏳ Waiting for Function App to be ready...")
+        logger.info("Waiting for Function App to be ready...")
 
         # Prefer ultra-light readiness endpoint; fallback to /hello
         readiness_urls = [
@@ -126,7 +304,7 @@ class ServiceManager:
                     async with httpx.AsyncClient(timeout=5) as client:
                         response = await client.get(url)
                         if 200 <= response.status_code < 300:
-                            logger.info("✅ Function App is ready!")
+                            logger.info("Function App is ready")
                             return True
                 except Exception as exc:
                     # Quietly retry with backoff; log occasionally
@@ -143,13 +321,17 @@ class ServiceManager:
             delay += 0.1 * (attempt % 3)  # cheap jitter
             await asyncio.sleep(delay)
             if attempt % 5 == 0:
-                logger.info(f"Still waiting... ({attempt}/{max_attempts})")
+                logger.info(
+                    "Still waiting... (%s/%s)",
+                    attempt,
+                    max_attempts,
+                )
 
         return False
-    
+
     async def setup_webhooks(self):
         """Set up MS Graph webhooks."""
-        logger.info("📋 Setting up MS Graph webhooks...")
+        logger.info("Setting up MS Graph webhooks...")
         
         try:
             async with httpx.AsyncClient() as client:
@@ -161,41 +343,53 @@ class ServiceManager:
                 )
                 
                 if response.status_code == 200:
-                    logger.info("✅ Webhooks setup complete")
+                    logger.info("Webhooks setup complete")
                     return True
                 else:
                     logger.warning(
-                        f"⚠️  Webhook setup returned: {response.status_code}"
+                        "Webhook setup returned: %s",
+                        response.status_code,
                     )
                     
         except Exception as e:
-            logger.error(f"❌ Webhook setup failed: {e}")
+            logger.error("Webhook setup failed: %s", e)
         
         return False
-    
+
     def start_function_app(self):
         """Start the Azure Function App."""
-        logger.info("🚀 Starting Azure Function App...")
+        logger.info("Starting Azure Function App...")
         
         # Change to src directory where host.json is located
         os.chdir(self.base_dir)
         
         # Start func host
+        func_path = self._resolve_func()
+        if not func_path:
+            raise FileNotFoundError(
+                "Azure Functions Core Tools (func) not found. Ensure it is "
+                "installed and on PATH, or set FUNC_PATH / "
+                "FUNCTIONS_CORE_TOOLS_PATH / AZURE_FUNCTIONS_CORE_TOOLS_PATH."
+            )
+        # Run from the function app directory where host.json resides
+        func_cwd = str(self.base_dir)
         if sys.platform == "win32":
-            # Use full path to func.cmd on Windows
-            func_cmd = r"C:\Users\JoshuaKoviak\AppData\Roaming\npm\func.cmd"
             self.func_process = subprocess.Popen(
-                [func_cmd, "start"],
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                [func_path, "start"],
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                cwd=func_cwd,
             )
         else:
-            self.func_process = subprocess.Popen(["func", "start"])
+            self.func_process = subprocess.Popen(
+                [func_path, "start"],
+                cwd=func_cwd,
+            )
         
-        logger.info("✅ Function App process started")
-    
+        logger.info("Function App process started")
+
     def start_sync_service(self):
         """Start the Planner sync service."""
-        logger.info("🔄 Starting Planner sync service V5...")
+        logger.info("Starting Planner sync service V5...")
         
         # Initialize webhook handler first
         from webhook_handler import initialize_webhook_handler
@@ -209,12 +403,12 @@ class ServiceManager:
         sync_task = asyncio.create_task(self.sync_service.start())
         self.background_tasks.append(sync_task)
         
-        logger.info("✅ Planner sync service V5 started")
-    
+        logger.info("Planner sync service V5 started")
+
     async def ensure_token_available(self, max_attempts=10):
         """Ensure authentication token is available before starting sync."""
         logger.info(
-            "🔐 Ensuring authentication tokens are available..."
+            "Ensuring authentication tokens are available..."
         )
         
         for attempt in range(max_attempts):
@@ -224,44 +418,45 @@ class ServiceManager:
                 
                 if token:
                     logger.info(
-                        "✅ Authentication token acquired successfully!"
+                        "Authentication token acquired successfully"
                     )
                     # Also verify it works with a simple API call
                     async with httpx.AsyncClient() as client:
                         response = await client.get(
                             "https://graph.microsoft.com/v1.0/me",
-                            headers={
-                                "Authorization": f"Bearer {token}"
-                            },
-                            timeout=10
+                            headers={"Authorization": f"Bearer {token}"},
+                            timeout=10,
                         )
                         if response.status_code == 200:
                             user_data = response.json()
                             logger.info(
-                                f"✅ Token verified for user: "
-                                f"{user_data.get('displayName', 'Unknown')}"
+                                "Token verified for user: %s",
+                                user_data.get("displayName", "Unknown"),
                             )
                             return True
                         else:
                             logger.warning(
-                                f"Token validation failed: "
-                                f"{response.status_code}"
+                                "Token validation failed: %s",
+                                response.status_code,
                             )
                 else:
                     logger.info(
-                        f"Waiting for token... "
-                        f"({attempt + 1}/{max_attempts})"
+                        "Waiting for token... (%s/%s)",
+                        attempt + 1,
+                        max_attempts,
                     )
                     
             except Exception as e:
                 logger.debug(
-                    f"Token check attempt {attempt + 1} failed: {e}"
+                    "Token check attempt %s failed: %s",
+                    attempt + 1,
+                    e,
                 )
             
             # Wait before retry
             await asyncio.sleep(3)
         
-        logger.error("❌ Failed to acquire authentication token")
+        logger.error("Failed to acquire authentication token")
         logger.info("Please check:")
         logger.info(
             "  - AGENT_USER_NAME and AGENT_PASSWORD are set correctly"
@@ -271,14 +466,14 @@ class ServiceManager:
         )
         logger.info("  - User has necessary permissions")
         return False
-    
+
     async def start_all(self):
         """Start all services in the correct order."""
-        logger.info("🎯 Starting all services...")
+        logger.info("Starting all services...")
         
         # 1. Start ngrok first
         if not await self.start_ngrok():
-            logger.error("❌ ngrok failed to start")
+            logger.error("ngrok failed to start")
             logger.info("Continuing without ngrok - webhooks will not work")
         
         # 2. Start Function App
@@ -286,7 +481,7 @@ class ServiceManager:
         
         # 3. Wait for it to be ready
         if not await self.wait_for_function_app():
-            logger.error("❌ Function App failed to start")
+            logger.error("Function App failed to start")
             return False
         
         # 4. Setup webhooks
@@ -305,23 +500,22 @@ class ServiceManager:
                         await self.chat_subscription_manager.\
                             renew_expiring_subscriptions()
                     except Exception as e:
-                        logger.error(f"Renewal error: {e}")
+                        logger.error("Renewal error: %s", e)
                     await asyncio.sleep(600)
 
             renew_task = asyncio.create_task(renew_loop())
             self.background_tasks.append(renew_task)
         except Exception as e:
-            logger.error(f"Chat subscription setup failed: {e}")
+            logger.error("Chat subscription setup failed: %s", e)
 
         # 6. Wait a bit for token service to be ready
-        logger.info("⏳ Waiting for token service to initialize...")
+        logger.info("Waiting for token service to initialize...")
         await asyncio.sleep(5)
 
         # 7. Ensure token is available before starting sync
         if not await self.ensure_token_available():
             logger.error(
-                "❌ Cannot start sync service without "
-                "authentication token"
+                "Cannot start sync service without authentication token"
             )
             logger.info(
                 "Sync service will not be started. "
@@ -333,12 +527,12 @@ class ServiceManager:
         # 8. Start sync service
         self.start_sync_service()
         
-        logger.info("✅ All services started successfully!")
-        logger.info("📡 Function App: http://localhost:7071")
+        logger.info("All services started successfully")
+        logger.info("Function App: http://localhost:7071")
         if self.webhook_url:
-            logger.info(f"🌐 Webhook URL: {self.webhook_url}")
-        logger.info("🔄 Planner sync service: Running")
-        logger.info("📨 Webhooks: Configured")
+            logger.info("Webhook URL: %s", self.webhook_url)
+        logger.info("Planner sync service: Running")
+        logger.info("Webhooks: Configured")
         
         return True
     
@@ -357,7 +551,12 @@ class ServiceManager:
                         f"if($c){{ $c.OwningProcess | Select-Object -First 1 }}"
                     ),
                 ]
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
                 out = result.stdout.strip()
                 if out.isdigit():
                     return int(out)
@@ -368,6 +567,7 @@ class ServiceManager:
                     ["lsof", "-i", f":{port}", "-sTCP:LISTEN", "-t"],
                     capture_output=True,
                     text=True,
+                    check=False,
                 )
                 out = result.stdout.strip().splitlines()
                 return int(out[0]) if out and out[0].isdigit() else None
@@ -438,7 +638,7 @@ class ServiceManager:
                 await self.sync_service.stop()
                 logger.info("Planner sync service V5 stopped.")
             except Exception as e:
-                logger.error(f"Error stopping V5 sync service: {e}")
+                logger.error("Error stopping V5 sync service: %s", e)
 
         # Cancel any remaining background tasks and wait for them
         for task in list(self.background_tasks):
@@ -469,7 +669,7 @@ class ServiceManager:
                     self.ngrok_process.kill()
                     self.ngrok_process.wait()
             except Exception as e:
-                logger.error(f"Error stopping ngrok: {e}")
+                logger.error("Error stopping ngrok: %s", e)
 
         # Stop Function App
         if self.func_process:
@@ -489,7 +689,7 @@ class ServiceManager:
                     self.func_process.kill()
                     self.func_process.wait()
             except Exception as e:
-                logger.error(f"Error stopping Function App: {e}")
+                logger.error("Error stopping Function App: %s", e)
 
         # Ensure local ports are freed (Azure Functions default 7071; ngrok API 4040)
         try:
@@ -518,7 +718,7 @@ async def main():
     def signal_handler(signum, frame):
         """Handle shutdown signals."""
         if not shutdown_event.is_set():
-            logger.info("\n⚠️  Shutdown signal received...")
+            logger.info("\nShutdown signal received...")
             shutdown_event.set()
     
     # Register signal handlers
@@ -553,7 +753,7 @@ async def main():
         # This might not be reached due to signal handlers, but just in case
         logger.info("\nKeyboard interrupt received...")
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.error("Unexpected error: %s", e)
         import traceback
         traceback.print_exc()
     finally:

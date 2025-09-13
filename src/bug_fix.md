@@ -25,6 +25,29 @@ Notes / Follow-ups
 
 ---
 
+Date: 2025-09-13
+
+Issue
+- `start_all_services.py` failed to start `ngrok` and Azure Functions host with WinError 2 (executable not found).
+
+Root Cause
+- The script assumed `ngrok` and `func` would be discoverable on PATH and hard‑coded a user‑specific `func.cmd` path. In some sessions, PATH wasn’t inherited by the Python process, causing lookups to fail.
+
+Fix
+- `src/start_all_services.py`:
+  - Implemented robust executable discovery using `shutil.which` plus environment hints (`NGROK_EXE`, `NGROK_PATH`, `NGROK_DIR`, `FUNC_PATH`, `FUNCTIONS_CORE_TOOLS_PATH`, `AZURE_FUNCTIONS_CORE_TOOLS_PATH`) and a repo‑local `tools/` directory fallback.
+  - When an executable is found, prepend its directory to `PATH` for child processes to ensure consistent discovery.
+  - Removed hard‑coded `func.cmd` path and switched to resolved path.
+  - Cleaned up logs (removed emojis) and improved error messages.
+
+Verification
+- Quick checks:
+  - `Get-Command ngrok` and `Get-Command func` return valid paths in PowerShell.
+  - Running `python start_all_services.py` no longer raises WinError 2; ngrok and Function App start as expected.
+
+Notes / Follow-ups
+- If `ngrok`/`func` still aren’t found, set `NGROK_EXE` or `FUNC_PATH` (or their directory variants) in `.env`/`local.settings.json`. The startup script will pick them up automatically.
+
 Date: 2025-09-10
 
 Change

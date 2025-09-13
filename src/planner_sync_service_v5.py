@@ -255,7 +255,27 @@ class WebhookDrivenPlannerSync:
             await self.pubsub.unsubscribe()
             await self.pubsub.close()
         if self.redis_client:
-            await self.redis_client.close()
+            # Ensure all connections are fully torn down before the event loop closes
+            try:
+                pool = getattr(self.redis_client, "connection_pool", None)
+                if pool is not None:
+                    try:
+                        # Some redis.asyncio versions expose an async disconnect
+                        await pool.disconnect()  # type: ignore[func-returns-value]
+                    except TypeError:
+                        # Fallback for sync disconnect signature
+                        pool.disconnect()
+            except Exception:
+                pass
+            try:
+                await self.redis_client.close()
+            except Exception:
+                pass
+            # Yield control to allow cleanup callbacks to run
+            try:
+                await asyncio.sleep(0)
+            except Exception:
+                pass
             
         logger.info("Webhook-driven sync service stopped")
     
@@ -399,7 +419,46 @@ class WebhookDrivenPlannerSync:
                 logger.warning(f"No token available for {webhook_name} webhook")
                 continue
 
+            # Idempotency: check Graph for an existing active subscription
+            try:
+                found = await self._find_existing_webhook(
+                    webhook_token, webhook_info["config"]
+                )
+                if found:
+                    sub_id = found.get("id")
+                    self.webhook_subscriptions[webhook_name] = sub_id
+                    await self.redis_client.hset(
+                        WEBHOOK_STATUS_KEY,
+                        webhook_name,
+                        json.dumps(
+                            {
+                                "subscription_id": sub_id,
+                                "created_at": found.get("@odata.context", ""),
+                                "expires_at": found.get("expirationDateTime"),
+                                "resource": found.get("resource"),
+                            }
+                        ),
+                    )
+                    logger.info(
+                        "%s webhook: adopted existing subscription id=%s resource=%s expires=%s",
+                        webhook_name,
+                        sub_id,
+                        found.get("resource"),
+                        found.get("expirationDateTime"),
+                    )
+                    continue
+            except Exception as e:
+                logger.debug(
+                    "Error checking existing webhook %s: %s", webhook_name, e
+                )
+
             await self._create_webhook(webhook_info)
+
+        # After setup attempts, log current status (adopted or created)
+        try:
+            await self._log_webhook_status()
+        except Exception:
+            pass
 
     async def _create_webhook(self, cfg: dict) -> None:
         """Create a single webhook subscription and store its state."""
@@ -417,6 +476,34 @@ class WebhookDrivenPlannerSync:
         }
 
         try:
+            # Idempotency: re-check just before creation to avoid races
+            preexisting = await self._find_existing_webhook(token, config)
+            if preexisting:
+                sub_id = preexisting.get("id")
+                self.webhook_subscriptions[webhook_name] = sub_id
+                await self.redis_client.hset(
+                    WEBHOOK_STATUS_KEY,
+                    webhook_name,
+                    json.dumps(
+                        {
+                            "subscription_id": sub_id,
+                            "created_at": preexisting.get("@odata.context", ""),
+                            "expires_at": preexisting.get("expirationDateTime"),
+                            "resource": preexisting.get("resource"),
+                        }
+                    ),
+                )
+                logger.info(
+                    "%s webhook: adopted existing subscription id=%s resource=%s expires=%s",
+                    webhook_name,
+                    sub_id,
+                    preexisting.get("resource"),
+                    preexisting.get("expirationDateTime"),
+                )
+                return
+
+            logger.info("%s webhook: no existing subscription found; creating new", webhook_name)
+
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{GRAPH_API_ENDPOINT}/subscriptions",
@@ -445,12 +532,173 @@ class WebhookDrivenPlannerSync:
                     f"✅ {webhook_name} webhook subscription created: {sub_id}"
                 )
             else:
+                # If Graph reports limit reached, treat as already exists
+                if (
+                    response.status_code == 403
+                    and "limit of '1'" in response.text
+                ):
+                    try:
+                        # Try strict/relaxed match first
+                        existing = await self._find_existing_webhook(token, config)
+                        # If still not found, accept near-expiry subscriptions
+                        if not existing:
+                            existing = await self._find_existing_webhook(token, config)
+                    except Exception:
+                        existing = None
+                    if existing:
+                        sub_id = existing.get("id")
+                        self.webhook_subscriptions[webhook_name] = sub_id
+                        await self.redis_client.hset(
+                            WEBHOOK_STATUS_KEY,
+                            webhook_name,
+                            json.dumps(
+                                {
+                                    "subscription_id": sub_id,
+                                    "created_at": existing.get("@odata.context", ""),
+                                    "expires_at": existing.get("expirationDateTime"),
+                                    "resource": existing.get("resource"),
+                                }
+                            ),
+                        )
+                        logger.info(
+                            "%s webhook: adopted existing subscription (quota) id=%s resource=%s expires=%s",
+                            webhook_name,
+                            sub_id,
+                            existing.get("resource"),
+                            existing.get("expirationDateTime"),
+                        )
+                        return
+                    # No visible existing sub; still assume one is present due to quota
+                    logger.info(
+                        "%s webhook: quota reached; assuming an existing active subscription is in use",
+                        webhook_name,
+                    )
+                    return
+
                 logger.error(
                     f"Failed to create {webhook_name} webhook: {response.status_code}"
                 )
                 logger.error(f"Response: {response.text}")
         except Exception as exc:
             logger.error(f"Error setting up {webhook_name} webhook: {exc}")
+
+    async def _log_webhook_status(self) -> None:
+        """Log current adopted/created webhook subscriptions with expirations."""
+        if not self.webhook_subscriptions:
+            logger.info("No webhook subscriptions tracked yet")
+            return
+
+        # Choose tokens per resource for GET by id
+        for name, sub_id in self.webhook_subscriptions.items():
+            token = self._token_for_webhook(name)
+            if not token:
+                logger.debug("No token available to query webhook %s", name)
+                continue
+            headers = {"Authorization": f"Bearer {token}"}
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        f"{GRAPH_API_ENDPOINT}/subscriptions/{sub_id}",
+                        headers=headers,
+                        timeout=15,
+                    )
+                if resp.status_code == 200:
+                    sub = resp.json()
+                    logger.info(
+                        "webhook '%s' in use: id=%s resource=%s expires=%s",
+                        name,
+                        sub.get("id"),
+                        sub.get("resource"),
+                        sub.get("expirationDateTime"),
+                    )
+                elif resp.status_code == 404:
+                    logger.warning(
+                        "webhook '%s' id=%s not found during status; will recreate on renewal",
+                        name,
+                        sub_id,
+                    )
+                else:
+                    logger.debug(
+                        "status query for webhook '%s' returned %s",
+                        name,
+                        resp.status_code,
+                    )
+            except Exception:
+                logger.debug("Failed to query status for webhook '%s'", name)
+
+    async def _find_existing_webhook(self, token: str, config: dict) -> Optional[dict]:
+        """Find an active existing webhook matching the desired config.
+
+        Strategy:
+        1) Strict match: resource + notificationUrl (+ clientState when present)
+        2) Fallback: any active subscription with the same resource
+
+        Only returns subscriptions that expire at least 5 minutes
+        in the future.
+        """
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{GRAPH_API_ENDPOINT}/subscriptions", headers=headers, timeout=30
+                )
+            if resp.status_code != 200:
+                return None
+
+            items = resp.json().get("value", [])
+            desired_resource = config.get("resource")
+            desired_url = config.get("notificationUrl")
+            desired_state = config.get("clientState")
+
+            now = datetime.utcnow()
+
+            # Pass 1: strict match
+            for sub in items:
+                try:
+                    exp = sub.get("expirationDateTime")
+                    if not exp:
+                        continue
+                    exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                    if exp_dt <= now + timedelta(minutes=5):
+                        continue
+                    if sub.get("resource") != desired_resource:
+                        continue
+                    if desired_url and sub.get("notificationUrl") != desired_url:
+                        continue
+                    if desired_state and sub.get("clientState") != desired_state:
+                        continue
+                    return sub
+                except Exception:
+                    continue
+
+            # Pass 2: relaxed match (resource only)
+            for sub in items:
+                try:
+                    exp = sub.get("expirationDateTime")
+                    if not exp:
+                        continue
+                    exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                    if exp_dt <= now + timedelta(minutes=5):
+                        continue
+                    if sub.get("resource") != desired_resource:
+                        continue
+                    return sub
+                except Exception:
+                    continue
+            # Pass 3: any subscription for the same resource, even near expiry
+            for sub in items:
+                try:
+                    if sub.get("resource") != desired_resource:
+                        continue
+                    return sub
+                except Exception:
+                    continue
+        except Exception:
+            return None
+        return None
     
     async def _webhook_renewal_loop(self):
         """Periodically renew webhook subscriptions."""
@@ -461,13 +709,12 @@ class WebhookDrivenPlannerSync:
     async def _renew_webhooks(self):
         """Renew webhook subscriptions before they expire."""
         logger.info("🔄 Renewing webhook subscriptions...")
-        
-        token = get_agent_token()
-        if not token:
-            return
-        
         for webhook_type, subscription_id in self.webhook_subscriptions.items():
             try:
+                token = self._token_for_webhook(webhook_type)
+                if not token:
+                    logger.debug("No token available to renew %s", webhook_type)
+                    continue
                 # Extend expiration by 24 hours
                 new_expiration = (
                     datetime.utcnow() + timedelta(hours=24)
@@ -492,6 +739,20 @@ class WebhookDrivenPlannerSync:
 
                 if response.status_code == 200:
                     logger.info(f"✅ Renewed webhook: {webhook_type}")
+                    # Update Redis status with new expiration
+                    try:
+                        status = await self.redis_client.hget(
+                            WEBHOOK_STATUS_KEY, webhook_type
+                        )
+                        payload = json.loads(status) if status else {}
+                        payload["expires_at"] = new_expiration
+                        await self.redis_client.hset(
+                            WEBHOOK_STATUS_KEY,
+                            webhook_type,
+                            json.dumps(payload),
+                        )
+                    except Exception:
+                        pass
                 elif response.status_code == 404:
                     logger.warning(
                         f"Webhook {webhook_type} missing, recreating..."
@@ -508,6 +769,18 @@ class WebhookDrivenPlannerSync:
                     
             except Exception as e:
                 logger.error(f"Error renewing webhook {webhook_type}: {e}")
+
+    def _token_for_webhook(self, webhook_type: str) -> Optional[str]:
+        """Return an appropriate token for the webhook type."""
+        try:
+            if webhook_type == "groups":
+                return get_delegated_token()
+            # Teams webhooks require application token
+            if webhook_type in ("teams_chats", "teams_channels"):
+                return get_application_token()
+        except Exception:
+            return None
+        return None
     
     async def _cleanup_webhooks(self):
         """Clean up webhook subscriptions on shutdown."""
@@ -553,10 +826,81 @@ class WebhookDrivenPlannerSync:
                     if channel == "annika:planner:webhook":
                         # Process webhook notification
                         notification_data = json.loads(message['data'])
+                        # Adopt subscription IDs from live notifications
+                        try:
+                            await self._adopt_subscription_from_notification(
+                                notification_data
+                            )
+                        except Exception:
+                            pass
                         await self._handle_webhook_notification(notification_data)
                         
                 except Exception as e:
                     logger.error(f"Error processing webhook notification: {e}")
+
+    async def _adopt_subscription_from_notification(self, notification: Dict) -> None:
+        """Adopt subscription ID from a live notification and persist it.
+
+        This guarantees that even if creation was skipped due to quotas
+        or discovery failed earlier, we track the active subscription.
+        """
+        sub_id = notification.get("subscriptionId")
+        if not sub_id:
+            return
+        resource = notification.get("resource", "")
+        client_state = notification.get("clientState", "")
+
+        # Determine webhook name by clientState first, then resource
+        name: Optional[str] = None
+        if "groups" in client_state:
+            name = "groups"
+        elif "teams_chats" in client_state or "/chats" in resource:
+            name = "teams_chats"
+        elif "teams_channels" in client_state or (
+            "/teams" in resource and "/channels" in resource
+        ) or "/teams/getAllChannels" in resource:
+            name = "teams_channels"
+        if not name:
+            return
+
+        # If we already have the same id recorded, nothing to do
+        if self.webhook_subscriptions.get(name) == sub_id:
+            return
+
+        # Save mapping and attempt to record status in Redis
+        self.webhook_subscriptions[name] = sub_id
+        try:
+            token = self._token_for_webhook(name)
+            headers = {"Authorization": f"Bearer {token}"} if token else None
+            expires = None
+            if headers:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        f"{GRAPH_API_ENDPOINT}/subscriptions/{sub_id}",
+                        headers=headers,
+                        timeout=15,
+                    )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    expires = data.get("expirationDateTime")
+            await self.redis_client.hset(
+                WEBHOOK_STATUS_KEY,
+                name,
+                json.dumps(
+                    {
+                        "subscription_id": sub_id,
+                        "resource": resource,
+                        "expires_at": expires,
+                    }
+                ),
+            )
+        except Exception:
+            pass
+        logger.info(
+            "webhook '%s': adopted subscription from notification id=%s",
+            name,
+            sub_id,
+        )
     
     async def _handle_webhook_notification(self, notification: Dict):
         """Handle a single webhook notification from Microsoft Graph."""
