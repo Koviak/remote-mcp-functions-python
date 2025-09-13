@@ -49,6 +49,11 @@ def get_access_token():
     return token.token
 
 
+def _get_agent_user_id() -> str:
+    """Return the configured agent user id if available, else empty string."""
+    return os.environ.get("AGENT_USER_ID", "").strip()
+
+
 # HTTP Endpoint Functions (without decorators)
 
 def list_groups_http(req: func.HttpRequest) -> func.HttpResponse:
@@ -1591,11 +1596,28 @@ def get_calendar_view_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        # Prefer delegated token for /me; fallback to app-only with /users/{id}
+        token, base = (None, None)
+        try:
+            from agent_auth_manager import get_agent_token
+            delegated = get_agent_token()
+            if delegated:
+                token, base = delegated, "/me"
+        except Exception:
+            token, base = (None, None)
         if not token:
+            app_token = get_access_token()
+            user_id = _get_agent_user_id()
+            if app_token and user_id:
+                token, base = app_token, f"/users/{user_id}"
+        if not token or not base:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
+                json.dumps({
+                    "error": "auth_unavailable",
+                    "message": "Delegated token missing and app-only fallback not configured",
+                }),
+                status_code=503,
+                mimetype="application/json",
             )
         
         headers = {
@@ -1603,11 +1625,15 @@ def get_calendar_view_http(req: func.HttpRequest) -> func.HttpResponse:
             "Content-Type": "application/json"
         }
         
+        url = f"{GRAPH_API_ENDPOINT}{base}/calendar/calendarView"
         response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/me/calendar/calendarView"
-            f"?startDateTime={start_date}&endDateTime={end_date}",
+            url,
+            params={
+                "startDateTime": start_date,
+                "endDateTime": end_date,
+            },
             headers=headers,
-            timeout=10
+            timeout=10,
         )
         
         if response.status_code == 200:
@@ -1995,6 +2021,8 @@ def register_http_endpoints(function_app):
     app.route(route="drives/{drive_id}/items/{item_id}/content", 
               methods=["GET"])(download_file_http)
     app.route(route="sites", methods=["GET"])(sites_search_http)
+    # SharePoint: support compound siteId and listing drives by site
+    app.route(route="sites/{site_id}/drives", methods=["GET"])(list_site_drives_http)
     
     # Security & Reporting
     app.route(route="reports/usage", methods=["GET"])(usage_summary_http)
@@ -2879,11 +2907,30 @@ def send_message_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        # Prefer delegated token for /me sendMail; fallback to app-only with /users/{id}
+        token, path = (None, None)
+        try:
+            from agent_auth_manager import get_agent_token
+            delegated = get_agent_token()
+            if delegated:
+                token, path = delegated, "/me/sendMail"
+        except Exception:
+            token, path = (None, None)
+
         if not token:
+            app_token = get_access_token()
+            user_id = _get_agent_user_id()
+            if app_token and user_id:
+                token, path = app_token, f"/users/{user_id}/sendMail"
+
+        if not token or not path:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
+                json.dumps({
+                    "error": "auth_unavailable",
+                    "message": "Delegated token missing and app-only fallback not configured",
+                }),
+                status_code=503,
+                mimetype="application/json",
             )
         
         headers = {
@@ -2909,7 +2956,7 @@ def send_message_http(req: func.HttpRequest) -> func.HttpResponse:
         }
         
         response = requests.post(
-            f"{GRAPH_API_ENDPOINT}/me/sendMail",
+            f"{GRAPH_API_ENDPOINT}{path}",
             headers=headers,
             json=data,
             timeout=10
@@ -2936,25 +2983,46 @@ def send_message_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_inbox_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list inbox messages"""
     try:
-        from agent_auth_manager import get_agent_token
-        token = get_agent_token("openid profile offline_access User.Read Mail.Read")
+        # Prefer delegated /me; fallback to app-only /users/{id}
+        token, path = (None, None)
+        try:
+            from agent_auth_manager import get_agent_token
+            delegated = get_agent_token("openid profile offline_access User.Read Mail.Read")
+            if delegated:
+                token, path = delegated, "/me/mailFolders/inbox/messages"
+        except Exception:
+            token, path = (None, None)
+
         if not token:
+            app_token = get_access_token()
+            user_id = _get_agent_user_id()
+            if app_token and user_id:
+                token, path = app_token, f"/users/{user_id}/mailFolders/inbox/messages"
+
+        if not token or not path:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
+                json.dumps({
+                    "error": "auth_unavailable",
+                    "message": "Delegated token missing and app-only fallback not configured",
+                }),
+                status_code=503,
+                mimetype="application/json",
             )
-        
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
+
         response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/me/mailFolders/inbox/messages"
-            "?$select=id,subject,from,receivedDateTime,isRead"
-            "&$top=20&$orderby=receivedDateTime desc",
+            f"{GRAPH_API_ENDPOINT}{path}",
+            params={
+                "$select": "id,subject,from,receivedDateTime,isRead",
+                "$top": "20",
+                "$orderby": "receivedDateTime desc",
+            },
             headers=headers,
-            timeout=10
+            timeout=10,
         )
         
         if response.status_code == 200:
@@ -3387,12 +3455,30 @@ def post_channel_message_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_chats_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list Teams chats."""
     try:
-        from agent_auth_manager import get_agent_token
-        token = get_agent_token()
+        # Prefer delegated /me; fallback to app-only /users/{id}
+        token, path = (None, None)
+        try:
+            from agent_auth_manager import get_agent_token
+            delegated = get_agent_token()
+            if delegated:
+                token, path = delegated, "/me/chats"
+        except Exception:
+            token, path = (None, None)
+
         if not token:
+            app_token = get_access_token()
+            user_id = _get_agent_user_id()
+            if app_token and user_id:
+                token, path = app_token, f"/users/{user_id}/chats"
+
+        if not token or not path:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401,
+                json.dumps({
+                    "error": "auth_unavailable",
+                    "message": "Delegated token missing and app-only fallback not configured",
+                }),
+                status_code=503,
+                mimetype="application/json",
             )
 
         headers = {
@@ -3401,7 +3487,7 @@ def list_chats_http(req: func.HttpRequest) -> func.HttpResponse:
         }
 
         response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/me/chats",
+            f"{GRAPH_API_ENDPOINT}{path}",
             headers=headers,
             timeout=10,
         )
@@ -3444,11 +3530,21 @@ def post_chat_message_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400,
             )
 
-        token = get_access_token()
+        # Prefer delegated token for posting; app-only may lack permissions
+        token = None
+        try:
+            from agent_auth_manager import get_agent_token
+            token = get_agent_token()
+        except Exception:
+            token = None
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401,
+                json.dumps({
+                    "error": "delegated_required",
+                    "message": "Posting chat messages requires delegated token",
+                }),
+                status_code=503,
+                mimetype="application/json",
             )
 
         headers = {
@@ -3488,21 +3584,39 @@ def post_chat_message_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_drives_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list drives"""
     try:
-        from agent_auth_manager import get_agent_token
-        token = get_agent_token("openid profile offline_access User.Read Files.ReadWrite.All")
+        # Prefer delegated /me; fallback to app-only /users/{id}
+        token, path = (None, None)
+        try:
+            from agent_auth_manager import get_agent_token
+            delegated = get_agent_token("openid profile offline_access User.Read Files.ReadWrite.All")
+            if delegated:
+                token, path = delegated, "/me/drives"
+        except Exception:
+            token, path = (None, None)
+
         if not token:
+            app_token = get_access_token()
+            user_id = _get_agent_user_id()
+            if app_token and user_id:
+                token, path = app_token, f"/users/{user_id}/drives"
+
+        if not token or not path:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
+                json.dumps({
+                    "error": "auth_unavailable",
+                    "message": "Delegated token missing and app-only fallback not configured",
+                }),
+                status_code=503,
+                mimetype="application/json",
             )
-        
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
+
         response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/me/drives",
+            f"{GRAPH_API_ENDPOINT}{path}",
             headers=headers,
             timeout=10
         )
@@ -3529,23 +3643,39 @@ def list_drives_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_root_items_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list root items in my drive"""
     try:
-        from agent_auth_manager import get_agent_token
-        token = get_agent_token("openid profile offline_access User.Read Files.ReadWrite.All")
+        # Prefer delegated /me; fallback to app-only /users/{id}
+        token, path = (None, None)
+        try:
+            from agent_auth_manager import get_agent_token
+            delegated = get_agent_token("openid profile offline_access User.Read Files.ReadWrite.All")
+            if delegated:
+                token, path = delegated, "/me/drive/root/children"
+        except Exception:
+            token, path = (None, None)
+
         if not token:
+            app_token = get_access_token()
+            user_id = _get_agent_user_id()
+            if app_token and user_id:
+                token, path = app_token, f"/users/{user_id}/drive/root/children"
+
+        if not token or not path:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
+                json.dumps({
+                    "error": "auth_unavailable",
+                    "message": "Delegated token missing and app-only fallback not configured",
+                }),
+                status_code=503,
+                mimetype="application/json",
             )
-        
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
-        endpoint = f"{GRAPH_API_ENDPOINT}/me/drive/root/children"
-        
+
         response = requests.get(
-            endpoint,
+            f"{GRAPH_API_ENDPOINT}{path}",
             headers=headers,
             timeout=10
         )
@@ -3665,6 +3795,71 @@ def sites_search_http(req: func.HttpRequest) -> func.HttpResponse:
             f"Error: {str(e)}",
             status_code=500
         )
+
+
+def list_site_drives_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list drives for a SharePoint site.
+
+    Accepts compound site IDs (e.g., `{hostname},{siteId},{webId}`) via route param
+    or `siteId` query param. Falls back to search by `hostname`+`path` if provided.
+    """
+    try:
+        site_id = req.route_params.get('site_id') or req.params.get('siteId')
+        hostname = req.params.get('hostname')
+        site_path = req.params.get('path')
+
+        if not site_id and not (hostname and site_path):
+            return func.HttpResponse(
+                "Missing site_id or (hostname and path) parameters",
+                status_code=400,
+            )
+
+        token = get_access_token()
+        if not token:
+            return func.HttpResponse(
+                "Authentication failed. Check Azure AD credentials.",
+                status_code=401,
+            )
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
+        if not site_id:
+            # Build id from hostname and path
+            # GET /sites/{hostname}:/sites/{path}
+            lookup = requests.get(
+                f"{GRAPH_API_ENDPOINT}/sites/{hostname}:/sites/{site_path}",
+                headers=headers,
+                timeout=10,
+            )
+            if lookup.status_code != 200:
+                return func.HttpResponse(
+                    f"Error: {lookup.status_code} - {lookup.text}",
+                    status_code=lookup.status_code,
+                )
+            site_id = lookup.json().get("id")
+            if not site_id:
+                return func.HttpResponse("Site not found", status_code=404)
+
+        # Now list drives
+        resp = requests.get(
+            f"{GRAPH_API_ENDPOINT}/sites/{site_id}/drives",
+            headers=headers,
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return func.HttpResponse(
+                resp.text, status_code=200, mimetype="application/json"
+            )
+        return func.HttpResponse(
+            f"Error: {resp.status_code} - {resp.text}",
+            status_code=resp.status_code,
+        )
+
+    except Exception as e:
+        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
 
 
 def usage_summary_http(req: func.HttpRequest) -> func.HttpResponse:
@@ -4396,21 +4591,39 @@ def create_agent_task_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_mail_folders_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list mail folders"""
     try:
-        from agent_auth_manager import get_agent_token
-        token = get_agent_token()
+        # Prefer delegated /me; fallback to app-only /users/{id}
+        token, path = (None, None)
+        try:
+            from agent_auth_manager import get_agent_token
+            delegated = get_agent_token()
+            if delegated:
+                token, path = delegated, "/me/mailFolders"
+        except Exception:
+            token, path = (None, None)
+
         if not token:
+            app_token = get_access_token()
+            user_id = _get_agent_user_id()
+            if app_token and user_id:
+                token, path = app_token, f"/users/{user_id}/mailFolders"
+
+        if not token or not path:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
-                status_code=401
+                json.dumps({
+                    "error": "auth_unavailable",
+                    "message": "Delegated token missing and app-only fallback not configured",
+                }),
+                status_code=503,
+                mimetype="application/json",
             )
-        
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
+
         response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/me/mailFolders",
+            f"{GRAPH_API_ENDPOINT}{path}",
             headers=headers,
             timeout=10
         )

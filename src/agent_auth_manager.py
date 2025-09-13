@@ -52,7 +52,7 @@ class AgentAuthManager:
         self,
         scope: str = (
             "openid profile offline_access "
-            "User.Read Mail.Read Mail.ReadWrite Calendars.ReadWrite Files.ReadWrite.All Chat.Read Chat.ReadWrite"
+            "User.Read Mail.ReadWrite Files.ReadWrite.All Chat.ReadWrite.All"
         ),
     ) -> Optional[str]:
         """
