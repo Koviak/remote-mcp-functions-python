@@ -373,16 +373,22 @@ class ServiceManager:
             )
         # Run from the function app directory where host.json resides
         func_cwd = str(self.base_dir)
+        # Ensure the host binds to all interfaces so remote machines can connect
+        child_env = os.environ.copy()
+        child_env.setdefault("ASPNETCORE_URLS", "http://0.0.0.0:7071")
+        cmd = [func_path, "start", "--port", "7071"]
         if sys.platform == "win32":
             self.func_process = subprocess.Popen(
-                [func_path, "start"],
+                cmd,
                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
                 cwd=func_cwd,
+                env=child_env,
             )
         else:
             self.func_process = subprocess.Popen(
-                [func_path, "start"],
+                cmd,
                 cwd=func_cwd,
+                env=child_env,
             )
         
         logger.info("Function App process started")
@@ -528,7 +534,7 @@ class ServiceManager:
         self.start_sync_service()
         
         logger.info("All services started successfully")
-        logger.info("Function App: http://localhost:7071")
+        logger.info("Function App: http://0.0.0.0:7071")
         if self.webhook_url:
             logger.info("Webhook URL: %s", self.webhook_url)
         logger.info("Planner sync service: Running")

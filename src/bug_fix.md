@@ -50,6 +50,30 @@ Notes / Follow-ups
 
 ---
 
+Change
+- Align HTTP endpoints with correct token types and Graph paths; add SharePoint compound site support.
+
+Files
+- `src/http_endpoints.py`
+
+Details
+- Teams Chats:
+  - `GET /api/me/chats` now prefers delegated token; falls back to app-only via `/users/{id}/chats` when `AGENT_USER_ID` is set. Returns a friendly 503 JSON if neither is available.
+  - `POST /api/me/chats` messaging now requires delegated token explicitly; surfaces clear error if missing (app-only cannot post chat messages).
+- Mail:
+  - `GET /api/me/messages` (inbox list) and `GET /api/me/mailFolders` now use delegated tokens; fall back to `/users/{id}/...` with app-only if configured.
+  - `POST /api/me/sendMail` now prefers delegated; falls back to `/users/{id}/sendMail` for app-only.
+- Calendar:
+  - `GET /api/me/calendar/calendarView` now prefers delegated; falls back to `/users/{id}/calendar/calendarView` with app-only. Uses `requests` query `params` to pass `startDateTime`/`endDateTime` as-is and returns clearer JSON on auth unavailability.
+- SharePoint:
+  - Added `GET /api/sites/{site_id}/drives` supporting compound `site_id` (e.g., `{hostname},{siteId},{webId}`) and lookup via `hostname` + `path` when needed.
+
+Impact
+- Resolves 401/403/400s caused by token-type/endpoint mismatches without adding new scopes. Delegated is used for all `/me/*` routes; app-only fallbacks target `/users/{id}/...` where supported by Graph.
+
+Operational Notes
+- Ensure `AGENT_USER_ID` is set for app-only fallbacks. Delegated tokens are acquired via `agent_auth_manager.get_agent_token()` (ROPC or other configured methods).
+
 Date: 2025-09-13
 
 Issue
@@ -72,6 +96,27 @@ Verification
 
 Notes / Follow-ups
 - If `ngrok`/`func` still aren’t found, set `NGROK_EXE` or `FUNC_PATH` (or their directory variants) in `.env`/`local.settings.json`. The startup script will pick them up automatically.
+
+Date: 2025-09-13
+
+Change
+- Bind local Azure Functions host to all interfaces (0.0.0.0) so the MCP SSE endpoint is reachable from other machines on the network.
+
+Files
+- `src/start_all_services.py`
+
+Details
+- When starting the Functions host, set `ASPNETCORE_URLS=http://0.0.0.0:7071` in the child process environment and pass `--port 7071`. This ensures Kestrel listens on all interfaces.
+- Startup log now prints `http://0.0.0.0:7071` to make the external URL obvious.
+
+Operational Notes
+- To run manually without the script:
+  - PowerShell (session-only): `$env:ASPNETCORE_URLS = "http://0.0.0.0:7071"; cd src; func start`
+  - Optional Windows Firewall rule (require admin): `New-NetFirewallRule -DisplayName "Azure Functions 7071" -Direction Inbound -Protocol TCP -LocalPort 7071 -Action Allow`
+- If exposing publicly, prefer using the existing ngrok tunnel and function-level auth for the SSE endpoint.
+
+Verification
+- From another machine on the LAN, curl: `http://<host-ip>:7071/api/health/ready` returns 200 and the SSE endpoint streams at `http://<host-ip>:7071/runtime/webhooks/mcp/sse`.
 
 Date: 2025-09-10
 
