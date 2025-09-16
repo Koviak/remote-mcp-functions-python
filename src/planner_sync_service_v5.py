@@ -29,7 +29,7 @@ import requests
 
 from agent_auth_manager import get_agent_token
 from annika_task_adapter import AnnikaTaskAdapter
-from dual_auth_manager import get_application_token, get_delegated_token, get_token_for_operation
+from dual_auth_manager import get_application_token, get_delegated_token
 
 # Load environment variables from .env file
 env_file = Path(__file__).parent / '.env'
@@ -138,8 +138,12 @@ class ConflictResolver:
     ) -> ConflictResolution:
         """Determine which version should win in a conflict."""
         
-        # Get modification timestamps
-        annika_modified = annika_task.get("modified_at")
+        # Get modification timestamps (prefer last_modified_at, then updated_at)
+        annika_modified = (
+            annika_task.get("last_modified_at")
+            or annika_task.get("updated_at")
+            or annika_task.get("modified_at")
+        )
         planner_modified = planner_task.get("lastModifiedDateTime")
         
         if not annika_modified or not planner_modified:
@@ -908,8 +912,6 @@ class WebhookDrivenPlannerSync:
             change_type = notification.get("changeType")
             resource = notification.get("resource", "")
             client_state = notification.get("clientState", "")
-            resource_data = notification.get("resourceData", {})
-            resource_id = resource_data.get("id")
             
             logger.info(f"📨 Webhook: {change_type} for {resource} (client: {client_state})")
             
@@ -1319,6 +1321,13 @@ class WebhookDrivenPlannerSync:
                     annika_id = key.replace(PLANNER_ID_MAP_PREFIX, "")
                     if annika_id not in current_ids:
                         planner_id = await self.redis_client.get(key)
+                        # Accept JSON-or-string mapping values
+                        if planner_id and planner_id.strip().startswith("{"):
+                            try:
+                                obj = json.loads(planner_id)
+                                planner_id = obj.get("planner_id") or obj.get("plannerId") or obj.get("planner")
+                            except Exception:
+                                planner_id = None
                         if planner_id:
                             await self._delete_planner_task(planner_id)
                         await self._remove_mapping(annika_id, planner_id)
@@ -1338,7 +1347,11 @@ class WebhookDrivenPlannerSync:
             return True
         
         # Check if modified since last sync
-        annika_modified = annika_task.get("modified_at")
+        annika_modified = (
+            annika_task.get("last_modified_at")
+            or annika_task.get("updated_at")
+            or annika_task.get("modified_at")
+        )
         last_sync = await self.redis_client.get(f"annika:sync:last_upload:{annika_id}")
         
         if not last_sync or not annika_modified:
@@ -1433,6 +1446,13 @@ class WebhookDrivenPlannerSync:
             for key in keys:
                 annika_id = key.replace(PLANNER_ID_MAP_PREFIX, "")
                 planner_id = await self.redis_client.get(key)
+                # Accept JSON-or-string mapping values
+                if planner_id and planner_id.strip().startswith("{"):
+                    try:
+                        obj = json.loads(planner_id)
+                        planner_id = obj.get("planner_id") or obj.get("plannerId") or obj.get("planner")
+                    except Exception:
+                        planner_id = None
                 if planner_id and planner_id not in seen_ids:
                     await self._delete_annika_task(annika_id)
                     await self._remove_mapping(annika_id, planner_id)
@@ -1533,7 +1553,11 @@ class WebhookDrivenPlannerSync:
             recent_tasks = []
             
             for task in annika_tasks:
-                modified_at = task.get("modified_at")
+                modified_at = (
+                    task.get("last_modified_at")
+                    or task.get("updated_at")
+                    or task.get("modified_at")
+                )
                 if modified_at:
                     try:
                         mod_time = datetime.fromisoformat(modified_at.replace('Z', '+00:00'))
@@ -1562,7 +1586,13 @@ class WebhookDrivenPlannerSync:
     # ========== ID MAPPING AND STORAGE ==========
     
     async def _store_id_mapping(self, annika_id: str, planner_id: str):
-        """Store bidirectional ID mapping."""
+        """Store bidirectional ID mapping.
+
+        Writes:
+        - annika:planner:id_map:{annika_id} -> {planner_id} (string)
+        - annika:planner:id_map:{planner_id} -> {annika_id} (string)
+        - annika:task:mapping:planner:{planner_id} -> {annika_id} (compat)
+        """
         await self.redis_client.set(
             f"{PLANNER_ID_MAP_PREFIX}{annika_id}",
             planner_id
@@ -1571,18 +1601,54 @@ class WebhookDrivenPlannerSync:
             f"{PLANNER_ID_MAP_PREFIX}{planner_id}",
             annika_id
         )
+        # Compatibility reverse key used by Task Manager
+        await self.redis_client.set(
+            f"annika:task:mapping:planner:{planner_id}",
+            annika_id
+        )
     
     async def _get_planner_id(self, annika_id: str) -> Optional[str]:
-        """Get Planner ID for Annika task."""
-        return await self.redis_client.get(
-            f"{PLANNER_ID_MAP_PREFIX}{annika_id}"
-        )
+        """Get Planner ID for Annika task.
+
+        Accepts either a plain string value or a JSON object (legacy) and
+        extracts the planner_id when JSON is used.
+        """
+        try:
+            value = await self.redis_client.get(
+                f"{PLANNER_ID_MAP_PREFIX}{annika_id}"
+            )
+            if not value:
+                return None
+            v = value.strip()
+            if v.startswith("{") and v.endswith("}"):
+                try:
+                    obj = json.loads(v)
+                    # Try common fields
+                    return obj.get("planner_id") or obj.get("plannerId") or obj.get("planner")
+                except Exception:
+                    return None
+            return value
+        except Exception:
+            return None
     
     async def _get_annika_id(self, planner_id: str) -> Optional[str]:
-        """Get Annika ID for Planner task."""
-        return await self.redis_client.get(
-            f"{PLANNER_ID_MAP_PREFIX}{planner_id}"
-        )
+        """Get Annika ID for Planner task.
+
+        Reads standard reverse key first; falls back to compatibility key
+        annika:task:mapping:planner:{planner_id} if needed.
+        """
+        try:
+            annika_id = await self.redis_client.get(
+                f"{PLANNER_ID_MAP_PREFIX}{planner_id}"
+            )
+            if annika_id:
+                return annika_id
+            # Fallback to compatibility reverse mapping key
+            return await self.redis_client.get(
+                f"annika:task:mapping:planner:{planner_id}"
+            )
+        except Exception:
+            return None
     
     async def _store_etag(self, planner_id: str, etag: str):
         """Store ETag for update detection."""
@@ -1614,6 +1680,10 @@ class WebhookDrivenPlannerSync:
             annika_task["external_id"] = planner_id
             annika_task["source"] = "planner"
             annika_task["created_at"] = datetime.utcnow().isoformat()
+            # Ensure canonical timestamps for change detection
+            now_ts = datetime.utcnow().isoformat()
+            annika_task["last_modified_at"] = annika_task.get("last_modified_at") or now_ts
+            annika_task["updated_at"] = annika_task.get("updated_at") or now_ts
             
             # Determine list type
             list_type = self.adapter.determine_task_list(planner_task)
@@ -1637,6 +1707,28 @@ class WebhookDrivenPlannerSync:
                     "JSON.SET", "annika:conscious_state", "$",
                     json.dumps(state)
                 )
+
+                # Also write authoritative per-task key and publish notification
+                try:
+                    await self.redis_client.set(
+                        f"annika:tasks:{annika_id}",
+                        json.dumps(annika_task)
+                    )
+                except Exception:
+                    logger.debug("Failed to write annika:tasks:{%s}", annika_id)
+
+                try:
+                    await self.redis_client.publish(
+                        "annika:tasks:updates",
+                        json.dumps({
+                            "action": "created",
+                            "task_id": annika_id,
+                            "task": annika_task,
+                            "source": "planner",
+                        })
+                    )
+                except Exception:
+                    logger.debug("Failed to publish annika:tasks:updates for %s", annika_id)
                 
                 await self._log_sync_operation(
                     SyncOperation.CREATE.value,
@@ -1680,6 +1772,7 @@ class WebhookDrivenPlannerSync:
             if state_json:
                 state = json.loads(state_json)[0]
                 updated = False
+                updated_task = None
                 
                 # Find and update task
                 for list_type, task_list in state.get("task_lists", {}).items():
@@ -1687,7 +1780,10 @@ class WebhookDrivenPlannerSync:
                         if task.get("id") == annika_id:
                             # Update fields
                             task.update(updates)
-                            task["modified_at"] = datetime.utcnow().isoformat()
+                            now_ts = datetime.utcnow().isoformat()
+                            task["last_modified_at"] = now_ts
+                            task["updated_at"] = now_ts
+                            updated_task = task
                             updated = True
                             break
                     if updated:
@@ -1698,6 +1794,28 @@ class WebhookDrivenPlannerSync:
                         "JSON.SET", "annika:conscious_state", "$",
                         json.dumps(state)
                     )
+
+                    # Also write authoritative per-task key and publish notification
+                    if updated_task:
+                        try:
+                            await self.redis_client.set(
+                                f"annika:tasks:{annika_id}",
+                                json.dumps(updated_task)
+                            )
+                        except Exception:
+                            logger.debug("Failed to write annika:tasks:{%s}", annika_id)
+                        try:
+                            await self.redis_client.publish(
+                                "annika:tasks:updates",
+                                json.dumps({
+                                    "action": "updated",
+                                    "task_id": annika_id,
+                                    "task": updated_task,
+                                    "source": "planner",
+                                })
+                            )
+                        except Exception:
+                            logger.debug("Failed to publish annika:tasks:updates for %s", annika_id)
                     
                     await self._log_sync_operation(
                         SyncOperation.UPDATE.value,
@@ -2160,7 +2278,11 @@ class WebhookDrivenPlannerSync:
                     if annika_id:
                         annika_task = await self._get_annika_task(annika_id)
                         if annika_task:
-                            annika_modified = annika_task.get("modified_at")
+                            annika_modified = (
+                                annika_task.get("last_modified_at")
+                                or annika_task.get("updated_at")
+                                or annika_task.get("modified_at")
+                            )
                             if annika_modified:
                                 planner_time = datetime.fromisoformat(planner_modified.replace('Z', '+00:00'))
                                 annika_time = datetime.fromisoformat(annika_modified.replace('Z', '+00:00'))

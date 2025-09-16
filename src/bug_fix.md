@@ -1,5 +1,30 @@
 Bug Fix Log
 
+Date: 2025-09-14
+
+Change
+- Implemented non-breaking changes for full two-way Planner ↔ Annika sync in MCP server (V5):
+  - Timestamp alignment: use last_modified_at or updated_at everywhere (fallback to modified_at).
+  - Planner→Annika create/update now writes canonical per-task key `annika:tasks:{id}` and publishes to `annika:tasks:updates`.
+  - ID mapping compatibility: tolerate JSON-or-string reads; always write string; also write reverse `annika:task:mapping:planner:{planner_id}`.
+  - Adapter mapping: include `notes` and append `output` into Planner `notes` with delimiter.
+  - Optional fallback: if lists are empty, adapter scans `annika:tasks:*` for per-task objects.
+
+Files
+- `src/planner_sync_service_v5.py`: updated `_task_needs_upload`, `ConflictResolver.resolve_conflict`, `_initial_sync` filter, `_get_planner_id`, `_get_annika_id`, `_store_id_mapping`, `_create_annika_task_from_planner`, `_update_annika_task_from_planner`, `_task_needs_sync_from_planner`.
+- `src/annika_task_adapter.py`: enhanced `annika_to_planner` for notes/output; added per-task fallback in `get_all_annika_tasks`.
+
+Impact
+- Annika-created tasks upload reliably; Planner-created tasks are visible to agents immediately and trigger processing.
+- ID map reads/writes are consistent with Task Manager; reverse mapping is present for lookups.
+- Notes and agent outputs appear in Planner task notes.
+
+Verification Plan
+- Run existing tests `test_v5_sync.py`, `test_phase2_*` and manual E2E: create in Planner, observe `annika:tasks:updates`, agent update, verify PATCH to Planner and `annika:sync:last_upload:{id}`.
+
+Notes / Follow-ups
+- Many linter style warnings exist project-wide; will address separately. Removed only obviously unsafe items in future passes.
+
 Date: 2025-09-09
 
 Issue

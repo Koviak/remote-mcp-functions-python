@@ -1,0 +1,252 @@
+---
+alwaysApply: false
+description: Cross-repo Planner ↔ Annika Task Manager sync changes and end-to-end function trace; align timestamps, ID mapping, canonical task writes/notifications, adapter field mappings, and robust list mirroring.
+---
+
+## Planner ↔ Annika Sync: Required Changes and End‑to‑End Function Trace
+
+This rule defines the concrete, non-breaking changes required across both codebases to guarantee reliable bi-directional sync between Microsoft Planner and Annika Task Manager, and documents the end-to-end function stack trace for the complete lifecycle:
+- User creates or updates a task in Planner → Annika ingests → Task Manager/Agents process → results sync back to Planner for the user to see.
+
+### Scope
+- Local repo (Annika 2.0): Task Manager, Agents, conscious state, Redis coordination
+  - Key directories/files: 
+    - [Agent_Tools/task_manager/redis_manager.py](mdc:Agent_Tools/task_manager/redis_manager.py)
+    - [Agent_Tools/task_manager/unified_task_schema.py](mdc:Agent_Tools/task_manager/unified_task_schema.py)
+    - [Agent_Tools/task_manager/config.py](mdc:Agent_Tools/task_manager/config.py)
+    - [Agent_Tools/task_manager/planner_integration.py](mdc:Agent_Tools/task_manager/planner_integration.py)
+    - [Agents/Agent_v3/task_monitor.py](mdc:Agents/Agent_v3/task_monitor.py)
+    - [Annika_AGI_Utils/conscious_state.py](mdc:Annika_AGI_Utils/conscious_state.py)
+
+- Remote repo (MS‑MCP): Microsoft Graph bridge, Webhooks, Planner sync
+  - Key paths (remote):
+    - src/webhook_handler.py
+    - src/planner_sync_service_v5.py
+    - src/annika_task_adapter.py
+    - src/http_endpoints.py
+    - src/graph_metadata_manager.py
+
+
+## A) Required Changes (Non‑Breaking)
+
+### A1. Timestamp alignment for upload detection (critical)
+- **Problem**: MS‑MCP checks `annika_task["modified_at"]`, but Task Manager writes `updated_at` and `last_modified_at`.
+- **Fix (MS‑MCP)**: In `src/planner_sync_service_v5.py`, replace all reads of `modified_at` with `last_modified_at` or fallback to `updated_at`.
+  - Suggested pattern: `annika_task.get("last_modified_at") or annika_task.get("updated_at")`
+  - Affected functions:
+    - `_task_needs_upload()`
+    - `_initial_sync()` (recently modified filter)
+    - Conflict resolution helpers comparing Annika vs Planner timestamps
+
+### A2. ID mapping value compatibility (Annika ↔ Planner)
+- **Current**:
+  - Task Manager stores JSON at `annika:planner:id_map:{annika_id}` and string at `annika:task:mapping:planner:{planner_id}`.
+  - MS‑MCP stores strings under `annika:planner:id_map:{annika_id}` and also `annika:planner:id_map:{planner_id}` (reverse).
+- **Fix (compatibility both ways)**:
+  - MS‑MCP: When reading `annika:planner:id_map:*`, accept either string (planner_id/annika_id) or JSON; if JSON, parse and use `planner_id`.
+  - MS‑MCP: When writing, continue string values but also write a reverse key that Task Manager already expects: `annika:task:mapping:planner:{planner_id} -> {annika_id}`.
+  - Task Manager: When reading `annika:planner:id_map:{annika_id}`, accept string value as `{planner_id}` in addition to existing JSON support.
+
+### A3. Canonical task writes + notifications for Planner→Annika creations (critical)
+- **Problem**: In webhook-driven path, MS‑MCP creates tasks only inside `annika:conscious_state` and does not write `annika:tasks:{id}` nor publish `annika:tasks:updates`. Agents/Task Manager rely on these for detection.
+- **Fix (MS‑MCP)**: In `src/planner_sync_service_v5.py::_create_annika_task_from_planner()`:
+  - After writing to `annika:conscious_state`, also:
+    - Write the full task object to `annika:tasks:{annika_id}` (stringified JSON is OK).
+    - Publish to `annika:tasks:updates` with `{action: "created", task_id, task, source: "planner"}`.
+    - Set `last_modified_at` (and keep `updated_at`) on the Annika task object.
+  - Result: Agents and Task Manager receive consistent notifications and can process Planner-created tasks.
+
+### A4. Robust list mirroring and fallback
+- **Fix (Annika Task Manager)**: Ensure `TaskRedisManager._sync_to_task_lists()` and `_update_conversation_task_list()` always succeed (defensive JSON handling, retry on transient errors). This is already largely present; verify and keep.
+- **Fix (MS‑MCP optional)**: In `src/annika_task_adapter.py::get_all_annika_tasks()`, if no tasks are found via `annika:conscious_state`/`annika:consciousness:*:components:tasks`, optionally fallback to read `annika:tasks:*` to avoid rare list desync corner cases.
+
+### A5. Adapter field coverage for user-visible notes/output
+- **Problem**: `annika_to_planner()` maps `description` → Planner `notes`, but does not account for Annika `notes` and `output` fields.
+- **Fix (MS‑MCP)**: Enhance `src/annika_task_adapter.py::annika_to_planner()`:
+  - If `task["notes"]` present, include in Planner `notes` (append to or prefer over `description`).
+  - If `task["output"]` present (agent result), append to Planner `notes` with a clear delimiter, e.g., `\n\n[Agent Output]\n...`.
+  - Keep `percentComplete`, `priority`, `dueDateTime`, `assignments` mapping as-is.
+
+### A6. Documentation-only consistency for confirmations channel
+- **Note**: Both sides use `annika:tasks:updates` as the primary notification channel. Any `annika:tasks:sync` mention is informational only; no code change needed.
+
+
+## B) End‑to‑End Function Stack Trace
+
+This is the canonical flow for a Planner-created task traveling through the system and returning to Planner with agent results.
+
+### B1. Planner → Annika (ingestion)
+- **User action**: Create or update a Planner task (Graph).
+- **Webhook ingress (MS‑MCP)**:
+  - `src/webhook_handler.py`
+    - Receives Microsoft Graph webhook notification
+    - Publishes JSON payload to Redis channel: `annika:planner:webhook`
+  - `src/planner_sync_service_v5.py`
+    - `WebhookDrivenPlannerSync.start()` subscribes to:
+      - `annika:planner:webhook`
+      - `annika:tasks:updates`
+      - `__keyspace@0__:annika:conscious_state`
+    - `_process_webhook_notifications()` → `_handle_webhook_notification()`
+      - On `changeType == created`: `import_new_planner_task(planner_task_id)`
+      - On `changeType == updated`: `sync_planner_update(planner_task_id)`
+
+- **Create path (MS‑MCP)**:
+  - `import_new_planner_task()` → reads `annika:planner:tasks:{planner_task_id}` cache → calls `_create_annika_task_from_planner(planner_task)`
+  - `_create_annika_task_from_planner()`
+    - `_store_id_mapping(annika_id, planner_id)`
+    - `_store_etag(planner_id, etag)`
+    - Convert `planner_task` → Annika via `AnnikaTaskAdapter.planner_to_annika()`
+    - Write to `annika:conscious_state` (JSON)
+    - [CHANGE REQUIRED] Also write `annika:tasks:{annika_id}` and publish to `annika:tasks:updates`
+    - Set `last_modified_at` and `updated_at` on the Annika task
+
+### B2. Annika → Agent processing (assignment and execution)
+- **Notification (Annika)**:
+  - Agents subscribe to `annika:tasks:updates` in [Agents/Agent_v3/task_monitor.py](mdc:Agents/Agent_v3/task_monitor.py)
+  - On `{action: "created" | "updated"}`
+    - Monitor fetches `annika:tasks:{task_id}` (JSON or string JSON)
+    - Validates assignment via unified schema and processes if relevant
+
+- **Agent execution (Annika)**:
+  - Agent updates the task:
+    - Writes back to `annika:tasks:{task_id}` (JSON), sets `status` to `in_progress`/`agent_finished`
+    - Stores agent results under `annika:agent_outputs:{conversation_id}:{task_id}`
+    - Publishes notification on `annika:tasks:updates` (e.g., `agent_finished`)
+
+- **Task Manager update (Annika)**:
+  - [Agent_Tools/task_manager/redis_manager.py](mdc:Agent_Tools/task_manager/redis_manager.py)
+    - `update_task_direct(task_id, updates)` merges agent results into task (e.g., `notes`, `output`, `percent_complete`), sets `last_modified_at` and `updated_at`, mirrors to lists, and publishes to `annika:tasks:updates`
+
+### B3. Annika → Planner (upload of results)
+- **Change detection (MS‑MCP)**:
+  - `WebhookDrivenPlannerSync._monitor_annika_changes()` listens on `annika:tasks:updates` and `__keyspace@0__:annika:conscious_state` and calls `_detect_and_queue_changes()`
+  - `_detect_and_queue_changes()` gets tasks via `AnnikaTaskAdapter.get_all_annika_tasks()`
+  - `_task_needs_upload(task)`
+    - [CHANGE REQUIRED] Use `last_modified_at` or `updated_at` to compare against `annika:sync:last_upload:{annika_id}`
+  - `_queue_upload(task)` → `_process_upload_batch()` → `_update_planner_task(planner_id, task)` (PATCH) or `_create_planner_task(task)` (POST)
+  - After success: set `annika:sync:last_upload:{annika_id}` and update stored ETag
+
+- **Adapter mapping (MS‑MCP)**:
+  - `AnnikaTaskAdapter.annika_to_planner(task)`
+    - Maps `title`, `percent_complete`, `priority`, `dueDateTime`, assignments
+    - [CHANGE REQUIRED] Also map `notes` and (optionally) append `output` to Planner `notes`
+
+### B4. User sees updates in Planner
+- Planner reflects the updated fields (title, percentComplete, dueDateTime, priority, notes). Any agent-produced `notes`/`output` are visible in the task’s description/notes in Planner.
+
+
+### B5. Task Manager → Planner (Annika-created task end-to-end)
+
+This stack trace covers the exact functions, keys, channels, and ID maps used when a task is created by the Annika Task Manager and must appear in Microsoft Planner.
+
+1) Task creation (Annika Task Manager)
+   - Entry point: `@register_tool("task_create", TaskCreateRequest)` in [Agent_Tools/task_manager/__init__.py](mdc:Agent_Tools/task_manager/__init__.py)
+     - Generates `task_id` via `TaskRedisManager.generate_task_id(conversation_id, message_id)`
+     - Calls `TaskRedisManager.write_task_direct(task_id, task_data)`
+   - Storage/notification: [Agent_Tools/task_manager/redis_manager.py](mdc:Agent_Tools/task_manager/redis_manager.py)
+     - `write_task_direct()`
+       - Ensures required fields and sets timestamps: `created_at`, `updated_at`, `last_modified_at`
+       - For non-Planner sources, sets `sync_status = "pending"`
+       - Writes task to key: `annika:tasks:{task_id}` (JSON string)
+       - Publishes to channel: `annika:tasks:updates` with `{action: "created", task_id, task, source: "task_manager"}`
+       - Mirrors task into lists via `_sync_to_task_lists(task)`:
+         - Conversation list (RedisJSON): `annika:consciousness:{conversation_id}:components:tasks`
+         - Global list (RedisJSON): `annika:conscious_state`
+
+2) Change detection for Planner upload (MS‑MCP)
+   - Service: `src/planner_sync_service_v5.py`
+     - `WebhookDrivenPlannerSync.start()` subscribes to `annika:tasks:updates` and `__keyspace@0__:annika:conscious_state`
+     - `_monitor_annika_changes()` receives the message and calls `_detect_and_queue_changes()`
+     - `_detect_and_queue_changes()` pulls tasks via `AnnikaTaskAdapter.get_all_annika_tasks()` (reads `annika:conscious_state` and `annika:consciousness:*:components:tasks`)
+     - For each task, `_task_needs_upload(task)` decides:
+       - New task (no mapping): upload required
+       - Otherwise, compare timestamps: `last_modified_at` (or `updated_at`) vs `annika:sync:last_upload:{annika_id}`
+
+3) Create task in Planner (MS‑MCP)
+   - Batch queue: `_queue_upload(task)` → `_process_upload_batch()` → `_create_planner_task(task)` if no existing mapping
+   - Conversion: `src/annika_task_adapter.py::annika_to_planner(task)`
+     - Maps Annika fields → Planner (`title`, `percentComplete`, `priority`, `dueDateTime`, `assignments`)
+     - Recommended: include `notes` and append `output` to Planner `notes` with a delimiter
+   - Destination plan: `_determine_plan_for_task(task)`
+     - Reads `annika:config:default_plan_id` or `DEFAULT_PLANNER_PLAN_ID` env; allows task-level override `task_plan`
+   - Graph call: POST `https://graph.microsoft.com/v1.0/planner/tasks`
+   - On success:
+     - Store ID mappings:
+       - `annika:planner:id_map:{annika_id} -> {planner_id}` (string)
+       - `annika:task:mapping:planner:{planner_id} -> {annika_id}` (reverse; compatibility key)
+     - Store ETag: `annika:planner:etag:{planner_id} -> {etag}`
+     - Mark upload timestamp: `annika:sync:last_upload:{annika_id} -> ISO timestamp`
+     - Log operation in `annika:sync:log`
+
+4) Future updates to the same Annika task
+   - Agent/Task Manager updates (e.g., `status`, `notes`, `output`) trigger `annika:tasks:updates` again
+   - `_task_needs_upload(task)` finds existing mapping and compares `last_modified_at` vs `annika:sync:last_upload:{annika_id}`
+   - `_update_planner_task(planner_id, task)` issues PATCH, updates stored ETag, and refreshes `annika:sync:last_upload:{annika_id}`
+
+5) Keys, channels, and mappings used in this path
+   - Writes by Task Manager:
+     - `annika:tasks:{task_id}` (string JSON)
+     - `annika:consciousness:{conversation_id}:components:tasks` (RedisJSON)
+     - `annika:conscious_state` (RedisJSON)
+   - Channel by Task Manager/Agents:
+     - `annika:tasks:updates`
+   - Reads/writes by MS‑MCP:
+     - Reads lists via `AnnikaTaskAdapter.get_all_annika_tasks()`
+     - On create: `annika:planner:id_map:{annika_id}` (string), `annika:task:mapping:planner:{planner_id}` (string), `annika:planner:etag:{planner_id}`, `annika:sync:last_upload:{annika_id}`, `annika:sync:log`
+   - Plan selection:
+     - `annika:config:default_plan_id` (string) or `DEFAULT_PLANNER_PLAN_ID` env
+
+6) Preconditions to guarantee visibility in Planner
+   - Task Manager must always set `last_modified_at` (and `updated_at`) on create/update
+   - MS‑MCP must check `last_modified_at or updated_at` when deciding uploads
+   - MS‑MCP must successfully map and post to Planner with a valid `planId`
+   - ID mappings must be written in both directions (Annika→Planner and Planner→Annika reverse key)
+
+## C) Redis Keys/Channels (canonical)
+- **Task storage**: `annika:tasks:{id}` (authoritative per-task object)
+- **Notifications**: `annika:tasks:updates` (agents, Task Manager, MS‑MCP subscribe)
+- **Conversation lists (JSON)**: `annika:consciousness:{conversation_id}:components:tasks`
+- **Global state (JSON)**: `annika:conscious_state`
+- **Planner caches**: `annika:planner:tasks:{task_id}`; `annika:graph:tasks:{task_id}` (metadata)
+- **Planner webhooks**: `annika:planner:webhook`
+- **ID maps**: `annika:planner:id_map:{annika_id}` (Annika→Planner); `annika:task:mapping:planner:{planner_id}` (Planner→Annika)
+- **Sync telemetry**: `annika:sync:log`, `annika:sync:pending`, `annika:sync:failed`, `annika:sync:health`, `annika:sync:last_upload:{annika_id}`
+- **Agent outputs**: `annika:agent_outputs:{conversation_id}:{task_id}`
+
+
+## D) Implementation Checklist (non‑breaking)
+- **MS‑MCP**
+  - [ ] Replace `modified_at` reads with `last_modified_at or updated_at`
+  - [ ] On Planner→Annika create/update, write `annika:tasks:{annika_id}` and publish `annika:tasks:updates`
+  - [ ] ID map compatibility: accept JSON or string; also set `annika:task:mapping:planner:{planner_id}`
+  - [ ] Adapter: include `notes` and optional `output` in Planner `notes`
+  - [ ] Optional: fallback to scan `annika:tasks:*` if lists are empty
+
+- **Annika Task Manager**
+  - [ ] Ensure `last_modified_at` (and `updated_at`) set on every create/update
+  - [ ] Accept string values for `annika:planner:id_map:{annika_id}` in addition to JSON
+  - [ ] Verify list mirroring robustness; keep retries/defensive JSON handling
+
+
+## E) Minimal Test Plan (E2E)
+- **Planner→Annika**
+  - Create Planner task → webhook → MS‑MCP writes `annika:tasks:{id}` + publishes `annika:tasks:updates` + updates `conscious_state` → Agent receives and marks in_progress → TM merges output/notes and republishes → MS‑MCP detects `last_modified_at`>last_upload → PATCH to Planner → `annika:sync:last_upload:{annika_id}` set.
+- **Annika→Planner**
+  - Create Annika task (Task Manager) → `annika:tasks:{id}` + `annika:tasks:updates` → MS‑MCP detects and creates task in Planner → ID map both directions set → update Annika task → MS‑MCP updates Planner `notes` with agent results.
+
+
+## F) References
+- Annika (local):
+  - [Agent_Tools/task_manager/redis_manager.py](mdc:Agent_Tools/task_manager/redis_manager.py)
+  - [Agent_Tools/task_manager/unified_task_schema.py](mdc:Agent_Tools/task_manager/unified_task_schema.py)
+  - [Agent_Tools/task_manager/config.py](mdc:Agent_Tools/task_manager/config.py)
+  - [Agents/Agent_v3/task_monitor.py](mdc:Agents/Agent_v3/task_monitor.py)
+  - [Annika_AGI_Utils/conscious_state.py](mdc:Annika_AGI_Utils/conscious_state.py)
+
+- MS‑MCP (remote):
+  - src/webhook_handler.py
+  - src/planner_sync_service_v5.py
+  - src/annika_task_adapter.py
+  - src/http_endpoints.py
+  - src/graph_metadata_manager.py
+

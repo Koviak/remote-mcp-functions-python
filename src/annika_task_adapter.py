@@ -148,10 +148,16 @@ class AnnikaTaskAdapter:
                     }
                 }
         
-        # Map fields that exist
+        # Map notes/description/output to Planner notes
+        notes_parts: List[str] = []
         if annika_task.get("description"):
-            # Note: Planner uses 'notes' not 'description'
-            planner_task["notes"] = annika_task["description"]
+            notes_parts.append(str(annika_task.get("description")))
+        if annika_task.get("notes"):
+            notes_parts.append(str(annika_task.get("notes")))
+        if annika_task.get("output"):
+            notes_parts.append("[Agent Output]\n" + str(annika_task.get("output")))
+        if notes_parts:
+            planner_task["notes"] = "\n\n".join([p for p in notes_parts if p])
             
         if annika_task.get("due_date"):
             # Convert date to datetime
@@ -245,6 +251,28 @@ class AnnikaTaskAdapter:
                             all_tasks.append(task)
                 except Exception as e:
                     logger.error(f"Error reading {key}: {e}")
+            
+            # Optional fallback: if no tasks found via lists, read per-task keys
+            if not all_tasks:
+                try:
+                    cursor = 0
+                    pattern = "annika:tasks:*"
+                    while True:
+                        cursor, keys = await self.redis.scan(cursor, match=pattern, count=100)
+                        for task_key in keys:
+                            try:
+                                raw = await self.redis.get(task_key)
+                                if raw:
+                                    task = json.loads(raw)
+                                    if isinstance(task, dict):
+                                        all_tasks.append(task)
+                            except Exception:
+                                # skip malformed entries
+                                continue
+                        if cursor == 0:
+                            break
+                except Exception as e:
+                    logger.debug(f"Fallback annika:tasks scan failed: {e}")
                     
         except Exception as e:
             logger.error(f"Error extracting Annika tasks: {e}")
@@ -272,4 +300,4 @@ class AnnikaTaskAdapter:
         elif planner_task.get("assignments"):
             return "user_tasks"
         else:
-            return "system_two_tasks" 
+            return "system_two_tasks"
