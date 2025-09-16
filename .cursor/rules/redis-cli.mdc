@@ -1,6 +1,4 @@
 ---
-description: 
-globs: 
 alwaysApply: false
 ---
 # Redis-CLI in Docker - Reference Guide (WSL Version)

@@ -1,8 +1,7 @@
 ---
-alwaysApply: true
 description: Canonical Azure AD (Entra ID) and Microsoft Graph endpoints to use across the codebase
+alwaysApply: false
 ---
-
 ### Azure AD (Entra ID) v2.0 endpoints
 
 - Authority (tenant-scoped): `https://login.microsoftonline.com/{TENANT_ID}`

@@ -1,8 +1,7 @@
 ---
-alwaysApply: true
 description: Global scope and architecture for Remote MCP Functions (Python) with Microsoft Graph, Redis-first design, webhook-driven Planner sync, and HTTP/MCP endpoints.
+alwaysApply: false
 ---
-
 ### Remote MCP Functions + Microsoft Graph — Global Overview
 
 This repository implements a production-ready remote MCP (Model Context Protocol) server on Azure Functions that enables autonomous agents to interact with Microsoft 365 (Graph) using a Redis-first architecture and a webhook-driven bidirectional sync with Microsoft Planner. Use this rule as the authoritative, code-verified overview.
