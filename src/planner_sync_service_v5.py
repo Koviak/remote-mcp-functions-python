@@ -55,6 +55,11 @@ if settings_file.exists():
     except Exception as e:
         logging.error(f"Error loading local.settings.json: {e}")
 
+try:
+    from logging_setup import setup_logging
+    setup_logging(add_console=True)
+except Exception:
+    pass
 logger = logging.getLogger(__name__)
 
 GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
@@ -353,6 +358,21 @@ class WebhookDrivenPlannerSync:
                         datetime.utcnow() + timedelta(hours=24)
                     ).isoformat() + "Z",
                     "clientState": "annika_groups_webhook_v5"
+                }
+            },
+            {
+                "name": "planner_tasks",
+                "token": get_agent_token(),
+                "config": {
+                    "changeType": "created,updated,deleted",
+                    "notificationUrl": (
+                        "https://agency-swarm.ngrok.app/api/graph_webhook"
+                    ),
+                    "resource": "/planner/tasks",
+                    "expirationDateTime": (
+                        datetime.utcnow() + timedelta(hours=24)
+                    ).isoformat() + "Z",
+                    "clientState": "annika_planner_sync_v5"
                 }
             },
             {
@@ -838,6 +858,13 @@ class WebhookDrivenPlannerSync:
                         except Exception:
                             pass
                         await self._handle_webhook_notification(notification_data)
+                        # For Planner task resources, trigger immediate detection
+                        try:
+                            resource = notification_data.get("resource", "")
+                            if "/planner/tasks" in resource:
+                                await self._detect_and_queue_changes()
+                        except Exception:
+                            pass
                         
                 except Exception as e:
                     logger.error(f"Error processing webhook notification: {e}")
@@ -922,6 +949,31 @@ class WebhookDrivenPlannerSync:
                 await self._handle_teams_chat_notification(notification)
             elif "teams_channels" in client_state:
                 await self._handle_teams_channel_notification(notification)
+            elif "/planner/tasks" in resource or client_state == "annika_planner_sync_v5":
+                # Poll the specific task or plan to handle updates quickly
+                try:
+                    resource_data = notification.get("resourceData", {})
+                    planner_id = resource_data.get("id")
+                    if planner_id:
+                        # Fetch latest and route to existing sync path
+                        token = get_agent_token()
+                        if token:
+                            headers = {"Authorization": f"Bearer {token}"}
+                            resp = requests.get(
+                                f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
+                                headers=headers,
+                                timeout=10,
+                            )
+                            if resp.status_code == 200:
+                                await self._sync_existing_task(planner_id, resp.json())
+                            else:
+                                # Fallback to detect cycle
+                                await self._detect_and_queue_changes()
+                    else:
+                        # Fallback: run a quick detect cycle
+                        await self._detect_and_queue_changes()
+                except Exception:
+                    await self._detect_and_queue_changes()
             elif "/chats" in resource:
                 # Handle chat notifications even without specific client state
                 await self._handle_teams_chat_notification(notification)
@@ -1291,7 +1343,21 @@ class WebhookDrivenPlannerSync:
                             last_state_hash = current_hash
                     
                     elif channel == 'annika:tasks:updates':
-                        await self._detect_and_queue_changes()
+                        # Fast-path: parse task_id from message and queue that task only
+                        try:
+                            payload = json.loads(message.get('data', '{}'))
+                            task_id = payload.get('task_id')
+                            if task_id:
+                                task = await self._get_annika_task(task_id)
+                                if task and await self._task_needs_upload(task):
+                                    await self._queue_upload(task)
+                                else:
+                                    # Fallback: global detection if task missing
+                                    await self._detect_and_queue_changes()
+                            else:
+                                await self._detect_and_queue_changes()
+                        except Exception:
+                            await self._detect_and_queue_changes()
                         
                 except Exception as e:
                     logger.error(f"Error monitoring Annika changes: {e}")
@@ -1329,7 +1395,13 @@ class WebhookDrivenPlannerSync:
                             except Exception:
                                 planner_id = None
                         if planner_id:
+                            # Delete in Planner, then remove mappings and Annika task per policy
                             await self._delete_planner_task(planner_id)
+                        # Remove both forward and reverse mappings and Annika task record
+                        try:
+                            await self.redis_client.delete(f"annika:tasks:{annika_id}")
+                        except Exception:
+                            pass
                         await self._remove_mapping(annika_id, planner_id)
                 if cursor == 0:
                     break
@@ -1359,9 +1431,9 @@ class WebhookDrivenPlannerSync:
         
         try:
             annika_time = datetime.fromisoformat(annika_modified.replace('Z', '+00:00'))
-            sync_time = datetime.fromisoformat(last_sync)
+            sync_time = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
             return annika_time > sync_time
-        except:
+        except Exception:
             return True
     
     async def _queue_upload(self, annika_task: Dict):
@@ -1406,8 +1478,14 @@ class WebhookDrivenPlannerSync:
                     # Mark as uploaded
                     await self.redis_client.set(
                         f"annika:sync:last_upload:{annika_id}",
-                        datetime.utcnow().isoformat()
+                        datetime.utcnow().isoformat() + "Z"
                     )
+                    # Sanity: after create, verify mapping exists to avoid future duplicates
+                    if not planner_id:
+                        try:
+                            _ = await self._get_planner_id(annika_id)
+                        except Exception:
+                            pass
                     
                 finally:
                     self.processing_upload.discard(annika_id)
@@ -1505,16 +1583,14 @@ class WebhookDrivenPlannerSync:
     async def _health_monitor(self):
         """Monitor service health and report metrics."""
         while self.running:
-            await asyncio.sleep(300)  # Every 5 minutes
+            await asyncio.sleep(60)  # Every 60 seconds for better visibility
             
             try:
                 metrics = await self._collect_health_metrics()
-                logger.info("📊 Health Check:")
-                logger.info(f"   - Processed tasks: {metrics['processed_tasks']}")
-                logger.info(f"   - Pending uploads: {metrics['pending_uploads']}")
-                logger.info(f"   - Failed operations: {metrics['failed_operations']}")
-                logger.info(f"   - Rate limit status: {metrics['rate_limit_status']}")
-                logger.info(f"   - Webhook status: {metrics['webhook_status']}")
+                logger.info("📊 Health Check: processed=%s pending=%s failed=%s rate=%s webhooks=%s",
+                            metrics['processed_tasks'], metrics['pending_uploads'],
+                            metrics['failed_operations'], metrics['rate_limit_status'],
+                            metrics['webhook_status'])
                 
                 # Store metrics in Redis
                 await self.redis_client.set(
@@ -1590,18 +1666,16 @@ class WebhookDrivenPlannerSync:
 
         Writes:
         - annika:planner:id_map:{annika_id} -> {planner_id} (string)
-        - annika:planner:id_map:{planner_id} -> {annika_id} (string)
-        - annika:task:mapping:planner:{planner_id} -> {annika_id} (compat)
+        - annika:task:mapping:planner:{planner_id} -> {annika_id} (reverse for compat)
+        
+        Note: We no longer store annika:planner:id_map:{planner_id} to avoid confusion
         """
+        # Primary forward mapping: Annika ID -> Planner ID
         await self.redis_client.set(
             f"{PLANNER_ID_MAP_PREFIX}{annika_id}",
             planner_id
         )
-        await self.redis_client.set(
-            f"{PLANNER_ID_MAP_PREFIX}{planner_id}",
-            annika_id
-        )
-        # Compatibility reverse key used by Task Manager
+        # Reverse mapping for Task Manager compatibility
         await self.redis_client.set(
             f"annika:task:mapping:planner:{planner_id}",
             annika_id
@@ -1610,45 +1684,63 @@ class WebhookDrivenPlannerSync:
     async def _get_planner_id(self, annika_id: str) -> Optional[str]:
         """Get Planner ID for Annika task.
 
-        Accepts either a plain string value or a JSON object (legacy) and
-        extracts the planner_id when JSON is used.
+        Reads from the forward mapping key:
+        annika:planner:id_map:{annika_id}
+        Accepts string or JSON values for backward compatibility.
         """
         try:
-            value = await self.redis_client.get(
-                f"{PLANNER_ID_MAP_PREFIX}{annika_id}"
-            )
+            value = await self.redis_client.get(f"{PLANNER_ID_MAP_PREFIX}{annika_id}")
             if not value:
                 return None
-            v = value.strip()
-            if v.startswith("{") and v.endswith("}"):
+            value = value.strip()
+            if value.startswith("{"):
                 try:
-                    obj = json.loads(v)
-                    # Try common fields
+                    obj = json.loads(value)
                     return obj.get("planner_id") or obj.get("plannerId") or obj.get("planner")
                 except Exception:
                     return None
             return value
         except Exception:
             return None
-    
+
     async def _get_annika_id(self, planner_id: str) -> Optional[str]:
         """Get Annika ID for Planner task.
 
-        Reads standard reverse key first; falls back to compatibility key
-        annika:task:mapping:planner:{planner_id} if needed.
+        Reads from the compatibility reverse mapping key:
+        annika:task:mapping:planner:{planner_id}
         """
         try:
-            annika_id = await self.redis_client.get(
-                f"{PLANNER_ID_MAP_PREFIX}{planner_id}"
-            )
-            if annika_id:
-                return annika_id
-            # Fallback to compatibility reverse mapping key
+            # Use the reverse mapping key for Planner -> Annika lookups
             return await self.redis_client.get(
                 f"annika:task:mapping:planner:{planner_id}"
             )
         except Exception:
             return None
+
+    async def _find_annika_id_by_forward_map(self, planner_id: str) -> Optional[str]:
+        """Best-effort: find Annika ID by scanning forward map values that may be JSON."""
+        try:
+            cursor = 0
+            pattern = f"{PLANNER_ID_MAP_PREFIX}*"
+            while True:
+                cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=200)
+                for key in keys:
+                    val = await self.redis_client.get(key)
+                    if not val:
+                        continue
+                    v = val.strip()
+                    if v.startswith("{"):
+                        try:
+                            obj = json.loads(v)
+                            if obj.get("planner_id") == planner_id or obj.get("plannerId") == planner_id:
+                                return key.replace(PLANNER_ID_MAP_PREFIX, "")
+                        except Exception:
+                            continue
+                if cursor == 0:
+                    break
+        except Exception:
+            pass
+        return None
     
     async def _store_etag(self, planner_id: str, etag: str):
         """Store ETag for update detection."""
@@ -1658,7 +1750,7 @@ class WebhookDrivenPlannerSync:
         """Remove ID mappings."""
         await self.redis_client.delete(
             f"{PLANNER_ID_MAP_PREFIX}{annika_id}",
-            f"{PLANNER_ID_MAP_PREFIX}{planner_id}",
+            f"annika:task:mapping:planner:{planner_id}",
             f"{ETAG_PREFIX}{planner_id}"
         )
     
@@ -1667,10 +1759,47 @@ class WebhookDrivenPlannerSync:
     async def _create_annika_task_from_planner(self, planner_task: Dict):
         """Create task in Annika from Planner task."""
         planner_id = planner_task["id"]
+        # Dedup guard: if any mapping already points to this planner_id, adopt it
+        try:
+            existing_annika_id = await self._get_annika_id(planner_id)
+            if not existing_annika_id:
+                existing_annika_id = await self._find_annika_id_by_forward_map(planner_id)
+            if existing_annika_id:
+                logger.info(
+                    "🔁 Adopted existing Annika ID %s for Planner task %s",
+                    existing_annika_id,
+                    planner_id,
+                )
+                # Ensure reverse mapping is present
+                await self.redis_client.set(
+                    f"annika:task:mapping:planner:{planner_id}", existing_annika_id
+                )
+                # Treat as update to avoid duplicate creates
+                await self._update_annika_task_from_planner(existing_annika_id, planner_task)
+                return
+        except Exception:
+            # Non-fatal; fall through to create path
+            pass
+
         annika_id = f"Task-{uuid.uuid4().hex[:8]}"
         
         try:
-            # Store mapping first to prevent duplicates
+            # Store mapping first to prevent duplicates (with atomic guard)
+            # SETNX reverse map; if already set, adopt existing ID and update instead
+            setnx_ok = await self.redis_client.setnx(
+                f"annika:task:mapping:planner:{planner_id}", annika_id
+            )
+            if not setnx_ok:
+                try:
+                    existing_annika_id = await self.redis_client.get(
+                        f"annika:task:mapping:planner:{planner_id}"
+                    )
+                    if existing_annika_id:
+                        await self._update_annika_task_from_planner(existing_annika_id, planner_task)
+                        return
+                except Exception:
+                    pass
+            # Write forward map
             await self._store_id_mapping(annika_id, planner_id)
             await self._store_etag(planner_id, planner_task.get("@odata.etag", ""))
             
@@ -1679,74 +1808,63 @@ class WebhookDrivenPlannerSync:
             annika_task["id"] = annika_id
             annika_task["external_id"] = planner_id
             annika_task["source"] = "planner"
-            annika_task["created_at"] = datetime.utcnow().isoformat()
+            annika_task["created_at"] = datetime.utcnow().isoformat() + "Z"
             # Ensure canonical timestamps for change detection
-            now_ts = datetime.utcnow().isoformat()
+            now_ts = datetime.utcnow().isoformat() + "Z"
             annika_task["last_modified_at"] = annika_task.get("last_modified_at") or now_ts
             annika_task["updated_at"] = annika_task.get("updated_at") or now_ts
             
-            # Determine list type
-            list_type = self.adapter.determine_task_list(planner_task)
-            
-            # Update conscious_state directly
-            state_json = await self.redis_client.execute_command(
-                "JSON.GET", "annika:conscious_state", "$"
+            # Always write authoritative per-task key first (agent detection relies on this)
+            await self.redis_client.set(
+                f"annika:tasks:{annika_id}",
+                json.dumps(annika_task)
             )
-            
-            if state_json:
-                state = json.loads(state_json)[0]
-                
-                if "task_lists" not in state:
-                    state["task_lists"] = {}
-                if list_type not in state["task_lists"]:
-                    state["task_lists"][list_type] = {"tasks": []}
-                
-                state["task_lists"][list_type]["tasks"].append(annika_task)
-                
-                await self.redis_client.execute_command(
-                    "JSON.SET", "annika:conscious_state", "$",
-                    json.dumps(state)
-                )
+            logger.debug(f"Wrote task to annika:tasks:{annika_id}")
 
-                # Also write authoritative per-task key and publish notification
-                try:
-                    await self.redis_client.set(
-                        f"annika:tasks:{annika_id}",
-                        json.dumps(annika_task)
-                    )
-                except Exception:
-                    logger.debug("Failed to write annika:tasks:{%s}", annika_id)
+            # Always publish notification for agents
+            await self.redis_client.publish(
+                "annika:tasks:updates",
+                json.dumps({
+                    "action": "created",
+                    "task_id": annika_id,
+                    "task": annika_task,
+                    "source": "planner",
+                })
+            )
+            logger.debug(f"Published creation notification for {annika_id}")
 
-                try:
-                    await self.redis_client.publish(
-                        "annika:tasks:updates",
-                        json.dumps({
-                            "action": "created",
-                            "task_id": annika_id,
-                            "task": annika_task,
-                            "source": "planner",
-                        })
+            # Best-effort: mirror into global conscious_state if it exists
+            try:
+                # Determine list type for mirroring
+                list_type = self.adapter.determine_task_list(planner_task)
+
+                state_json = await self.redis_client.execute_command(
+                    "JSON.GET", "annika:conscious_state", "$"
+                )
+                if state_json:
+                    state = json.loads(state_json)[0]
+                    if "task_lists" not in state:
+                        state["task_lists"] = {}
+                    if list_type not in state["task_lists"]:
+                        state["task_lists"][list_type] = {"tasks": []}
+                    state["task_lists"][list_type]["tasks"].append(annika_task)
+                    await self.redis_client.execute_command(
+                        "JSON.SET", "annika:conscious_state", "$",
+                        json.dumps(state)
                     )
-                except Exception:
-                    logger.debug("Failed to publish annika:tasks:updates for %s", annika_id)
-                
-                await self._log_sync_operation(
-                    SyncOperation.CREATE.value,
-                    annika_id,
-                    planner_id,
-                    "success"
-                )
-                
-                logger.info(f"✅ Created Annika task from Planner: {planner_task.get('title')}")
-            else:
-                logger.error("No conscious_state found in Redis!")
-                await self._log_sync_operation(
-                    SyncOperation.CREATE.value,
-                    annika_id,
-                    planner_id,
-                    "error",
-                    "No conscious_state found"
-                )
+                else:
+                    logger.debug("conscious_state not present; skipped mirroring for created task")
+            except Exception as mirror_err:
+                logger.debug(f"Mirror to conscious_state skipped due to error: {mirror_err}")
+
+            # Log success irrespective of mirror presence
+            await self._log_sync_operation(
+                SyncOperation.CREATE.value,
+                annika_id,
+                planner_id,
+                "success"
+            )
+            logger.info(f"✅ Created Annika task from Planner: {planner_task.get('title')}")
                 
         except Exception as e:
             logger.error(f"Error creating Annika task from Planner: {e}")
@@ -1761,72 +1879,84 @@ class WebhookDrivenPlannerSync:
     async def _update_annika_task_from_planner(self, annika_id: str, planner_task: Dict):
         """Update Annika task from Planner changes."""
         try:
+            # Dedup/consistency: ensure mapping stored before update
+            pid = planner_task.get("id")
+            if pid:
+                await self._store_id_mapping(annika_id, pid)
             # Convert updates
             updates = await self.adapter.planner_to_annika(planner_task)
             
-            # Get current state
-            state_json = await self.redis_client.execute_command(
-                "JSON.GET", "annika:conscious_state", "$"
+            # Always update authoritative per-task key first
+            try:
+                existing_raw = await self.redis_client.get(f"annika:tasks:{annika_id}")
+                if existing_raw:
+                    existing_task = json.loads(existing_raw)
+                    if not isinstance(existing_task, dict):
+                        existing_task = {}
+                else:
+                    existing_task = {"id": annika_id, "external_id": planner_task.get("id"), "source": "planner"}
+            except Exception:
+                existing_task = {"id": annika_id, "external_id": planner_task.get("id"), "source": "planner"}
+
+            # Merge updates and timestamps
+            existing_task.update(updates)
+            now_ts = datetime.utcnow().isoformat() + "Z"
+            existing_task["last_modified_at"] = now_ts
+            existing_task["updated_at"] = now_ts
+
+            await self.redis_client.set(
+                f"annika:tasks:{annika_id}",
+                json.dumps(existing_task)
             )
-            
-            if state_json:
-                state = json.loads(state_json)[0]
-                updated = False
-                updated_task = None
-                
-                # Find and update task
-                for list_type, task_list in state.get("task_lists", {}).items():
-                    for i, task in enumerate(task_list.get("tasks", [])):
-                        if task.get("id") == annika_id:
-                            # Update fields
-                            task.update(updates)
-                            now_ts = datetime.utcnow().isoformat()
-                            task["last_modified_at"] = now_ts
-                            task["updated_at"] = now_ts
-                            updated_task = task
-                            updated = True
+            logger.debug(f"Updated task in annika:tasks:{annika_id}")
+
+            await self.redis_client.publish(
+                "annika:tasks:updates",
+                json.dumps({
+                    "action": "updated",
+                    "task_id": annika_id,
+                    "task": existing_task,
+                    "source": "planner",
+                })
+            )
+            logger.debug(f"Published update notification for {annika_id}")
+
+            # Best-effort: mirror into global conscious_state if present
+            try:
+                state_json = await self.redis_client.execute_command(
+                    "JSON.GET", "annika:conscious_state", "$"
+                )
+                if state_json:
+                    state = json.loads(state_json)[0]
+                    updated = False
+                    # Find and update task in mirrors
+                    for list_type, task_list in state.get("task_lists", {}).items():
+                        for i, task in enumerate(task_list.get("tasks", [])):
+                            if task.get("id") == annika_id:
+                                state["task_lists"][list_type]["tasks"][i] = existing_task
+                                updated = True
+                                break
+                        if updated:
                             break
                     if updated:
-                        break
-                
-                if updated:
-                    await self.redis_client.execute_command(
-                        "JSON.SET", "annika:conscious_state", "$",
-                        json.dumps(state)
-                    )
-
-                    # Also write authoritative per-task key and publish notification
-                    if updated_task:
-                        try:
-                            await self.redis_client.set(
-                                f"annika:tasks:{annika_id}",
-                                json.dumps(updated_task)
-                            )
-                        except Exception:
-                            logger.debug("Failed to write annika:tasks:{%s}", annika_id)
-                        try:
-                            await self.redis_client.publish(
-                                "annika:tasks:updates",
-                                json.dumps({
-                                    "action": "updated",
-                                    "task_id": annika_id,
-                                    "task": updated_task,
-                                    "source": "planner",
-                                })
-                            )
-                        except Exception:
-                            logger.debug("Failed to publish annika:tasks:updates for %s", annika_id)
-                    
-                    await self._log_sync_operation(
-                        SyncOperation.UPDATE.value,
-                        annika_id,
-                        planner_task["id"],
-                        "success"
-                    )
-                    
-                    logger.debug(f"✅ Updated Annika task from Planner: {planner_task.get('title')}")
+                        await self.redis_client.execute_command(
+                            "JSON.SET", "annika:conscious_state", "$",
+                            json.dumps(state)
+                        )
+                    else:
+                        logger.debug(f"Task {annika_id} not present in conscious_state; skipped mirror update")
                 else:
-                    logger.warning(f"Task {annika_id} not found in conscious_state")
+                    logger.debug("conscious_state not present; skipped mirror update")
+            except Exception as mirror_err:
+                logger.debug(f"Mirror update to conscious_state skipped due to error: {mirror_err}")
+
+            await self._log_sync_operation(
+                SyncOperation.UPDATE.value,
+                annika_id,
+                planner_task["id"],
+                "success"
+            )
+            logger.debug(f"✅ Updated Annika task from Planner: {planner_task.get('title')}")
                     
         except Exception as e:
             logger.error(f"Error updating Annika task: {e}")
@@ -1853,6 +1983,19 @@ class WebhookDrivenPlannerSync:
             
             # Convert to Planner format
             planner_data = self.adapter.annika_to_planner(annika_task)
+            # De-dupe: if Annika task has external_id and reverse map exists, update instead
+            maybe_external = annika_task.get("external_id")
+            if maybe_external:
+                try:
+                    mapped_annika = await self._get_annika_id(maybe_external)
+                    if mapped_annika:
+                        logger.info(
+                            "🔁 Planner create short-circuited to update for existing external_id %s",
+                            maybe_external,
+                        )
+                        return await self._update_planner_task(maybe_external, annika_task)
+                except Exception:
+                    pass
             
             # Set plan ID
             plan_id = await self._determine_plan_for_task(annika_task)
@@ -1861,6 +2004,36 @@ class WebhookDrivenPlannerSync:
                 return False
             
             planner_data["planId"] = plan_id
+
+            # Validate bucketId belongs to selected plan; drop if invalid to avoid 404s
+            try:
+                bucket_id = planner_data.get("bucketId")
+                if bucket_id:
+                    buckets_resp = requests.get(
+                        f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/buckets",
+                        headers={"Authorization": f"Bearer {token}"},
+                        timeout=10,
+                    )
+                    if buckets_resp.status_code == 200:
+                        bucket_ids = {b.get("id") for b in buckets_resp.json().get("value", [])}
+                        if bucket_id not in bucket_ids:
+                            logger.warning(
+                                "Dropping invalid bucketId %s for plan %s; will let Graph choose default bucket",
+                                bucket_id,
+                                plan_id,
+                            )
+                            planner_data.pop("bucketId", None)
+                    else:
+                        # If we cannot verify, prefer to send without bucketId to avoid invalid ID errors
+                        logger.debug(
+                            "Bucket list fetch failed (%s) for plan %s; removing bucketId to avoid 404",
+                            buckets_resp.status_code,
+                            plan_id,
+                        )
+                        planner_data.pop("bucketId", None)
+            except Exception as bucket_err:
+                logger.debug(f"Bucket validation error: {bucket_err}; removing bucketId to be safe")
+                planner_data.pop("bucketId", None)
             
             headers = {
                 "Authorization": f"Bearer {token}",
@@ -1954,6 +2127,36 @@ class WebhookDrivenPlannerSync:
             # Convert to update format
             update_data = self.adapter.annika_to_planner(annika_task)
             update_data.pop("planId", None)  # Can't update plan
+
+            # If bucketId present, ensure it's valid for the task's plan; if not, drop it
+            try:
+                plan_id = current_task.get("planId")
+                bucket_id = update_data.get("bucketId")
+                if plan_id and bucket_id:
+                    buckets_resp = requests.get(
+                        f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/buckets",
+                        headers={"Authorization": f"Bearer {token}"},
+                        timeout=10,
+                    )
+                    if buckets_resp.status_code == 200:
+                        bucket_ids = {b.get("id") for b in buckets_resp.json().get("value", [])}
+                        if bucket_id not in bucket_ids:
+                            logger.warning(
+                                "Dropping invalid bucketId %s on update for plan %s",
+                                bucket_id,
+                                plan_id,
+                            )
+                            update_data.pop("bucketId", None)
+                    else:
+                        logger.debug(
+                            "Bucket list fetch failed (%s) for plan %s during update; removing bucketId",
+                            buckets_resp.status_code,
+                            plan_id,
+                        )
+                        update_data.pop("bucketId", None)
+            except Exception as bucket_err:
+                logger.debug(f"Bucket validation error (update): {bucket_err}; removing bucketId")
+                update_data.pop("bucketId", None)
             
             headers = {
                 "Authorization": f"Bearer {token}",
@@ -1961,16 +2164,30 @@ class WebhookDrivenPlannerSync:
                 "If-Match": etag
             }
             
+            # PATCH with simple backoff on throttling/transient errors
             response = requests.patch(
                 f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                 headers=headers,
                 json=update_data,
                 timeout=10
             )
+            if response.status_code in (429, 500, 502, 503, 504):
+                retry_after = response.headers.get("Retry-After")
+                try:
+                    delay = float(retry_after)
+                except Exception:
+                    delay = 1.0
+                time.sleep(min(max(delay, 1.0), 5.0))
+                response = requests.patch(
+                    f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
+                    headers=headers,
+                    json=update_data,
+                    timeout=10
+                )
             
             if response.status_code in [200, 204]:
-                # Update stored ETag
-                new_etag = response.headers.get("ETag", etag)
+                # Update stored ETag (handle casing variants)
+                new_etag = response.headers.get("ETag") or response.headers.get("etag") or etag
                 await self._store_etag(planner_id, new_etag)
                 
                 await self._log_sync_operation(

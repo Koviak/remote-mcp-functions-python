@@ -468,7 +468,20 @@ def create_task_http(req: func.HttpRequest) -> func.HttpResponse:
         }
         
         if bucket_id:
-            data["bucketId"] = bucket_id
+            # Validate bucketId belongs to plan
+            try:
+                buckets_resp = requests.get(
+                    f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/buckets",
+                    headers=headers,
+                    timeout=10,
+                )
+                if buckets_resp.status_code == 200:
+                    bucket_ids = {b.get("id") for b in buckets_resp.json().get("value", [])}
+                    if bucket_id in bucket_ids:
+                        data["bucketId"] = bucket_id
+                # else: ignore invalid bucket
+            except Exception:
+                pass
         
         response = requests.post(
             f"{GRAPH_API_ENDPOINT}/planner/tasks",
@@ -2108,7 +2121,7 @@ def register_http_endpoints(function_app):
     # Webhook endpoint
     app.route(
         route="graph_webhook",
-        methods=["POST"],
+        methods=["POST", "GET"],
         auth_level=func.AuthLevel.ANONYMOUS
     )(graph_webhook_http)
     
@@ -4302,6 +4315,12 @@ def forward_message_http(req: func.HttpRequest) -> func.HttpResponse:
 
 def graph_webhook_http(req: func.HttpRequest) -> func.HttpResponse:
     """Handle Microsoft Graph webhook notifications"""
+    # Ensure capped logging is initialized for this entrypoint
+    try:
+        from logging_setup import setup_logging
+        setup_logging(add_console=True)
+    except Exception:
+        pass
     
     # Handle subscription validation
     validation_token = req.params.get('validationToken')
@@ -4449,11 +4468,12 @@ def sync_planner_task(resource: str, resource_data: Dict, redis_manager):
                 json.dumps(task)
             )
             
-            # Publish task update
+            # Publish standardized task update
             redis_client.publish(
                 "annika:tasks:updates",
                 json.dumps({
-                    "action": "task_synced",
+                    "action": "updated",
+                    "task_id": task_id,
                     "task": task,
                     "source": "webhook"
                 })
@@ -4547,7 +4567,7 @@ def create_agent_task_http(req: func.HttpRequest) -> func.HttpResponse:
             "dueDate": req_body.get('dueDate'),
             "percentComplete": req_body.get('percentComplete', 0),
             "createdBy": "agent",
-            "createdAt": datetime.utcnow().isoformat()
+            "createdAt": datetime.utcnow().isoformat() + "Z"
         }
         
         # Store task in Redis (primary storage)

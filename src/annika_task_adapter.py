@@ -129,11 +129,15 @@ class AnnikaTaskAdapter:
     
     def annika_to_planner(self, annika_task: Dict[str, Any]) -> Dict[str, Any]:
         """Convert Annika task to MS Planner format."""
+        # Normalize percent precision and map to 0..100 int
+        pct = annika_task.get("percent_complete", 0)
+        try:
+            pct = round(float(pct), 2)
+        except Exception:
+            pct = 0.0
         planner_task = {
             "title": annika_task.get("title", "Untitled Task"),
-            "percentComplete": int(
-                annika_task.get("percent_complete", 0) * 100
-            ),
+            "percentComplete": int(pct * 100),
         }
         
         # Map assigned user
@@ -155,7 +159,9 @@ class AnnikaTaskAdapter:
         if annika_task.get("notes"):
             notes_parts.append(str(annika_task.get("notes")))
         if annika_task.get("output"):
-            notes_parts.append("[Agent Output]\n" + str(annika_task.get("output")))
+            notes_parts.append(
+                "[Agent Output]\n" + str(annika_task.get("output"))
+            )
         if notes_parts:
             planner_task["notes"] = "\n\n".join([p for p in notes_parts if p])
             
@@ -206,7 +212,17 @@ class AnnikaTaskAdapter:
     
     async def get_all_annika_tasks(self) -> List[Dict[str, Any]]:
         """Extract all tasks from Annika's conscious_state structure."""
-        all_tasks = []
+        all_tasks: List[Dict[str, Any]] = []
+        # Map by id to deduplicate and to allow "latest wins" merging
+        by_id: Dict[str, Dict[str, Any]] = {}
+
+        def _ts(task: Dict[str, Any]) -> str:
+            return (
+                task.get("last_modified_at")
+                or task.get("updated_at")
+                or task.get("modified_at")
+                or ""
+            )
         
         try:
             # Get global conscious state
@@ -224,7 +240,13 @@ class AnnikaTaskAdapter:
                         # Add metadata about source
                         task["_source_list"] = list_type
                         task["_source_type"] = "global"
-                        all_tasks.append(task)
+                        tid = task.get("id")
+                        if not tid:
+                            continue
+                        # Keep latest by timestamp
+                        prev = by_id.get(tid)
+                        if not prev or _ts(task) > _ts(prev):
+                            by_id[tid] = task
             
             # Also get conversation-specific tasks
             conv_keys = await self.redis.keys(
@@ -248,35 +270,51 @@ class AnnikaTaskAdapter:
                         ):
                             task["_source_type"] = "conversation"
                             task["_conversation_id"] = conv_id
-                            all_tasks.append(task)
-                except Exception as e:
-                    logger.error(f"Error reading {key}: {e}")
-            
-            # Optional fallback: if no tasks found via lists, read per-task keys
-            if not all_tasks:
-                try:
-                    cursor = 0
-                    pattern = "annika:tasks:*"
-                    while True:
-                        cursor, keys = await self.redis.scan(cursor, match=pattern, count=100)
-                        for task_key in keys:
-                            try:
-                                raw = await self.redis.get(task_key)
-                                if raw:
-                                    task = json.loads(raw)
-                                    if isinstance(task, dict):
-                                        all_tasks.append(task)
-                            except Exception:
-                                # skip malformed entries
+                            tid = task.get("id")
+                            if not tid:
                                 continue
-                        if cursor == 0:
-                            break
+                            prev = by_id.get(tid)
+                            if not prev or _ts(task) > _ts(prev):
+                                by_id[tid] = task
                 except Exception as e:
-                    logger.debug(f"Fallback annika:tasks scan failed: {e}")
+                    logger.error("Error reading %s: %s", key, e)
+            
+            # Always also read per-task authoritative keys and merge (latest wins)
+            try:
+                cursor = 0
+                pattern = "annika:tasks:*"
+                while True:
+                    cursor, keys = await self.redis.scan(
+                        cursor, match=pattern, count=200
+                    )
+                    for task_key in keys:
+                        try:
+                            raw = await self.redis.get(task_key)
+                            if not raw:
+                                continue
+                            task = json.loads(raw)
+                            if not isinstance(task, dict):
+                                continue
+                            tid = task.get("id")
+                            if not tid:
+                                continue
+                            prev = by_id.get(tid)
+                            if not prev or _ts(task) > _ts(prev):
+                                by_id[tid] = task
+                        except Exception:
+                            # skip malformed entries
+                            continue
+                    if cursor == 0:
+                        break
+            except Exception as e:
+                logger.debug("Authoritative annika:tasks scan failed: %s", e)
                     
         except Exception as e:
             logger.error(f"Error extracting Annika tasks: {e}")
             
+        # Consolidate map to list
+        if by_id:
+            all_tasks = list(by_id.values())
         return all_tasks
     
     def determine_task_list(self, planner_task: Dict[str, Any]) -> str:

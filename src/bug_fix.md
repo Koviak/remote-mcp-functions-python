@@ -1,5 +1,66 @@
 Bug Fix Log
 
+Date: 2025-09-16
+
+Issue
+- Planner-Annika task sync completely broken - no tasks being created or synced
+
+Root Causes
+- ID mappings were incorrectly stored (50% had Planner IDs as keys instead of Annika IDs)
+- _store_id_mapping was creating bidirectional mappings in wrong namespace
+- Tasks were not being written to annika:tasks:{id} due to error suppression
+- Agent notifications were not being sent due to error suppression
+
+Fix
+- Fixed ID mapping storage in _store_id_mapping to only store:
+  - annika:planner:id_map:{annika_id} → {planner_id}
+  - annika:task:mapping:planner:{planner_id} → {annika_id}
+- Fixed _get_annika_id to look in correct reverse mapping location
+- Fixed _remove_mapping to delete correct keys
+- Removed error suppression in _create_annika_task_from_planner
+- Removed error suppression in _update_annika_task_from_planner
+- Ran recovery script to fix 95 reversed ID mappings in Redis
+
+Files Modified
+- src/planner_sync_service_v5.py: Fixed ID mapping functions and task creation/update
+- Created fix_mappings.py recovery script to correct reversed mappings
+- Created test_sync.py to verify sync functionality
+
+Verification
+- ID mappings now correctly stored (verified with test_sync.py)
+- Task creation/notification logic fixed (awaiting service restart for full test)
+- Recovery script successfully fixed 95 reversed mappings
+
+Impact
+- Bi-directional sync will work correctly after service restart
+- Agents will receive notifications for Planner tasks
+- Task Manager will have visibility of all synced tasks
+
+---
+
+Date: 2025-09-16
+
+Change
+- Decoupled authoritative task writes/notifications from `annika:conscious_state` existence in V5 sync service.
+
+Details
+- `_create_annika_task_from_planner`: Always `SET annika:tasks:{id}` and `PUBLISH annika:tasks:updates` even if `annika:conscious_state` is missing; mirror to `conscious_state` only if present (best effort).
+- `_update_annika_task_from_planner`: Always upsert per-task key and publish; mirror to `conscious_state` if present (best effort).
+- Rationale: Agents and Task Manager rely on the per-task key and updates channel; gating on `conscious_state` prevented all Planner imports.
+
+Files Modified
+- `src/planner_sync_service_v5.py`: Create/update paths refactored as above.
+
+Verification Plan
+- Restart the MS-MCP sync service.
+- Run `python test_sync.py` and confirm >0 `annika:tasks:*` keys and live messages on `annika:tasks:updates`.
+- Create a new Planner task; verify it appears under `annika:tasks:*`. If `annika:conscious_state` exists, confirm it mirrors under `task_lists`.
+
+Next Steps
+- Restart MS-MCP sync service to apply code changes
+- Create test tasks in Planner to verify sync
+- Monitor annika:tasks:updates channel for notifications
+
 Date: 2025-09-14
 
 Change
