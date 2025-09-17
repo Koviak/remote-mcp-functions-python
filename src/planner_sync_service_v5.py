@@ -187,6 +187,8 @@ class WebhookDrivenPlannerSync:
         self.pubsub = None
         self.adapter = None
         self.running = False
+        # Quick-poll scheduling to tighten feedback after local edits
+        self.quick_poll_task = None
         
         # Components
         self.rate_limiter = RateLimitHandler()
@@ -223,12 +225,15 @@ class WebhookDrivenPlannerSync:
         # Initialize adapter
         self.adapter = AnnikaTaskAdapter(self.redis_client)
         
-        # Set up pub/sub for Annika changes
-        self.pubsub = self.redis_client.pubsub()
-        await self.pubsub.subscribe(
+        # Set up pub/sub (use separate clients to avoid cross-consumer message loss)
+        self.pubsub_annika = self.redis_client.pubsub()
+        await self.pubsub_annika.subscribe(
             "__keyspace@0__:annika:conscious_state",
             "annika:tasks:updates",
-            "annika:planner:webhook"  # Webhook notifications
+        )
+        self.pubsub_webhook = self.redis_client.pubsub()
+        await self.pubsub_webhook.subscribe(
+            "annika:planner:webhook"
         )
         
         self.running = True
@@ -260,9 +265,25 @@ class WebhookDrivenPlannerSync:
         # Clean up webhooks
         await self._cleanup_webhooks()
         
-        if self.pubsub:
-            await self.pubsub.unsubscribe()
-            await self.pubsub.close()
+        # Close pubsubs
+        if getattr(self, "pubsub_annika", None):
+            try:
+                await self.pubsub_annika.unsubscribe()
+            except Exception:
+                pass
+            try:
+                await self.pubsub_annika.close()
+            except Exception:
+                pass
+        if getattr(self, "pubsub_webhook", None):
+            try:
+                await self.pubsub_webhook.unsubscribe()
+            except Exception:
+                pass
+            try:
+                await self.pubsub_webhook.close()
+            except Exception:
+                pass
         if self.redis_client:
             # Ensure all connections are fully torn down before the event loop closes
             try:
@@ -343,6 +364,17 @@ class WebhookDrivenPlannerSync:
             logger.error("No tokens available for webhook setup")
             return
         
+        # Feature flag: allow disabling Planner webhook attempts to reduce noise
+        enable_planner_webhooks_raw = await self.redis_client.get("annika:config:enable_planner_webhooks")
+        enable_planner_webhooks = False
+        try:
+            if isinstance(enable_planner_webhooks_raw, str):
+                enable_planner_webhooks = enable_planner_webhooks_raw.strip().lower() in ("1", "true", "yes", "on")
+            elif enable_planner_webhooks_raw:
+                enable_planner_webhooks = True
+        except Exception:
+            enable_planner_webhooks = False
+        
         # Setup multiple webhook subscriptions with appropriate tokens
         webhook_configs = [
             {
@@ -358,21 +390,6 @@ class WebhookDrivenPlannerSync:
                         datetime.utcnow() + timedelta(hours=24)
                     ).isoformat() + "Z",
                     "clientState": "annika_groups_webhook_v5"
-                }
-            },
-            {
-                "name": "planner_tasks",
-                "token": get_agent_token(),
-                "config": {
-                    "changeType": "created,updated,deleted",
-                    "notificationUrl": (
-                        "https://agency-swarm.ngrok.app/api/graph_webhook"
-                    ),
-                    "resource": "/planner/tasks",
-                    "expirationDateTime": (
-                        datetime.utcnow() + timedelta(hours=24)
-                    ).isoformat() + "Z",
-                    "clientState": "annika_planner_sync_v5"
                 }
             },
             {
@@ -412,6 +429,100 @@ class WebhookDrivenPlannerSync:
                 }
             }
         ]
+
+        # Conditionally add Planner global webhook only when enabled
+        if enable_planner_webhooks:
+            webhook_configs.insert(1, {
+                "name": "planner_tasks",
+                "token": delegated_token,
+                "config": {
+                    "changeType": "created,updated,deleted",
+                    "notificationUrl": (
+                        "https://agency-swarm.ngrok.app/api/graph_webhook"
+                    ),
+                    "resource": "/planner/tasks",
+                    "expirationDateTime": (
+                        datetime.utcnow() + timedelta(hours=24)
+                    ).isoformat() + "Z",
+                    "clientState": "annika_planner_sync_v5"
+                }
+            })
+        else:
+            logger.info("Planner webhooks disabled by config; skipping /planner/tasks subscriptions")
+
+        # Optionally subscribe to specific Planner plan task changes if enabled
+        if enable_planner_webhooks:
+            try:
+                # Read default plan id
+                default_plan_id = await self.redis_client.get("annika:config:default_plan_id")
+                # Read optional explicit list of plan ids (JSON array)
+                raw_plan_ids = await self.redis_client.get("annika:config:planner_plan_ids")
+                extra_plan_ids = []
+                if raw_plan_ids:
+                    try:
+                        extra_plan_ids = json.loads(raw_plan_ids)
+                        if not isinstance(extra_plan_ids, list):
+                            extra_plan_ids = []
+                    except Exception:
+                        extra_plan_ids = []
+
+                plan_ids: list = []
+                if default_plan_id:
+                    plan_ids.append(default_plan_id)
+                for pid in extra_plan_ids:
+                    if isinstance(pid, str) and pid not in plan_ids:
+                        plan_ids.append(pid)
+
+                # If no configured plans, attempt discovery via Graph (delegated)
+                if not plan_ids and delegated_token:
+                    try:
+                        headers = {"Authorization": f"Bearer {delegated_token}"}
+                        discovered = await self._get_all_plans_for_polling(headers)
+                        for p in discovered:
+                            pid = p.get("id")
+                            if isinstance(pid, str) and pid not in plan_ids:
+                                plan_ids.append(pid)
+                    except Exception:
+                        logger.debug("Plan discovery failed; continuing without cached plans")
+
+                # Persist discovered plan ids into config for future runs
+                try:
+                    if plan_ids:
+                        await self.redis_client.set(
+                            "annika:config:planner_plan_ids", json.dumps(plan_ids)
+                        )
+                        if not default_plan_id:
+                            await self.redis_client.set(
+                                "annika:config:default_plan_id", plan_ids[0]
+                            )
+                            default_plan_id = plan_ids[0]
+                except Exception:
+                    logger.debug("Unable to persist planner plan ids to Redis config")
+
+                # Build plan-scoped webhook configs (requires delegated token and plan membership)
+                for pid in plan_ids:
+                    webhook_configs.append(
+                        {
+                            "name": f"planner_plan_{pid}_tasks",
+                            "token": delegated_token,
+                            "config": {
+                                "changeType": "created,updated,deleted",
+                                "notificationUrl": (
+                                    "https://agency-swarm.ngrok.app/api/graph_webhook"
+                                ),
+                                "resource": f"/planner/plans/{pid}/tasks",
+                                "expirationDateTime": (
+                                    datetime.utcnow() + timedelta(hours=24)
+                                ).isoformat() + "Z",
+                                "clientState": f"annika_planner_plan_{pid}"
+                            }
+                        }
+                    )
+            except Exception:
+                # Non-fatal: proceed without plan-scoped webhooks
+                logger.debug("Planner plan-scoped webhook configuration skipped due to error")
+        else:
+            logger.info("Planner plan-scoped webhooks disabled by config; skipping per-plan subscriptions")
 
         # Store configs for renewal/recreation
         self.webhook_configs = {
@@ -839,7 +950,7 @@ class WebhookDrivenPlannerSync:
         """Process incoming webhook notifications from Microsoft Graph."""
         logger.info("📥 Monitoring webhook notifications...")
         
-        async for message in self.pubsub.listen():
+        async for message in self.pubsub_webhook.listen():
             if not self.running:
                 break
             
@@ -1328,7 +1439,7 @@ class WebhookDrivenPlannerSync:
         
         last_state_hash = await self._get_state_hash()
         
-        async for message in self.pubsub.listen():
+        async for message in self.pubsub_annika.listen():
             if not self.running:
                 break
             
@@ -1347,17 +1458,25 @@ class WebhookDrivenPlannerSync:
                         try:
                             payload = json.loads(message.get('data', '{}'))
                             task_id = payload.get('task_id')
+                            if not task_id:
+                                # Back-compat: some publishers send only {task: {...}}
+                                task_obj = payload.get('task') or {}
+                                task_id = task_obj.get('id')
                             if task_id:
                                 task = await self._get_annika_task(task_id)
                                 if task and await self._task_needs_upload(task):
                                     await self._queue_upload(task)
+                                    await self._schedule_quick_poll(10)
                                 else:
                                     # Fallback: global detection if task missing
                                     await self._detect_and_queue_changes()
+                                    await self._schedule_quick_poll(15)
                             else:
                                 await self._detect_and_queue_changes()
+                                await self._schedule_quick_poll(20)
                         except Exception:
                             await self._detect_and_queue_changes()
+                            await self._schedule_quick_poll(20)
                         
                 except Exception as e:
                     logger.error(f"Error monitoring Annika changes: {e}")
@@ -2373,6 +2492,28 @@ class WebhookDrivenPlannerSync:
                 logger.error(f"Error in Planner polling loop: {e}")
                 # Continue running even if one poll fails
                 await asyncio.sleep(300)  # Wait 5 minutes before retrying
+
+    async def _schedule_quick_poll(self, delay_seconds: int) -> None:
+        """Schedule a one-off quick poll after local edits to reconcile Planner."""
+        try:
+            # Cancel any pending quick poll to coalesce bursts
+            if self.quick_poll_task and not self.quick_poll_task.done():
+                self.quick_poll_task.cancel()
+
+            async def _delayed_poll():
+                try:
+                    await asyncio.sleep(max(1, min(delay_seconds, 60)))
+                    if self.running:
+                        logger.info(f"⏱️ Quick poll triggered after local update (delay={delay_seconds}s)")
+                        await self._poll_all_planner_tasks()
+                except asyncio.CancelledError:
+                    return
+                except Exception as e:
+                    logger.debug(f"Quick poll failed: {e}")
+
+            self.quick_poll_task = asyncio.create_task(_delayed_poll())
+        except Exception:
+            pass
     
     async def _poll_all_planner_tasks(self):
         """Poll all accessible Planner plans for task changes."""

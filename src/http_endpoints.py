@@ -4586,6 +4586,7 @@ def create_agent_task_http(req: func.HttpRequest) -> func.HttpResponse:
             "annika:tasks:updates",
             json.dumps({
                 "action": "created",
+                "task_id": task.get("id"),
                 "task": task,
                 "source": "agent"
             })
