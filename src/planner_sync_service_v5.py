@@ -27,7 +27,13 @@ import httpx
 import redis.asyncio as redis
 import requests
 
-from agent_auth_manager import get_agent_token
+# FIX: Use package-absolute import to avoid ModuleNotFoundError when running as src.*
+try:
+    # When running as a package (python -m src.start_all_services)
+    from src.agent_auth_manager import get_agent_token  # type: ignore
+except ModuleNotFoundError:
+    # When running from inside src/ (python start_all_services.py)
+    from agent_auth_manager import get_agent_token  # type: ignore
 from annika_task_adapter import AnnikaTaskAdapter
 from dual_auth_manager import get_application_token, get_delegated_token
 

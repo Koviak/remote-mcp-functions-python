@@ -5,7 +5,12 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import redis.asyncio as redis
 
-from agent_auth_manager import get_agent_token
+try:
+    # When running as a package (python -m src.start_all_services)
+    from src.agent_auth_manager import get_agent_token  # type: ignore
+except ModuleNotFoundError:
+    # When running from inside src/ (python start_all_services.py)
+    from agent_auth_manager import get_agent_token  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -165,10 +170,38 @@ class ChatSubscriptionManager:
                         "created_at": datetime.now(UTC).isoformat(),
                         "expires_at": data.get("expirationDateTime"),
                         "status": "active",
+                        "mode": "global",
                     },
                 )
                 logger.info("Created global chat subscription")
                 return 1
+
+            # Permission/visibility failures: 403
+            if resp.status_code == 403:
+                snippet = resp.text[:200] if hasattr(resp, "text") else ""
+                logger.error(
+                    "Failed to create global chat subscription: 403. Falling back to per-chat subscriptions. Response: %s",
+                    snippet,
+                )
+                # Mark global key as failed_permission (do not retry aggressively)
+                await self.redis_client.hset(
+                    f"{REDIS_PREFIX}global",
+                    mapping={
+                        "status": "failed_permission",
+                        "mode": "per_chat",
+                        "updated_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+                # Fallback: enumerate chats and create per-chat subscriptions
+                created = 0
+                chat_ids = await self.discover_all_chats()
+                for cid in chat_ids:
+                    sub_id = await self.create_chat_subscription(cid)
+                    if sub_id:
+                        created += 1
+                logger.info("Per-chat subscriptions created: %d", created)
+                return created
+
             logger.error(
                 "Failed to create global chat subscription: %s", resp.status_code
             )
