@@ -253,3 +253,40 @@ Verification
 Notes
 - Some linter warnings remain (formatting/logging style) but do not affect shutdown reliability. Will address in a separate formatting pass.
 
+---
+
+Date: 2025-09-18
+
+Issue #34 - MS-MCP Infinite Recursion Loop
+- Service showing massive repetition of "📤 Processing upload batch" messages
+- Eventually failing with "maximum recursion depth exceeded while calling a Python object"
+- Complete Planner sync service failure, unable to process tasks
+
+Root Cause
+- Direct recursion in _queue_upload() function when batch size reached
+- When rate limited, _create_planner_task and _update_planner_task call _queue_upload()
+- _queue_upload() immediately called await _process_upload_batch() when queue full
+- _process_upload_batch() could trigger more rate limiting, calling _queue_upload() again
+- Created infinite recursion loop without proper async scheduling
+
+Fix Applied
+1. Changed _queue_upload() to use asyncio.create_task() instead of await for batch processing
+2. Added _trigger_batch_processing() helper with 0.1s delay to prevent tight loops
+3. Added batch_processing flag to prevent concurrent batch processing
+4. Added duplicate detection in _queue_upload() to prevent same task being queued multiple times
+5. Wrapped _process_upload_batch() with try/finally to ensure flag is always reset
+6. Initialized batch_processing flag in __init__ method
+
+Files Modified
+- src/planner_sync_service_v5.py: Fixed recursion in batch processing and added guards
+
+Verification Needed
+- Restart MS-MCP service to test fix
+- Monitor logs for proper batch processing without infinite loops
+- Verify tasks are syncing correctly between Planner and Annika
+
+Impact
+- MS-MCP service will be stable and functional
+- Task sync will resume working correctly
+- No more stack overflow errors
+
