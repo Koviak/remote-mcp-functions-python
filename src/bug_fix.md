@@ -290,3 +290,30 @@ Impact
 - Task sync will resume working correctly
 - No more stack overflow errors
 
+---
+
+Date: 2025-09-19
+
+Issue
+- UnboundLocalError in RateLimitHandler: "cannot access local variable 'backoff' where it is not associated with a value"
+
+Root Cause
+- In the handle_rate_limit method, the 'backoff' variable was only defined in the else block
+- When retry_after_seconds parameter was provided, backoff was never defined but still used in the logger.warning message
+
+Fix Applied
+- Modified handle_rate_limit() to define backoff in both branches of the if statement
+- When retry_after_seconds is provided, set backoff = retry_after_seconds
+- When calculating exponential backoff, backoff is calculated as before
+
+Files Modified
+- src/planner_sync_service_v5.py: Fixed UnboundLocalError in RateLimitHandler.handle_rate_limit()
+
+Verification
+- Confirmed fix worked - service ran without UnboundLocalError after restart
+- New HTTP 403 permission errors detected (tracked as issue #35 in current_debug_tasks.mdc)
+
+Impact
+- Rate limiting handler now works correctly when explicit retry_after is provided
+- No more UnboundLocalError crashes in rate limit scenarios
+

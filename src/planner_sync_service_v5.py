@@ -122,6 +122,7 @@ class RateLimitHandler:
         self.consecutive_failures += 1
 
         if retry_after_seconds:
+            backoff = retry_after_seconds
             self.retry_after = time.time() + retry_after_seconds
         else:
             # Exponential backoff: 2^failures seconds
@@ -215,6 +216,7 @@ class WebhookDrivenPlannerSync:
         self.batch_size = 10
         self.batch_timeout = 5  # seconds
         self.batch_processing = False  # Flag to prevent concurrent batch processing
+        self.batch_scheduled = False  # Flag to prevent scheduling multiple batch tasks
 
     async def start(self):
         """Start the webhook-driven sync service."""
@@ -1584,16 +1586,22 @@ class WebhookDrivenPlannerSync:
         # Schedule batch processing asynchronously if queue is full
         # Avoid direct recursion by using create_task instead of await
         if len(self.pending_uploads) >= self.batch_size:
-            # Don't await - schedule it asynchronously to avoid recursion
-            asyncio.create_task(self._trigger_batch_processing())
+            # Only schedule if not already scheduled to prevent multiple tasks
+            if not self.batch_scheduled:
+                self.batch_scheduled = True
+                asyncio.create_task(self._trigger_batch_processing())
 
     async def _trigger_batch_processing(self):
         """Trigger batch processing with recursion guard."""
-        # Add a small delay to prevent tight loops
-        await asyncio.sleep(0.1)
-        # Process batch if not already processing
-        if not hasattr(self, 'batch_processing') or not self.batch_processing:
-            await self._process_upload_batch()
+        try:
+            # Add a delay to prevent tight loops and give system time to breathe
+            await asyncio.sleep(1.0)
+            # Process batch if not already processing
+            if not hasattr(self, 'batch_processing') or not self.batch_processing:
+                await self._process_upload_batch()
+        finally:
+            # Reset the scheduled flag so future batches can be scheduled
+            self.batch_scheduled = False
 
     async def _batch_processor(self):
         """Process upload batches periodically."""
@@ -1647,6 +1655,10 @@ class WebhookDrivenPlannerSync:
 
                     finally:
                         self.processing_upload.discard(annika_id)
+            # If there are still pending uploads, schedule another batch
+            if self.pending_uploads and not self.batch_scheduled:
+                self.batch_scheduled = True
+                asyncio.create_task(self._trigger_batch_processing())
         finally:
             # Always reset the flag to allow future batch processing
             self.batch_processing = False
