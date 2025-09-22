@@ -86,16 +86,17 @@ class TokenRefreshService:
     def _acquire_initial_tokens(self):
         """Acquire initial tokens for common scopes"""
         try:
-            # Common scopes that should have tokens
-            # Include comprehensive delegated scopes required by /me endpoints
+            # Common delegated scopes to prefetch for /me endpoints only
             scopes = [
-                "https://graph.microsoft.com/.default",
-                (
-                    "openid profile offline_access "
-                    "User.Read Mail.Read Mail.ReadWrite Mail.Send "
-                    "Calendars.Read Files.Read.All Files.ReadWrite.All "
-                    "Chat.Read Chat.ReadWrite Tasks.ReadWrite"
-                ),
+                # Minimal baseline token; other endpoints add feature scopes
+                "openid profile offline_access User.Read",
+                # Chat read/list and write bundles
+                "openid profile offline_access User.Read Chat.Read Chat.ReadBasic",
+                "openid profile offline_access User.Read Chat.ReadWrite",
+                # Mail and Calendar examples (extend as needed)
+                "openid profile offline_access User.Read Mail.ReadWrite",
+                "openid profile offline_access User.Read Mail.Send",
+                "openid profile offline_access User.Read Calendars.ReadWrite",
             ]
             
             for scope in scopes:

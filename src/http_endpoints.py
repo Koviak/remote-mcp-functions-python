@@ -54,15 +54,28 @@ def _get_agent_user_id() -> str:
     return os.environ.get("AGENT_USER_ID", "").strip()
 
 
+def _get_token_and_base_for_me(delegated_scopes: str = "") -> tuple:
+    """Return (delegated_token, '/me') or (None, None) if unavailable."""
+    try:
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token(delegated_scopes) if delegated_scopes else get_agent_token()
+        if token:
+            return token, "/me"
+    except Exception:
+        return None, None
+    return None, None
+
+
 # HTTP Endpoint Functions (without decorators)
 
 def list_groups_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list Microsoft 365 groups"""
     try:
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token()
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/mailFolders.",
                 status_code=401
             )
         
@@ -101,10 +114,11 @@ def list_groups_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_users_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list all users in the organization"""
     try:
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Mail.ReadWrite Mail.Send")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/messages.",
                 status_code=401
             )
         
@@ -143,10 +157,11 @@ def list_users_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_groups_with_planner_http(req: func.HttpRequest) -> func.HttpResponse:
     """HTTP endpoint to list only groups that have Planner plans"""
     try:
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Mail.ReadWrite Mail.Send")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/messages/{id}/send.",
                 status_code=401
             )
         
@@ -194,10 +209,11 @@ def check_group_planner_status_http(
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Mail.ReadWrite")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/messages/{id}.",
                 status_code=401
             )
         
@@ -284,10 +300,11 @@ def list_plans_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Calendars.ReadWrite")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/events.",
                 status_code=401
             )
         
@@ -340,10 +357,11 @@ def create_plan_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Calendars.ReadWrite")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/events/{id}.",
                 status_code=401
             )
         
@@ -393,10 +411,11 @@ def list_tasks_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Calendars.ReadWrite")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/events/{id}.",
                 status_code=401
             )
         
@@ -450,10 +469,11 @@ def create_task_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Calendars.ReadWrite")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/events/{id}.",
                 status_code=401
             )
         
@@ -540,10 +560,11 @@ def update_task_progress_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Calendars.ReadWrite")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/events/{id}/accept.",
                 status_code=401
             )
         
@@ -595,10 +616,11 @@ def get_plan_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Calendars.ReadWrite")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/events/{id}/decline.",
                 status_code=401
             )
         
@@ -656,10 +678,11 @@ def update_plan_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Calendars.ReadWrite")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/findMeetingTimes.",
                 status_code=401
             )
         
@@ -707,10 +730,11 @@ def delete_plan_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Mail.ReadWrite")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for /me/messages/{id}/attachments.",
                 status_code=401
             )
         
@@ -753,10 +777,11 @@ def get_plan_details_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
+        from agent_auth_manager import get_agent_token
+        token = get_agent_token("openid profile offline_access Chat.ReadWrite")
         if not token:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for Teams channel post.",
                 status_code=401
             )
         
@@ -1012,25 +1037,27 @@ def create_calendar_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
-        if not token:
+        token, base = _get_token_and_base_for_me(
+            "openid profile offline_access Calendars.ReadWrite"
+        )
+        if not token or not base:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for calendar; app fallback unavailable.",
                 status_code=401
             )
-        
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
+
         data = {"name": name}
         color = req_body.get('color')
         if color:
             data['color'] = color
         
         response = requests.post(
-            f"{GRAPH_API_ENDPOINT}/me/calendars",
+            f"{GRAPH_API_ENDPOINT}{base}/calendars",
             headers=headers,
             json=data,
             timeout=10
@@ -1514,20 +1541,22 @@ def send_draft_message_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
-        if not token:
+        token, base = _get_token_and_base_for_me(
+            "openid profile offline_access Mail.ReadWrite Mail.Send"
+        )
+        if not token or not base:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for mail; app fallback unavailable.",
                 status_code=401
             )
-        
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
+
         response = requests.post(
-            f"{GRAPH_API_ENDPOINT}/me/messages/{message_id}/send",
+            f"{GRAPH_API_ENDPOINT}{base}/messages/{message_id}/send",
             headers=headers,
             timeout=10
         )
@@ -1560,19 +1589,19 @@ def delete_message_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
-        if not token:
+        token, base = _get_token_and_base_for_me(
+            "openid profile offline_access Mail.ReadWrite"
+        )
+        if not token or not base:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for mail; app fallback unavailable.",
                 status_code=401
             )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-        }
-        
+
+        headers = {"Authorization": f"Bearer {token}"}
+
         response = requests.delete(
-            f"{GRAPH_API_ENDPOINT}/me/messages/{message_id}",
+            f"{GRAPH_API_ENDPOINT}{base}/messages/{message_id}",
             headers=headers,
             timeout=10
         )
@@ -1609,20 +1638,7 @@ def get_calendar_view_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        # Prefer delegated token for /me; fallback to app-only with /users/{id}
-        token, base = (None, None)
-        try:
-            from agent_auth_manager import get_agent_token
-            delegated = get_agent_token()
-            if delegated:
-                token, base = delegated, "/me"
-        except Exception:
-            token, base = (None, None)
-        if not token:
-            app_token = get_access_token()
-            user_id = _get_agent_user_id()
-            if app_token and user_id:
-                token, base = app_token, f"/users/{user_id}"
+        token, base = _get_token_and_base_for_me("openid profile offline_access Calendars.ReadWrite")
         if not token or not base:
             return func.HttpResponse(
                 json.dumps({
@@ -1793,19 +1809,19 @@ def delete_event_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
-        if not token:
+        token, base = _get_token_and_base_for_me(
+            "openid profile offline_access Calendars.ReadWrite"
+        )
+        if not token or not base:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for calendar; app fallback unavailable.",
                 status_code=401
             )
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-        }
-        
+
+        headers = {"Authorization": f"Bearer {token}"}
+
         response = requests.delete(
-            f"{GRAPH_API_ENDPOINT}/me/events/{event_id}",
+            f"{GRAPH_API_ENDPOINT}{base}/events/{event_id}",
             headers=headers,
             timeout=10
         )
@@ -1840,21 +1856,22 @@ def list_attachments_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        from agent_auth_manager import get_agent_token
-        token = get_agent_token("openid profile offline_access User.Read Mail.Read")
-        if not token:
+        token, base = _get_token_and_base_for_me(
+            "openid profile offline_access Mail.ReadWrite"
+        )
+        if not token or not base:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for mail; app fallback unavailable.",
                 status_code=401
             )
-        
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
+
         response = requests.get(
-            f"{GRAPH_API_ENDPOINT}/me/messages/{message_id}/attachments",
+            f"{GRAPH_API_ENDPOINT}{base}/messages/{message_id}/attachments",
             headers=headers,
             timeout=10
         )
@@ -1905,27 +1922,29 @@ def add_attachment_http(req: func.HttpRequest) -> func.HttpResponse:
                 status_code=400
             )
         
-        token = get_access_token()
-        if not token:
+        token, base = _get_token_and_base_for_me(
+            "openid profile offline_access Mail.ReadWrite"
+        )
+        if not token or not base:
             return func.HttpResponse(
-                "Authentication failed. Check Azure AD credentials.",
+                "Authentication failed. Delegated token required for mail; app fallback unavailable.",
                 status_code=401
             )
-        
+
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
-        
+
         data = {
             "@odata.type": "#microsoft.graph.fileAttachment",
             "name": name,
             "contentBytes": content_bytes,
             "contentType": content_type
         }
-        
+
         response = requests.post(
-            f"{GRAPH_API_ENDPOINT}/me/messages/{message_id}/attachments",
+            f"{GRAPH_API_ENDPOINT}{base}/messages/{message_id}/attachments",
             headers=headers,
             json=data,
             timeout=10
@@ -1954,151 +1973,158 @@ def register_http_endpoints(function_app):
     """Register all HTTP endpoints with the provided function app instance"""
     global app
     app = function_app
+    # Import modular endpoint handlers (refactored per modular architecture)
+    from endpoints import admin as ep_admin
+    from endpoints import planner as ep_planner
+    from endpoints import tasks_buckets as ep_tasks
+    from endpoints import planner_formats as ep_planner_formats
+    from endpoints import mail as ep_mail
+    from endpoints import calendar as ep_calendar
+    from endpoints import teams as ep_teams
+    from endpoints import files_sites as ep_files
+    from endpoints import security_reports as ep_sec
+    from endpoints import users_groups as ep_users
+    from endpoints import agent_webhook as ep_webhook
+    from endpoints import agent_tools as ep_agent
     
     # Basic endpoints
-    app.route(route="groups", methods=["GET"])(list_groups_http)
-    app.route(route="users", methods=["GET"])(list_users_http)
+    app.route(route="groups", methods=["GET"])(ep_admin.list_groups_http)
+    app.route(route="users", methods=["GET"])(ep_admin.list_users_http)
     app.route(route="groups/with-planner", methods=["GET"])(
-        list_groups_with_planner_http)
+        ep_admin.list_groups_with_planner_http)
     app.route(route="groups/check-planner", methods=["GET"])(
-        check_group_planner_status_http)
-    app.route(route="hello", methods=["GET"])(hello_http)
+        ep_admin.check_group_planner_status_http)
+    app.route(route="hello", methods=["GET"])(ep_webhook.hello_http)
     
     # Plan endpoints
-    app.route(route="plans", methods=["GET"])(list_plans_http)
-    app.route(route="plans", methods=["POST"])(create_plan_http)
-    app.route(route="plans/{plan_id}", methods=["GET"])(get_plan_http)
-    app.route(route="plans/{plan_id}", methods=["PATCH"])(update_plan_http)
-    app.route(route="plans/{plan_id}", methods=["DELETE"])(delete_plan_http)
+    app.route(route="plans", methods=["GET"])(ep_planner.list_plans_http)
+    app.route(route="plans", methods=["POST"])(ep_planner.create_plan_http)
+    app.route(route="plans/{plan_id}", methods=["GET"])(ep_planner.get_plan_http)
+    app.route(route="plans/{plan_id}", methods=["PATCH"])(ep_planner.update_plan_http)
+    app.route(route="plans/{plan_id}", methods=["DELETE"])(ep_planner.delete_plan_http)
     app.route(route="plans/{plan_id}/details", methods=["GET"])(
-        get_plan_details_http)
+        ep_planner.get_plan_details_http)
     
     # Task endpoints
-    app.route(route="tasks", methods=["GET"])(list_tasks_http)
-    app.route(route="tasks", methods=["POST"])(create_task_http)
-    app.route(route="tasks/{task_id}", methods=["GET"])(get_task_http)
-    app.route(route="tasks/{task_id}", methods=["PATCH"])(update_task_http)
-    app.route(route="tasks/{task_id}", methods=["DELETE"])(delete_task_http)
+    app.route(route="tasks", methods=["GET"])(ep_planner.list_tasks_http)
+    app.route(route="tasks", methods=["POST"])(ep_planner.create_task_http)
+    app.route(route="tasks/{task_id}", methods=["GET"])(ep_tasks.get_task_http)
+    app.route(route="tasks/{task_id}", methods=["PATCH"])(ep_tasks.update_task_http)
+    app.route(route="tasks/{task_id}", methods=["DELETE"])(ep_tasks.delete_task_http)
     app.route(route="tasks/{task_id}/details", methods=["GET"])(
-        get_task_details_http)
+        ep_tasks.get_task_details_http)
     app.route(route="tasks/{task_id}/progress", methods=["PATCH"])(
-        update_task_progress_http)
+        ep_planner.update_task_progress_http)
     
     # User task endpoints
-    app.route(route="me/tasks", methods=["GET"])(list_my_tasks_http)
+    app.route(route="me/tasks", methods=["GET"])(ep_tasks.list_my_tasks_http)
     app.route(route="users/{user_id}/tasks", methods=["GET"])(
-        list_user_tasks_http)
+        ep_tasks.list_user_tasks_http)
     
     # Bucket endpoints
     app.route(route="plans/{plan_id}/buckets", methods=["GET"])(
-        list_buckets_http)
-    app.route(route="buckets", methods=["POST"])(create_bucket_http)
-    app.route(route="buckets/{bucket_id}", methods=["GET"])(get_bucket_http)
+        ep_tasks.list_buckets_http)
+    app.route(route="buckets", methods=["POST"])(ep_tasks.create_bucket_http)
+    app.route(route="buckets/{bucket_id}", methods=["GET"])(ep_tasks.get_bucket_http)
     app.route(route="buckets/{bucket_id}", methods=["PATCH"])(
-        update_bucket_http)
+        ep_tasks.update_bucket_http)
     app.route(route="buckets/{bucket_id}", methods=["DELETE"])(
-        delete_bucket_http)
+        ep_tasks.delete_bucket_http)
     
     # Additional endpoints
-    app.route(route="users/{user_id}", methods=["GET"])(get_user_http)
+    app.route(route="users/{user_id}", methods=["GET"])(ep_users.get_user_http)
     app.route(route="directory/deletedItems/microsoft.graph.user", 
-              methods=["GET"])(list_deleted_users_http)
+              methods=["GET"])(ep_users.list_deleted_users_http)
     app.route(route="groups/{group_id}/members", 
-              methods=["GET"])(list_group_members_http)
-    app.route(route="me/sendMail", methods=["POST"])(send_message_http)
-    app.route(route="me/messages", methods=["GET"])(list_inbox_http)
-    app.route(route="teams", methods=["GET"])(list_teams_http)
+              methods=["GET"])(ep_users.list_group_members_http)
+    app.route(route="me/sendMail", methods=["POST"])(ep_mail.send_message_http)
+    app.route(route="me/messages", methods=["GET"])(ep_mail.list_inbox_http)
+    app.route(route="teams", methods=["GET"])(ep_teams.list_teams_http)
     
     # User & Group Management
-    app.route(route="groups/members", methods=["POST"])(add_user_to_group_http)
+    app.route(route="groups/members", methods=["POST"])(ep_users.add_user_to_group_http)
     app.route(route="users/resetPassword", methods=["POST"])(
-        reset_password_http)
+        ep_users.reset_password_http)
     
     # Calendar
-    app.route(route="me/events", methods=["POST"])(create_event_http)
-    app.route(route="me/events/upcoming", methods=["GET"])(list_upcoming_http)
+    app.route(route="me/events", methods=["POST"])(ep_calendar.create_event_http)
+    app.route(route="me/events/upcoming", methods=["GET"])(ep_calendar.list_upcoming_http)
     
     # Teams
     app.route(route="teams/{team_id}/channels", methods=["GET"])(
-        list_channels_http)
+        ep_teams.list_channels_http)
     app.route(route="teams/messages", methods=["POST"])(
-        post_channel_message_http)
-    app.route(route="me/chats", methods=["GET"])(list_chats_http)
+        ep_teams.post_channel_message_http)
+    app.route(route="me/chats", methods=["GET"])(ep_teams.list_chats_http)
     app.route(route="me/chats/messages", methods=["POST"])(
-        post_chat_message_http)
+        ep_teams.post_chat_message_http)
     
     # Files & Sites
-    app.route(route="me/drives", methods=["GET"])(list_drives_http)
+    app.route(route="me/drives", methods=["GET"])(ep_files.list_drives_http)
     app.route(route="me/drive/root/children", methods=["GET"])(
-        list_root_items_http)
+        ep_files.list_root_items_http)
     app.route(route="drives/{drive_id}/items/{item_id}/content", 
-              methods=["GET"])(download_file_http)
-    app.route(route="sites", methods=["GET"])(sites_search_http)
+              methods=["GET"])(ep_files.download_file_http)
+    app.route(route="sites", methods=["GET"])(ep_files.sites_search_http)
     # SharePoint: support compound siteId and listing drives by site
-    app.route(route="sites/{site_id}/drives", methods=["GET"])(list_site_drives_http)
+    app.route(route="sites/{site_id}/drives", methods=["GET"])(ep_files.list_site_drives_http)
     
     # Security & Reporting
-    app.route(route="reports/usage", methods=["GET"])(usage_summary_http)
-    app.route(route="security/alerts", methods=["GET"])(get_alerts_http)
+    app.route(route="reports/usage", methods=["GET"])(ep_sec.usage_summary_http)
+    app.route(route="security/alerts", methods=["GET"])(ep_sec.get_alerts_http)
     app.route(route="deviceManagement/managedDevices", methods=["GET"])(
-        list_managed_devices_http)
+        ep_sec.list_managed_devices_http)
     
     # === NEW COMPREHENSIVE MAIL ENDPOINTS ===
     
     # Mail Message Operations
-    app.route(route="me/messages/{message_id}", methods=["GET"])(
-        get_message_http)
-    app.route(route="me/messages", methods=["POST"])(
-        create_draft_message_http)
-    app.route(route="me/messages/{message_id}/send", methods=["POST"])(
-        send_draft_message_http)
-    app.route(route="me/messages/{message_id}", methods=["DELETE"])(
-        delete_message_http)
+    app.route(route="me/messages/{message_id}", methods=["GET"])(ep_mail.get_message_http)
+    app.route(route="me/messages", methods=["POST"])(ep_mail.create_draft_message_http)
+    app.route(route="me/messages/{message_id}/send", methods=["POST"])(ep_mail.send_draft_message_http)
+    app.route(route="me/messages/{message_id}", methods=["DELETE"])(ep_mail.delete_message_http)
     app.route(route="me/messages/{message_id}/move", methods=["POST"])(
-        move_message_http)
+        ep_mail.move_message_http)
     app.route(route="me/messages/{message_id}/copy", methods=["POST"])(
-        copy_message_http)
+        ep_mail.copy_message_http)
     app.route(route="me/messages/{message_id}/reply", methods=["POST"])(
-        reply_message_http)
+        ep_mail.reply_message_http)
     app.route(route="me/messages/{message_id}/replyAll", methods=["POST"])(
-        reply_all_message_http)
+        ep_mail.reply_all_message_http)
     app.route(route="me/messages/{message_id}/forward", methods=["POST"])(
-        forward_message_http)
+        ep_mail.forward_message_http)
     
     # Mail Folder Operations
-    app.route(route="me/mailFolders", methods=["GET"])(
-        list_mail_folders_http)
-    app.route(route="me/mailFolders", methods=["POST"])(
-        create_mail_folder_http)
+    app.route(route="me/mailFolders", methods=["GET"])(ep_mail.list_mail_folders_http)
+    app.route(route="me/mailFolders", methods=["POST"])(ep_mail.create_mail_folder_http)
     
     # Mail Attachments
     app.route(route="me/messages/{message_id}/attachments", methods=["GET"])(
-        list_attachments_http)
+        ep_mail.list_attachments_http)
     app.route(route="me/messages/{message_id}/attachments", methods=["POST"])(
-        add_attachment_http)
+        ep_mail.add_attachment_http)
     
     # === NEW COMPREHENSIVE CALENDAR ENDPOINTS ===
     
     # Calendar Operations
-    app.route(route="me/calendars", methods=["GET"])(list_calendars_http)
-    app.route(route="me/calendars", methods=["POST"])(create_calendar_http)
+    app.route(route="me/calendars", methods=["GET"])(ep_calendar.list_calendars_http)
+    app.route(route="me/calendars", methods=["POST"])(ep_calendar.create_calendar_http)
     app.route(route="me/calendar/calendarView", methods=["GET"])(
-        get_calendar_view_http)
+        ep_calendar.get_calendar_view_http)
     
     # Event Operations
-    app.route(route="me/events/{event_id}", methods=["GET"])(get_event_http)
+    app.route(route="me/events/{event_id}", methods=["GET"])(ep_calendar.get_event_http)
     app.route(route="me/events/{event_id}", methods=["PATCH"])(
-        update_event_http)
+        ep_calendar.update_event_http)
     app.route(route="me/events/{event_id}", methods=["DELETE"])(
-        delete_event_http)
+        ep_calendar.delete_event_http)
     
     # Event Actions
     app.route(route="me/events/{event_id}/accept", methods=["POST"])(
-        accept_event_http)
+        ep_calendar.accept_event_http)
     app.route(route="me/events/{event_id}/decline", methods=["POST"])(
-        decline_event_http)
+        ep_calendar.decline_event_http)
     app.route(route="me/findMeetingTimes", methods=["POST"])(
-        find_meeting_times_http)
+        ep_calendar.find_meeting_times_http)
     
     # === NEW PLANNER TASK BOARD FORMAT ENDPOINTS ===
     
@@ -2106,15 +2132,15 @@ def register_http_endpoints(function_app):
     app.route(
         route="planner/tasks/{task_id}/assignedToTaskBoardFormat", 
         methods=["GET"]
-    )(get_assigned_to_task_board_format_http)
+    )(ep_planner_formats.get_assigned_to_task_board_format_http)
     app.route(
         route="planner/tasks/{task_id}/bucketTaskBoardFormat", 
         methods=["GET"]
-    )(get_bucket_task_board_format_http)
+    )(ep_planner_formats.get_bucket_task_board_format_http)
     app.route(
         route="planner/tasks/{task_id}/progressTaskBoardFormat",
         methods=["GET"]
-    )(get_progress_task_board_format_http)
+    )(ep_planner_formats.get_progress_task_board_format_http)
     
     # === NEW WEBHOOK AND AGENT ENDPOINTS ===
     
@@ -2123,20 +2149,20 @@ def register_http_endpoints(function_app):
         route="graph_webhook",
         methods=["POST", "GET"],
         auth_level=func.AuthLevel.ANONYMOUS
-    )(graph_webhook_http)
+    )(ep_webhook.graph_webhook_http)
     
     # Agent endpoints
     app.route(
         route="metadata",
         methods=["GET"],
         auth_level=func.AuthLevel.FUNCTION
-    )(get_metadata_http)
+    )(ep_agent.get_metadata_http)
     
     app.route(
         route="agent/tasks",
         methods=["POST"],
         auth_level=func.AuthLevel.FUNCTION
-    )(create_agent_task_http)
+    )(ep_agent.create_agent_task_http)
     
     # Planner sync endpoints
     app.route(
@@ -2145,7 +2171,7 @@ def register_http_endpoints(function_app):
         auth_level=func.AuthLevel.FUNCTION
     )(trigger_planner_poll_http)
     
-    print("All 73 HTTP endpoints registered successfully!")
+    print("All HTTP endpoints registered successfully (modular).")
 
 
 # Task Management HTTP Endpoints

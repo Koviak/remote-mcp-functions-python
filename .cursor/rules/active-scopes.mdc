@@ -1,10 +1,260 @@
 ---
-description: Active MS Graph Scopes
+description: Microsoft Graph API permissions and scopes for Office 365 integration - apply when working with Microsoft services, authentication, or Office 365 features
 alwaysApply: false
 ---
 ## Active Scopes
 
-### Microsoft Graph (275)
+**Note**: Scope counts updated to reflect current Agency-Swarm application manifest (284 total Microsoft Graph permissions: 132 delegated + 152 application permissions).
+
+### By Service Category (Microsoft Graph)
+
+#### Users & Groups (`http_users_groups.py`)
+
+- Delegated:
+  - Directory.AccessAsUser.All
+  - Directory.ReadWrite.All
+  - Group.ReadWrite.All
+  - GroupMember.ReadWrite.All
+  - User.Read
+  - User.Read.All
+  - User.ReadBasic.All
+  - User.ReadWrite.All
+  - People.Read.All
+  - PeopleSettings.ReadWrite.All
+  - profile
+  - email
+  - UserTeamwork.Read
+- Application:
+  - Directory.ReadWrite.All
+  - Group.Read.All
+  - Group.ReadWrite.All
+  - GroupMember.ReadWrite.All
+  - User.ReadWrite.All
+  - UserAuthenticationMethod.Read.All
+  - UserAuthenticationMethod.ReadWrite.All
+  - ProgramControl.Read.All
+  - ProgramControl.ReadWrite.All
+  - Organization.ReadWrite.All
+  - Domain.Read.All
+  - Domain.ReadWrite.All
+  - People.Read.All
+  - PeopleSettings.ReadWrite.All
+  - ProfilePhoto.Read.All
+  - ProfilePhoto.ReadWrite.All
+
+#### Planner & Tasks (`http_planner.py`, `http_tasks.py`, `http_buckets.py`)
+
+- Delegated:
+  - Tasks.ReadWrite
+  - Tasks.ReadWrite.Shared
+- Application:
+  - Tasks.ReadWrite.All
+
+#### Mail (`http_mail.py`)
+
+- Delegated:
+  - Mail.ReadWrite
+  - Mail.ReadWrite.Shared
+  - Mail.Send
+  - Mail.Send.Shared
+  - Mail-Advanced.ReadWrite.Shared
+  - MailboxFolder.ReadWrite
+  - MailboxItem.Read
+  - MailboxItem.ImportExport
+  - MailboxSettings.ReadWrite
+  - IMAP.AccessAsUser.All
+  - POP.AccessAsUser.All
+  - SMTP.Send
+  - EWS.AccessAsUser.All
+- Application:
+  - Mail.ReadWrite
+  - Mail.Send
+  - MailboxSettings.ReadWrite
+
+#### Calendar & Meetings (`http_calendar.py`)
+
+- Delegated:
+  - Calendars.ReadWrite.Shared
+  - VirtualAppointment.ReadWrite
+  - VirtualAppointmentNotification.Send
+  - VirtualEvent.ReadWrite
+- Application:
+  - Calendars.ReadWrite
+  - OnlineMeetings.ReadWrite.All
+  - OnlineMeetingRecording.Read.All
+  - OnlineMeetingTranscript.Read.All
+  - OnlineMeetingArtifact.Read.All
+  - VirtualAppointment.ReadWrite.All
+  - VirtualEvent.Read.All
+
+#### Teams & Chats (`http_teams.py`)
+
+- Delegated:
+  - ChannelMessage.ReadWrite
+  - ChannelMessage.Send
+  - Chat.Create
+  - Chat.ManageDeletion.All
+  - ChatMember.ReadWrite
+  - ChatMessage.Read
+  - ChatMessage.Send
+  - Team.Create
+  - TeamMember.ReadWrite.All
+  - TeamMember.ReadWriteNonOwnerRole.All
+  - TeamSettings.Read.All
+  - TeamSettings.ReadWrite.All
+  - TeamsActivity.Read
+  - TeamsActivity.Send
+  - TeamsAppInstallation.ReadWriteAndConsentForChat
+  - TeamsAppInstallation.ReadWriteAndConsentForTeam
+  - TeamsAppInstallation.ReadWriteAndConsentForUser
+  - TeamsAppInstallation.ReadWriteForChat
+  - TeamsAppInstallation.ReadWriteForTeam
+  - TeamsAppInstallation.ReadWriteForUser
+  - TeamsAppInstallation.ReadWriteSelfForChat
+  - TeamsAppInstallation.ReadWriteSelfForTeam
+  - TeamsAppInstallation.ReadWriteSelfForUser
+  - TeamsTab.Create
+  - TeamsTab.Read.All
+  - TeamsTab.ReadWrite.All
+  - TeamsTab.ReadWriteForChat
+  - TeamsTab.ReadWriteForTeam
+  - TeamsTab.ReadWriteForUser
+  - TeamsUserConfiguration.Read.All
+  - TeamTemplates.Read
+  - Teamwork.Read.All
+  - TeamworkAppSettings.ReadWrite.All
+  - TeamworkDevice.ReadWrite.All
+  - TeamworkTag.ReadWrite
+  - TeamworkUserInteraction.Read.All
+  - Community.ReadWrite.All
+  - Goals-Export.ReadWrite.All
+- Application:
+  - Calls.AccessMedia.All
+  - Calls.Initiate.All
+  - Calls.InitiateGroupCall.All
+  - Calls.JoinGroupCall.All
+  - Calls.JoinGroupCallAsGuest.All
+  - Channel.Create
+  - Channel.Delete.All
+  - Channel.ReadBasic.All
+  - ChannelMember.ReadWrite.All
+  - ChannelMessage.Read.All
+  - ChannelMessage.UpdatePolicyViolation.All
+  - ChannelSettings.ReadWrite.All
+  - Chat.Create
+  - Chat.ManageDeletion.All
+  - Chat.Read.All
+  - Chat.Read.WhereInstalled
+  - Chat.ReadBasic.All
+  - Chat.ReadBasic.WhereInstalled
+  - Chat.ReadWrite.All
+  - Chat.ReadWrite.WhereInstalled
+  - Chat.UpdatePolicyViolation.All
+  - ChatMember.Read.WhereInstalled
+  - Team.Create
+  - Team.ReadBasic.All
+  - TeamMember.ReadWrite.All
+  - TeamMember.ReadWriteNonOwnerRole.All
+  - TeamsActivity.Read.All
+  - TeamsActivity.Send
+  - TeamsAppInstallation.ReadForChat.All
+  - TeamsAppInstallation.ReadForTeam.All
+  - TeamsAppInstallation.ReadForUser.All
+  - TeamsTab.ReadWrite.All
+  - TeamsUserConfiguration.Read.All
+  - Teamwork.Migrate.All
+  - Teamwork.Read.All
+
+#### Files & SharePoint (`http_files.py`)
+
+- Delegated:
+  - Files.ReadWrite.All
+  - Files.ReadWrite.AppFolder
+  - Files.ReadWrite.Selected
+  - Files.SelectedOperations.Selected
+  - FileStorageContainer.Selected
+  - Sites.FullControl.All
+  - Sites.Manage.All
+  - Sites.ReadWrite.All
+  - Sites.Selected
+- Application:
+  - Files.Read.All
+  - Files.ReadWrite.All
+  - Files.ReadWrite.AppFolder
+  - Files.SelectedOperations.Selected
+  - FileStorageContainer.Selected
+  - Sites.Read.All
+  - Sites.ReadWrite.All
+  - Sites.FullControl.All
+  - Sites.Selected
+  - SearchConfiguration.ReadWrite.All
+  - ServiceActivity-OneDrive.Read.All
+
+#### Security & Admin (`http_security.py`)
+
+- Delegated:
+  - SecurityActions.ReadWrite.All
+  - SecurityAlert.ReadWrite.All
+  - SecurityAnalyzedMessage.ReadWrite.All
+  - SecurityEvents.ReadWrite.All
+  - TermStore.ReadWrite.All
+  - ThreatAssessment.ReadWrite.All
+  - IdentityRiskyUser.ReadWrite.All
+  - ManagedTenants.ReadWrite.All
+  - Place.ReadWrite.All
+  - PlaceDevice.ReadWrite.All
+- Application:
+  - SecurityEvents.ReadWrite.All
+  - SecurityIncident.ReadWrite.All
+  - Reports.Read.All
+  - Printer.ReadWrite.All
+  - PrintJob.Manage.All
+  - PrintJob.ReadWrite.All
+  - PrintSettings.Read.All
+  - PrintTaskDefinition.ReadWrite.All
+  - NetworkAccess-Reports.Read.All
+  - NetworkAccess.ReadWrite.All
+  - NetworkAccessBranch.ReadWrite.All
+  - CloudPC.ReadWrite.All
+  - Device.ReadWrite.All
+  - ProgramControl.Read.All
+  - ProgramControl.ReadWrite.All
+  - OrganizationalBranding.ReadWrite.All
+  - OrgSettings-AppsAndServices.ReadWrite.All
+  - OrgSettings-Forms.ReadWrite.All
+  - OrgSettings-Microsoft365Install.Read.All
+  - OrgSettings-Microsoft365Install.ReadWrite.All
+  - PlaceDevice.ReadWrite.All
+  - QnA.Read.All
+
+#### Webhooks & Notifications (`http_webhooks.py`)
+
+- Delegated:
+  - Subscription.Read.All
+  - UserTimelineActivity.Write.CreatedByApp
+- Application:
+  - UserNotification.ReadWrite.CreatedByApp
+
+#### Basic/Auth (`http_basic.py`)
+
+- Delegated:
+  - openid
+  - profile
+  - email
+  - offline_access
+
+#### Bookings
+
+- Delegated:
+  - Bookings.Manage.All
+  - Bookings.ReadWrite.All
+- Application:
+  - Bookings.Read.All
+  - BookingsAppointment.ReadWrite.All
+
+---
+
+### Microsoft Graph (284)
 
 | Permission | Type | Description | Admin Consent Required | Status |
 |---|---|---|---|---|
@@ -208,7 +458,7 @@ alwaysApply: false
 | TeamsAppInstallation.ReadWriteAndConsentSelfForTeam | Delegated | Allow the Teams app to manage itself and its permission grants in teams | Yes |  Granted for Koviak Built |
 | TeamsAppInstallation.ReadWriteAndConsentSelfForTeam.All | Application | Allow the Teams app to manage itself and its permission grants for all teams | Yes |  Granted for Koviak Built |
 | TeamsAppInstallation.ReadWriteAndConsentSelfForUser | Delegated | Allow the Teams app to manage itself and its permission grants in user accounts | Yes |  Granted for Koviak Built |
-| TeamsAppInstallation.ReadWriteAndConsentSelfForUser.All | Application | Allow the Teams app to manage itself and its permission grants in all user accounts | Yes |  Granted for Koviak Built |
+| TeamsAppInstallation.ReadWriteAndConsentSelfForUser.All | Application | Allow the app to manage itself for all users | Yes |  Granted for Koviak Built |
 | TeamsAppInstallation.ReadWriteForChat | Delegated | Manage installed Teams apps in chats | Yes |  Granted for Koviak Built |
 | TeamsAppInstallation.ReadWriteForChat.All | Application | Manage Teams apps for all chats | Yes |  Granted for Koviak Built |
 | TeamsAppInstallation.ReadWriteForTeam | Delegated | Manage installed Teams apps in teams | Yes |  Granted for Koviak Built |
@@ -283,6 +533,7 @@ alwaysApply: false
 | VirtualEvent.Read.All | Application | Read all users' virtual events | Yes |  Granted for Koviak Built |
 | VirtualEvent.ReadWrite | Delegated | Read and write your virtual events | Yes |  Granted for Koviak Built |
 | VirtualEventRegistration-Anon.ReadWrite.All | Application | Read and write anonymous users' virtual event registrations | Yes |  Granted for Koviak Built |
+
 ### Office 365 Management APIs (3)
 
 | Permission | Type | Description | Admin Consent Required | Status |
@@ -290,6 +541,7 @@ alwaysApply: false
 | ActivityFeed.Read | Delegated | Read activity data for your organization | Yes |  Granted for Koviak Built |
 | ActivityFeed.ReadDlp | Delegated | Read DLP policy events including detected sensitive data | Yes |  Granted for Koviak Built |
 | ServiceHealth.Read | Delegated | Read service health information for your organization | Yes |  Granted for Koviak Built |
+
 ### OneNote (3)
 
 | Permission | Type | Description | Admin Consent Required | Status |

@@ -1,0 +1,9 @@
+2025-09-21T18:29:43 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-21T18:35:03 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-21T18:53:03 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: b23b15fa-96bf-4d4d-8b29-419d1701fe77, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: e5c53af8-388c-4566-bc87-f3c0872d7a98, function type: sync, timestamp (UTC): 2025-09-21 23:53:03.613935, sync threadpool max workers: 1000
+2025-09-21T18:53:03 | INFO | webhook_handler | 🔔 Lifecycle event 'reauthorizationRequired' for subscription e74516cc-eea9-4940-bbd7-489cd412e3eb
+2025-09-21T18:53:03 | ERROR | webhook_handler | Error logging webhook notification: Event loop is closed
+2025-09-21T18:53:03 | INFO | endpoints.agent_webhook | Successfully processed webhook notification: None for Subscriptions/e74516cc-eea9-4940-bbd7-489cd412e3eb
+2025-09-21T18:53:04 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: b23b15fa-96bf-4d4d-8b29-419d1701fe77, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: c85058d1-c8dd-47b8-9b87-7602ffed9392, function type: sync, timestamp (UTC): 2025-09-21 23:53:04.201557, sync threadpool max workers: 1000
+2025-09-21T18:53:04 | INFO | webhook_handler | 🔔 Lifecycle event 'reauthorizationRequired' for subscription aaba7f91-a1be-4946-853f-ffdbf4e84348
+2025-09-21T18:53:04 | INFO | endpoints.agent_webhook | Successfully processed webhook notification: None for Subscriptions/aaba7f91-a1be-4946-853f-ffdbf4e84348

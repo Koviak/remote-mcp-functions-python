@@ -5,6 +5,8 @@ csx
 edge
 Publish
 
+!mcp_server.log
+
 ffmpeg.exe
 
 *.user

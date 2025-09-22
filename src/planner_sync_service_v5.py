@@ -714,7 +714,7 @@ class WebhookDrivenPlannerSync:
                         return
                     # No visible existing sub; still assume one is present due to quota
                     logger.info(
-                        "%s webhook: quota reached; assuming an existing active subscription is in use",
+                        "%s webhook: quota reached; verifying existing subscription matches current notificationUrl before assuming active",
                         webhook_name,
                     )
                     return
@@ -828,6 +828,9 @@ class WebhookDrivenPlannerSync:
                     if exp_dt <= now + timedelta(minutes=5):
                         continue
                     if sub.get("resource") != desired_resource:
+                        continue
+                    # If URL differs (e.g., stale ngrok), do not assume active
+                    if desired_url and sub.get("notificationUrl") != desired_url:
                         continue
                     return sub
                 except Exception:

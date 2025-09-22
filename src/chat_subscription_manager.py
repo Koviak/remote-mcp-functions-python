@@ -43,7 +43,8 @@ class ChatSubscriptionManager:
 
     async def discover_all_chats(self) -> list[str]:
         """Return all chat ids for the agent user."""
-        token = get_agent_token()
+        # Explicitly request delegated chat read scopes to ensure /me/chats works
+        token = get_agent_token("Chat.Read Chat.ReadWrite Chat.ReadBasic")
         if not token:
             logger.warning("No agent token available for chat discovery")
             return []
@@ -64,7 +65,8 @@ class ChatSubscriptionManager:
 
     async def create_chat_subscription(self, chat_id: str) -> str | None:
         """Create a chat message subscription for the given chat."""
-        token = get_agent_token()
+        # Global and per-chat subscriptions require delegated Chat.Read/Chat.ReadWrite
+        token = get_agent_token("Chat.Read Chat.ReadWrite")
         if not token:
             logger.warning("Cannot create chat subscription without token")
             return None
@@ -132,7 +134,8 @@ class ChatSubscriptionManager:
             except Exception:
                 pass
 
-        token = get_agent_token()
+        # Use delegated chat read scopes for global subscription covering /me/chats
+        token = get_agent_token("Chat.Read Chat.ReadWrite")
         if not token:
             logger.warning("Cannot create chat subscription without token")
             return 0
@@ -215,7 +218,7 @@ class ChatSubscriptionManager:
 
     async def renew_expiring_subscriptions(self) -> None:
         """Renew subscriptions that expire within 15 minutes."""
-        token = get_agent_token()
+        token = get_agent_token("Chat.Read Chat.ReadWrite")
         if not token or not self.redis_client:
             return
 

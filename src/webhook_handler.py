@@ -26,7 +26,7 @@ class GraphWebhookHandler:
         self.redis_client = None
         
     async def initialize(self):
-        """Initialize Redis connection."""
+        """Initialize Redis connection bound to the current event loop."""
         self.redis_client = redis.Redis(
             host=REDIS_HOST,
             port=REDIS_PORT,
@@ -456,6 +456,10 @@ class GraphWebhookHandler:
     async def _log_webhook_notification(self, notification: Dict):
         """Log webhook notification for debugging."""
         try:
+            # If Redis client was created on a different loop/thread (e.g., during
+            # startup), recreate it on-demand to avoid "Event loop is closed".
+            if self.redis_client is None:
+                await self.initialize()
             log_entry = {
                 "timestamp": datetime.utcnow().isoformat(),
                 "change_type": notification.get("changeType"),

@@ -1,0 +1,491 @@
+---
+alwaysApply: false
+---
+# Modular HTTP Endpoints Architecture Guide
+
+## Overview
+
+The HTTP endpoints system has been refactored from a single 4,737-line monolith into a modular architecture with 14 manageable modules, each under 500 lines. All modules are organized in the `http_endpoints/` folder.
+
+## Directory Structure
+
+```
+src/
+├── http_endpoints/                    # New modular HTTP endpoints
+│   ├── __init__.py                   # Package initialization
+│   ├── http_common.py                # Shared utilities & auth (~150 lines)
+│   ├── http_registration.py          # Registration system (~100 lines)
+│   │
+│   ├── http_basic.py                 # Basic endpoints (~50 lines)
+│   ├── http_users_groups.py          # User/Group management (~400 lines)
+│   ├── http_planner.py               # Planner operations (~350 lines)
+│   ├── http_tasks.py                 # Task CRUD & management (~450 lines)
+│   ├── http_buckets.py               # Bucket operations (~300 lines)
+│   ├── http_mail.py                  # Mail & messaging (~450 lines)
+│   ├── http_calendar.py              # Calendar & events (~400 lines)
+│   ├── http_teams.py                 # Teams integration (~250 lines)
+│   ├── http_files.py                 # Files & SharePoint (~300 lines)
+│   ├── http_security.py              # Security & reporting (~200 lines)
+│   ├── http_task_formats.py          # Task board formats (~200 lines)
+│   └── http_webhooks.py              # Webhooks & notifications (~400 lines)
+│
+└── http_endpoints.py                 # LEGACY FILE (to be deprecated)
+```
+
+## Step-by-Step Architecture
+
+### Step 1: Shared Foundation (`http_common.py`)
+
+**Purpose**: Centralized utilities, constants, and authentication used by all modules.
+
+**Key Components**:
+```python
+# Constants
+GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
+
+# Global instances
+app = None                    # Set by register_http_endpoints
+metadata_manager = None       # Global metadata manager
+
+# Core Functions
+def get_access_token()        # App-only authentication
+def get_metadata_manager()    # Singleton metadata manager
+def _get_agent_user_id()      # Agent user ID helper
+
+# Shared Imports
+import asyncio, json, logging, os, requests
+import azure.functions as func
+from azure.identity import ClientSecretCredential
+from datetime import datetime
+from typing import Any, Dict
+```
+
+**Usage Pattern**: All service modules import from `http_common`:
+```python
+from .http_common import *
+```
+
+### Step 2: Registration System (`http_registration.py`)
+
+**Purpose**: Modular endpoint registration replacing the monolithic 200-line function.
+
+**Architecture**:
+```python
+def register_all_endpoints(function_app):
+    """Master registration function - replaces register_http_endpoints()"""
+    global app
+    app = function_app
+    
+    # Import all service modules
+    from . import (
+        http_basic, http_users_groups, http_planner, http_tasks,
+        http_buckets, http_mail, http_calendar, http_teams,
+        http_files, http_security, http_task_formats, http_webhooks
+    )
+    
+    # Register each module's endpoints
+    http_basic.register_endpoints(function_app)
+    http_users_groups.register_endpoints(function_app) 
+    # ... continue for all modules
+    
+    print("All 73+ HTTP endpoints registered successfully!")
+```
+
+**Benefits**:
+- ✅ Eliminates 200-line monolithic registration
+- ✅ Each module manages its own routes
+- ✅ Easy to add/remove service modules
+- ✅ Clear separation of concerns
+
+### Step 3: Service Module Pattern
+
+**Standard Structure**: Each service module follows this pattern:
+
+```python
+# Example: http_users_groups.py
+from .http_common import *
+
+# Service-specific endpoints
+def list_users_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to list all users in the organization"""
+    # Implementation moved from original file
+    
+def get_user_http(req: func.HttpRequest) -> func.HttpResponse:
+    """HTTP endpoint to get a specific user"""
+    # Implementation with shared auth/error patterns
+
+# Module registration function
+def register_endpoints(app):
+    """Register this module's endpoints with the function app"""
+    app.route(route="users", methods=["GET"])(list_users_http)
+    app.route(route="users/{user_id}", methods=["GET"])(get_user_http)
+    app.route(route="groups", methods=["GET"])(list_groups_http)
+    app.route(route="groups/{group_id}/members", methods=["GET"])(list_group_members_http)
+    # ... register all endpoints for this service area
+```
+
+### Step 4: Service Module Breakdown
+
+| Module | Responsibility | Endpoint Count | Key Functions |
+|--------|---------------|----------------|---------------|
+| **http_basic.py** | Connectivity testing | 1 | `hello_http` |
+| **http_users_groups.py** | User/Group CRUD | 8 | User management, group operations, member lists |
+| **http_planner.py** | Planner management | 6 | Plan CRUD, plan details, group associations |
+| **http_tasks.py** | Task operations | 9 | Task CRUD, progress updates, user assignments |
+| **http_buckets.py** | Bucket management | 5 | Bucket CRUD within plans |
+| **http_mail.py** | Email operations | 12 | Messages, folders, attachments, replies |
+| **http_calendar.py** | Calendar events | 9 | Events, meeting scheduling, calendar views |
+| **http_teams.py** | Teams integration | 4 | Channels, chats, team messages |
+| **http_files.py** | File operations | 5 | OneDrive, SharePoint, file downloads |
+| **http_security.py** | Security & reports | 3 | Security alerts, device management, usage |
+| **http_task_formats.py** | Task board views | 3 | Task board format configurations |
+| **http_webhooks.py** | Webhooks & events | 8 | Graph webhooks, notifications, agent tasks |
+
+### Step 5: Main Application Integration
+
+**In your main Azure Function file**:
+```python
+import azure.functions as func
+from http_endpoints.http_registration import register_all_endpoints
+
+def main():
+    """Main Azure Function entry point"""
+    app = func.FunctionApp()
+    
+    # Register all HTTP endpoints using new modular system
+    register_all_endpoints(app)
+    
+    return app
+```
+
+## Development Workflow
+
+### Adding New Endpoints
+
+**Step 1**: Identify the appropriate service module
+**Step 2**: Add endpoint function to the module
+**Step 3**: Register the endpoint in the module's `register_endpoints()` function
+**Step 4**: Test the endpoint
+
+**Example - Adding a new user endpoint**:
+```python
+# In http_users_groups.py
+def update_user_photo_http(req: func.HttpRequest) -> func.HttpResponse:
+    """Upload user profile photo"""
+    # Implementation here
+
+# In register_endpoints() function:
+def register_endpoints(app):
+    # ... existing routes
+    app.route(route="users/{user_id}/photo", methods=["PATCH"])(update_user_photo_http)
+```
+
+### Working with Shared Code
+
+**Authentication**: All modules use shared auth functions from `http_common.py`
+```python
+# Delegated token (preferred)
+from agent_auth_manager import get_agent_token
+token = get_agent_token("scope")
+
+# App-only token (fallback)  
+token = get_access_token()
+```
+
+**Error Handling**: Consistent patterns across all modules
+```python
+if response.status_code == 200:
+    return func.HttpResponse(
+        response.text,
+        status_code=200,
+        mimetype="application/json"
+    )
+else:
+    return func.HttpResponse(
+        f"Error: {response.status_code} - {response.text}",
+        status_code=response.status_code
+    )
+```
+
+### Testing Strategy
+
+**Unit Testing**: Test individual modules in isolation
+**Integration Testing**: Test cross-module dependencies  
+**End-to-End Testing**: Validate complete registration and routing
+
+**Test Structure**:
+```
+tests/
+├── test_http_endpoints/
+│   ├── test_http_common.py
+│   ├── test_http_registration.py
+│   ├── test_http_users_groups.py
+│   └── ... (one test file per module)
+```
+
+## Migration Strategy - Zero-Risk Backward Compatibility
+
+### Current Dependency Analysis (CRITICAL)
+
+**Files Currently Importing http_endpoints.py:**
+```python
+# function_app.py (lines 26, 443) - PRIMARY USAGE
+from http_endpoints import register_http_endpoints
+register_http_endpoints(app)
+
+# Tests/integration/test_http_endpoints_live.py (lines 22, 25, 31) - TESTING
+http_mod = importlib.import_module("http_endpoints")
+register_http_endpoints = getattr(http_mod, "register_http_endpoints")
+register_http_endpoints(app)
+
+# Documentation files - filename references only (no code impact)
+```
+
+**Risk Assessment:** ✅ **MINIMAL RISK** - Only 2 code files affected
+
+### Safe Migration Plan - Compatibility Layer Approach
+
+#### Phase 1: Build New Modular Structure (No Breaking Changes)
+
+```bash
+# 1. Create new directory - original file untouched
+mkdir src/http_endpoints/
+
+# 2. Build all new modules in parallel
+# 3. Original http_endpoints.py remains functional
+# 4. Test new modules independently
+```
+
+**Directory Structure During Migration:**
+```
+src/
+├── http_endpoints.py                 # ORIGINAL (4,737 lines) - KEEP WORKING
+├── http_endpoints/                   # NEW MODULAR SYSTEM
+│   ├── __init__.py
+│   ├── http_common.py                # Shared utilities (~150 lines)
+│   ├── http_registration.py          # New registration system (~100 lines)
+│   ├── http_users_groups.py          # User/group endpoints (~400 lines)
+│   ├── http_planner.py               # Planner operations (~350 lines)
+│   ├── http_tasks.py                 # Task management (~450 lines)
+│   ├── http_buckets.py               # Bucket operations (~300 lines)
+│   ├── http_mail.py                  # Mail operations (~450 lines)
+│   ├── http_calendar.py              # Calendar events (~400 lines)
+│   ├── http_teams.py                 # Teams integration (~250 lines)
+│   ├── http_files.py                 # Files & SharePoint (~300 lines)
+│   ├── http_security.py              # Security & reporting (~200 lines)
+│   ├── http_task_formats.py          # Task board formats (~200 lines)
+│   └── http_webhooks.py              # Webhooks & notifications (~400 lines)
+```
+
+#### Phase 2: Replace with Compatibility Layer
+
+**Backup Strategy:**
+```bash
+# 1. Backup original file
+cp src/http_endpoints.py src/http_endpoints.py.backup
+
+# 2. Replace with thin compatibility layer
+# 3. Test immediately - should work identically
+# 4. Keep backup until fully validated
+```
+
+**New http_endpoints.py (Compatibility Layer ~50 lines):**
+```python
+"""
+HTTP Endpoints - Backward Compatibility Layer
+Maintains exact same interface while delegating to new modular structure.
+
+CRITICAL: This file preserves the exact function signatures that existing 
+code depends on, ensuring zero breaking changes during migration.
+"""
+
+# Import the new modular registration system  
+from http_endpoints.http_registration import register_all_endpoints
+
+def register_http_endpoints(function_app):
+    """
+    Register all HTTP endpoints with the provided function app instance.
+    
+    LEGACY INTERFACE - delegates to new modular system.
+    
+    This function maintains the exact same signature as the original
+    register_http_endpoints() function to ensure backward compatibility.
+    
+    Args:
+        function_app: Azure Function App instance
+        
+    Returns:
+        Same behavior as original function
+    """
+    # Delegate to new modular system
+    return register_all_endpoints(function_app)
+
+# Re-export shared utilities for any direct imports
+from http_endpoints.http_common import (
+    GRAPH_API_ENDPOINT,
+    get_access_token, 
+    get_metadata_manager,
+    metadata_manager
+)
+
+# Re-export specific endpoint functions if used elsewhere
+# (Only export what's actually imported by other code)
+from http_endpoints.http_users_groups import list_users_http, get_user_http
+from http_endpoints.http_planner import list_plans_http, create_plan_http
+from http_endpoints.http_mail import send_message_http, list_inbox_http
+from http_endpoints.http_webhooks import graph_webhook_http
+
+# Module metadata for compatibility tracking
+__version__ = "2.0.0-modular"
+__legacy_interface__ = True
+__original_line_count__ = 4737
+__new_line_count__ = 50
+__modules_count__ = 14
+
+# Optional: Deprecation warning for future migration
+import warnings
+warnings.filterwarnings('default', category=DeprecationWarning)
+warnings.warn(
+    "http_endpoints.py is now a compatibility layer. "
+    "Consider migrating to: from http_endpoints.http_registration import register_all_endpoints",
+    DeprecationWarning,
+    stacklevel=2
+)
+```
+
+#### Phase 3: Test Compatibility
+
+**Validation Checklist:**
+- [ ] `function_app.py` imports work unchanged
+- [ ] `register_http_endpoints(app)` produces same output: "All 73+ HTTP endpoints registered successfully!"
+- [ ] All 73+ endpoints respond correctly
+- [ ] Integration tests pass
+- [ ] No functionality is broken or missing
+
+#### Phase 4: Update Tests (Optional)
+
+```python
+# Tests/integration/test_http_endpoints_live.py (OPTIONAL UPDATE)
+
+# Option 1: Keep using compatibility layer (no changes needed)
+http_mod = importlib.import_module("http_endpoints")  # Still works!
+
+# Option 2: Update to use new interface directly
+from http_endpoints.http_registration import register_all_endpoints as register_http_endpoints
+```
+
+### Rollback Strategy - Zero Downtime
+
+**If Any Issues Arise:**
+```bash
+# 1. Immediate Rollback (30 seconds)
+cp src/http_endpoints.py.backup src/http_endpoints.py
+
+# 2. Remove new directory (optional)
+rm -rf src/http_endpoints/
+
+# 3. System returns to original state
+# 4. No functionality lost, no downtime
+```
+
+### Implementation Timeline
+
+**Phase 1: Foundation (Day 1-2)**
+- Create `http_endpoints/` folder
+- Implement `http_common.py` 
+- Implement `http_registration.py`
+- Test new registration system in isolation
+
+**Phase 2: Core Modules (Day 3-4)**
+- Extract `http_users_groups.py`, `http_planner.py`, `http_tasks.py`
+- Test individual modules
+- Validate integration between modules
+
+**Phase 3: Communication Modules (Day 5-6)**
+- Extract `http_mail.py`, `http_calendar.py`, `http_teams.py` 
+- Handle complex inter-module dependencies
+- Test end-to-end functionality
+
+**Phase 4: Support Modules (Day 7-8)**
+- Extract remaining modules (`http_files.py`, `http_security.py`, etc.)
+- Extract complex `http_webhooks.py` 
+- Complete integration testing
+
+**Phase 5: Cutover (Day 9)**
+- Create backup of original file
+- Replace with compatibility layer
+- Validate all functionality
+- Monitor for 24 hours
+
+**Phase 6: Documentation (Day 10)**
+- Update all documentation references
+- Update README and architecture docs
+- Create migration guide for future developers
+
+### Migration Safety Rules - What NOT to Do
+
+**❌ NEVER during migration:**
+1. **Delete original file** until fully validated (keep backup at all times)
+2. **Change function signatures** in compatibility layer (breaks backward compatibility) 
+3. **Skip testing** after each phase (catch issues early)
+4. **Migrate all modules at once** (do incrementally for safety)
+5. **Ignore import errors** (indicates missing compatibility exports)
+6. **Rush the cutover** (validate extensively before replacing original)
+7. **Skip backup** (always have rollback option)
+
+**✅ ALWAYS during migration:**
+1. **Test imports** after each module completion
+2. **Validate endpoint count** matches original (73+ endpoints)
+3. **Check registration output** matches original exactly
+4. **Keep original functionality** during entire migration
+5. **Document any deviations** from planned approach
+6. **Monitor for breaking changes** in dependent code
+7. **Preserve exact behavior** of register_http_endpoints() function
+
+## Benefits of New Architecture
+
+### Code Quality
+- ✅ **Maintainability**: 14 modules under 500 lines each vs. 4,737-line monolith
+- ✅ **Standards Compliance**: All modules meet <500 line requirement
+- ✅ **Separation of Concerns**: Each module handles one service area
+- ✅ **Testability**: Isolated modules easier to test
+
+### Developer Experience
+- ✅ **Navigation**: Easy to find specific endpoint functionality
+- ✅ **Collaboration**: Multiple developers can work on different service areas
+- ✅ **Code Reviews**: Smaller, focused changes
+- ✅ **Debugging**: Issues isolated to specific service modules
+
+### System Architecture
+- ✅ **Scalability**: Easy to add new Microsoft 365 services
+- ✅ **Performance**: Reduced import overhead through lazy loading
+- ✅ **Modularity**: Services can be enabled/disabled independently
+- ✅ **Dependency Management**: Clear dependency hierarchy
+
+## Best Practices
+
+### Code Organization
+- Keep service-specific logic in appropriate modules
+- Use `http_common.py` for truly shared functionality only
+- Follow consistent naming patterns across modules
+- Document cross-module dependencies clearly
+
+### Error Handling
+- Use shared error patterns from `http_common.py`
+- Implement consistent authentication fallback logic
+- Log errors appropriately for debugging
+- Return standard HTTP status codes
+
+### Performance
+- Avoid circular imports between modules
+- Use lazy loading where appropriate
+- Cache frequently accessed data
+- Monitor module load times
+
+### Security
+- All authentication flows through `http_common.py`
+- Consistent token validation patterns
+- Proper error message sanitization
+- Follow principle of least privilege
+
+This modular architecture transforms the codebase from an unmaintainable monolith into a clean, scalable system that follows software engineering best practices while maintaining full functionality.

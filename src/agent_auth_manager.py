@@ -50,9 +50,14 @@ class AgentAuthManager:
     
     def get_agent_user_token(
         self,
-        scope: str = (
-            "openid profile offline_access "
-            "User.Read Mail.ReadWrite Files.ReadWrite.All Chat.ReadWrite.All"
+        scope: str = " ".join(
+            [
+                # Minimal baseline suitable for most /me bootstraps
+                "openid",
+                "profile",
+                "offline_access",
+                "User.Read",
+            ]
         ),
     ) -> Optional[str]:
         """

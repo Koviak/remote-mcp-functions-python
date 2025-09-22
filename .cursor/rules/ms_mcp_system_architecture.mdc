@@ -1,0 +1,268 @@
+name: ms_mcp_system_architecture
+version: 2.2
+date: 2025-09-21
+description: Global scope and architecture for Remote MCP Functions (Python) with Microsoft Graph, Redis-first design, webhook-driven Planner sync, and HTTP/MCP endpoints
+tags: [architecture, microsoft-graph, redis, mcp, webhook-sync, azure-functions]
+
+---
+
+# Remote MCP Functions + Microsoft Graph — System Architecture
+
+Global scope and architecture for Remote MCP Functions (Python) with Microsoft Graph, Redis-first design, webhook-driven Planner sync, and HTTP/MCP endpoints.
+
+### Remote MCP Functions + Microsoft Graph — Global Overview
+
+This repository implements a production-ready remote MCP (Model Context Protocol) server on Azure Functions that enables autonomous agents to interact with Microsoft 365 (Graph) using a Redis-first architecture and a webhook-driven bidirectional sync with Microsoft Planner. Use this rule as the authoritative, code-verified overview.
+
+- **Architecture diagram**: [architecture-diagram.png](mdc:architecture-diagram.png)
+- **Primary docs**: [README.md](mdc:README.md), [CONSOLIDATED_DOCUMENTATION.md](mdc:CONSOLIDATED_DOCUMENTATION.md)
+
+### Core Components (verified)
+- **Azure Function App**: registers MCP tools and HTTP endpoints, readiness probe, and service bootstrap hooks
+  - File: [src/function_app.py](mdc:src/function_app.py)
+  - Exposes readiness `GET /api/health/ready`
+  - Registers MCP tools (`hello_mcp`, `get_snippet`, `save_snippet`) and additional tools
+  - Registers HTTP endpoints via helpers below
+  - **Enhanced**: Local services orchestration with DISABLE_LOCAL_SERVICES flag, token refresh service startup
+- **HTTP Endpoints aggregation**: Graph wrappers and agent endpoints (calendars, events, planner, metadata, webhook handler, etc.)
+  - File: [src/http_endpoints.py](mcp:src/http_endpoints.py) — **4700+ lines** of comprehensive Microsoft Graph API wrappers
+  - Verified routes in code:
+    - `POST /api/graph_webhook` (Graph webhooks ingress)
+    - `GET /api/metadata` (cached metadata access via query params)
+    - `POST /api/agent/tasks` (create agent task)
+    - `POST /api/planner/poll` (trigger immediate Planner poll)
+    - Numerous Microsoft Graph wrappers (e.g., calendars/events and Planner task board formats)
+- **Webhook-driven Planner Sync (V5)**: real-time sync using Microsoft Graph webhooks with fallback polling
+  - File: [src/planner_sync_service_v5.py](mcp:src/planner_sync_service_v5.py)
+  - **V5 Features**: Circuit breaker pattern, batch operations, transaction logging, health monitoring, exponential backoff
+  - Features: webhook adoption/renewal/cleanup, ID mapping, ETag tracking, conflict resolution, rate limiting
+  - **Performance**: 95% reduction in API calls through webhook-driven architecture
+- **Graph Webhook Handler**: validates, routes, and logs Graph notifications via Redis pub/sub
+  - File: [src/webhook_handler.py](mdc:src/webhook_handler.py)
+- **Teams Chat Subscriptions Manager**: creates/renews global chat message subscriptions (`/me/chats/getAllMessages`)
+  - File: [src/chat_subscription_manager.py](mcp:src/chat_subscription_manager.py)
+  - **Enhanced**: Comprehensive subscription health monitoring and auto-renewal
+- **Graph Metadata Manager**: cache-first access for users/groups/plans/buckets/tasks with Redis TTLs
+  - File: [src/graph_metadata_manager.py](mcp:src/graph_metadata_manager.py)
+  - **TTL Strategy**: 24h cache for metadata, persistent storage for tasks
+- **Token API Endpoints**: health, list tokens, fetch token by scope, trigger refresh
+  - File: [src/token_api_endpoints.py](mcp:src/token_api_endpoints.py)
+  - Verified routes in code:
+    - `GET /api/tokens/health`
+    - `GET /api/tokens` (list active token metadata)
+    - `GET /api/tokens/{scope}` (optionally `?user_id=`)
+    - `POST /api/tokens/refresh/{scope}`
+- **Startup Orchestrator**: comprehensive local development services management
+  - **Primary**: [src/start_all_services.py](mcp:src/start_all_services.py) - Comprehensive startup with ngrok, Azure Functions host, webhooks, chat subscriptions, V5 sync, monitoring
+  - **Helper**: [src/startup_local_services.py](mcp:src/startup_local_services.py) - Local services manager for development
+  - **Enhanced**: ServiceManager class with proper cleanup, background task management, health monitoring
+- **Authentication & Tokens**:
+  - Agent ROPC tokens and refresh: [src/agent_auth_manager.py](mcp:src/agent_auth_manager.py), [src/token_refresh_service.py](mcp:src/token_refresh_service.py)
+  - Delegated/app tokens utilities: [src/dual_auth_manager.py](mcp:src/dual_auth_manager.py)
+  - Redis token manager: [src/mcp_redis_config.py](mcp:src/mcp_redis_config.py)
+- **MCP tools**: additional app-only and delegated tools
+  - Files: [src/additional_tools.py](mcp:src/additional_tools.py), [src/additional_tools_delegated.py](mcp:src/additional_tools_delegated.py)
+- **Task format adapter** (Annika ↔ Planner): [src/annika_task_adapter.py](mcp:src/annika_task_adapter.py)
+
+### Data Flow (authoritative)
+- Agents operate against Redis for read/write; no direct Graph calls from agents during normal operation
+- Redis publishes real-time changes; webhook handler ingests Graph events and routes to sync service
+- Planner Sync V5 performs:
+  - Event-driven uploads (Redis → Planner) on Annika changes via pub/sub
+  - Webhook-driven downloads (Planner → Redis) with periodic fallback polling
+  - **Performance**: Intelligent caching (2000-4000x performance improvement)
+
+### Redis Keys and Channels (verified examples)
+- Planner sync
+  - Mappings: `annika:planner:id_map:{annika_or_planner_id}`
+  - ETags: `annika:planner:etag:{planner_id}`
+  - Logs and queues: `annika:sync:log`, `annika:sync:pending`, `annika:sync:failed`
+  - Webhook status: `annika:sync:webhook_status`
+  - Health: `annika:sync:health`
+- Metadata cache
+  - Users: `annika:graph:users:{user_id}` (24h TTL)
+  - Groups: `annika:graph:groups:{group_id}` (24h TTL)
+  - Plans: `annika:graph:plans:{plan_id}` (24h TTL)
+  - Buckets: `annika:graph:buckets:{bucket_id}` (24h TTL)
+  - Tasks: `annika:graph:tasks:{task_id}` (persist)
+- Pub/Sub channels
+  - Planner webhook bus: `annika:planner:webhook`
+  - Task updates: `annika:tasks:updates`
+  - Teams feeds: `annika:teams:chat_messages`, `annika:teams:chats`, `annika:teams:channel_messages`, `annika:teams:channels`
+- State document (RedisJSON): `annika:conscious_state`
+- Webhook logs: `annika:webhook:log`, `annika:webhooks:notifications`
+- Chat subscriptions: `annika:chat_subscriptions:*`
+
+### Redis Cache Architecture (comprehensive analysis)
+
+#### Core Redis Setup
+- **Host Configuration**: `localhost:6379` (development), fully configurable via environment
+- **Password**: `"password"` (default), configurable via `REDIS_PASSWORD`
+- **Namespace Pattern**: All keys prefixed with `annika:`
+- **Connection**: Async Redis with connection pooling, health checks, automatic retry logic
+
+#### 1. Token Management Cache ([src/mcp_redis_config.py](mcp:src/mcp_redis_config.py))
+**Purpose**: OAuth2 token storage with automatic expiration management
+
+**Key Patterns:**
+```
+annika:tokens:agent:{scope}           # Agent ROPC tokens
+annika:tokens:user:{user_id}:{scope}  # User-specific delegated tokens
+annika:tokens:active                  # Set tracking all active tokens
+```
+
+**TTL Strategy:**
+- **Automatic TTL**: Token expiration time minus 5-minute buffer
+- **Example**: If token expires at 15:00:00, Redis TTL = expires_on - now - 300 seconds
+- **Cleanup**: Expired tokens auto-removed, stale references cleaned up
+
+**When Used:**
+- Agent authentication for Microsoft Graph API calls
+- Delegated access token storage for HTTP endpoints
+- Token refresh service background operations
+- Health monitoring and active token tracking
+
+#### 2. Microsoft Graph Metadata Cache ([src/graph_metadata_manager.py](mcp:src/graph_metadata_manager.py))
+**Purpose**: High-performance caching of Microsoft Graph metadata
+
+**Key Patterns & TTL:**
+```
+annika:graph:users:{user_id}      # 24 hour TTL
+annika:graph:groups:{group_id}    # 24 hour TTL
+annika:graph:plans:{plan_id}      # 24 hour TTL
+annika:graph:buckets:{bucket_id}  # 24 hour TTL
+annika:graph:tasks:{task_id}      # NO EXPIRY (persistent)
+```
+
+**Performance Benefits:**
+- **2000-4000x faster** than direct Graph API calls (microsecond vs millisecond response times)
+- **Intelligent fallback**: Cache miss triggers fresh API fetch + re-cache
+- **Pub/Sub notifications**: Real-time cache invalidation via channels
+
+**When Used:**
+- HTTP endpoint metadata queries (`GET /api/metadata`)
+- Agent task operations requiring user/group/plan context
+- Planner sync operations for ID resolution
+- Background metadata refresh operations
+
+#### 3. Planner Sync State Management ([src/planner_sync_service_v5.py](mcp:src/planner_sync_service_v5.py))
+**Purpose**: Bidirectional sync state between Annika and Microsoft Planner
+
+**Key Patterns:**
+```
+annika:planner:id_map:{annika_id}     # Annika → Planner ID mapping
+annika:planner:etag:{planner_id}      # ETag cache for conflict resolution
+annika:sync:log                       # Operation transaction log
+annika:sync:pending                   # Queued sync operations
+annika:sync:failed                    # Failed operations for retry
+annika:sync:webhook_status            # Webhook subscription status
+annika:sync:health                    # Health metrics snapshot
+```
+
+**TTL Strategy:**
+- **ID Mappings**: Persistent (critical for sync integrity)
+- **ETags**: Updated on every sync operation
+- **Logs**: Rotating with size limits
+- **Webhook Status**: Updated on subscription renewal
+
+**When Used:**
+- Real-time task synchronization (Redis → Planner)
+- Webhook-driven updates (Planner → Redis)
+- Conflict resolution using ETags
+- Sync operation monitoring and health tracking
+- Agent notification system (keyspace events)
+
+#### 4. Teams Chat Subscriptions ([src/chat_subscription_manager.py](mcp:src/chat_subscription_manager.py))
+**Purpose**: Microsoft Teams webhook subscription lifecycle management
+
+**Key Patterns:**
+```
+annika:chat_subscriptions:{chat_id}   # Individual chat subscription data
+annika:teams:chat_messages:history    # Recent chat messages (100 max)
+annika:teams:chats:history           # Recent chat events (50 max)
+```
+
+**TTL Strategy:**
+- **Subscriptions**: Expire based on Microsoft Graph webhook lifecycle (typically 60 minutes)
+- **Message History**: LRU with size limits (LTRIM operations)
+- **Auto-renewal**: Background process monitors expiration times
+
+**When Used:**
+- Teams chat message webhook subscriptions
+- Chat discovery and subscription health monitoring
+- Message history for agent context
+- Real-time Teams integration
+
+#### 5. Cache Performance Strategy
+**Cache-First Approach:**
+1. Always check Redis before making Graph API calls
+2. Cache miss → API call → cache update → return data
+3. Background refresh: Proactive cache warming for frequently accessed data
+4. Event-driven invalidation: Webhook notifications trigger cache updates
+
+**Performance Impact:**
+- **Metadata Queries**: ~0.1ms (Redis) vs ~200ms (Graph API) = **2000x faster**
+- **Token Retrieval**: ~0.05ms (Redis) vs ~500ms (OAuth flow) = **10,000x faster**
+- **API Call Reduction**: **95% reduction** in Microsoft Graph API calls through caching
+- **Agent Response Time**: Sub-millisecond data access for real-time operations
+
+#### 6. Connection & Health Management
+- **Connection Pooling**: 10 max connections (configurable)
+- **Health Monitoring**: Automatic ping checks every 15 seconds
+- **Retry Logic**: 3 retries with exponential backoff
+- **Memory Management**: LRU eviction policy, 2GB max memory
+- **Monitoring**: Active token counts, cache hit rates, subscription health
+
+### HTTP Endpoints (selected, verified)
+- Health/readiness
+  - `GET /api/health/ready` (lightweight readiness)
+- Webhooks ingress
+  - `POST /api/graph_webhook` (Azure Functions route; Graph validation handled in code)
+- Agent and sync controls
+  - `GET /api/metadata?type={user|group|plan|task}&id={id}`
+  - `POST /api/agent/tasks`
+  - `POST /api/planner/poll`
+- Token service
+  - `GET /api/tokens/health`, `GET /api/tokens`, `GET /api/tokens/{scope}`, `POST /api/tokens/refresh/{scope}`
+- Note: `src/http_endpoints.py` additionally defines extensive Graph wrappers (calendars, events, planner board formats, and more) registered with `app.route(...)`.
+
+### MCP Server Interface (SSE)
+- Local SSE endpoint: `http://0.0.0.0:7071/runtime/webhooks/mcp/sse`
+- Remote requires system key header (see [README.md](mdc:README.md) for `x-functions-key` usage)
+- MCP tools in [src/function_app.py](mcd:src/function_app.py) and extended via [src/additional_tools.py](mcp:src/additional_tools.py)
+
+### Configuration (validated sources)
+- Environment variables resolved via `.env` and `local.settings.json`; loaded early by [src/load_env.py](mcp:src/load_env.py) and startup scripts
+- Common vars: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AGENT_USER_NAME`, `AGENT_PASSWORD`, `DEFAULT_PLANNER_PLAN_ID`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `GRAPH_WEBHOOK_URL`
+- **New**: `DISABLE_LOCAL_SERVICES` flag for production deployment
+- ngrok usage and domain are managed dynamically in [src/start_all_services.py](mcp:src/start_all_services.py)
+
+### Authentication Modes (as implemented)
+- MCP tools: app-only (`ClientSecretCredential`) for Graph
+- HTTP endpoints: delegated or app-only; On-Behalf-Of is shown for HTTP triggers only (MCP triggers cannot access headers)
+- Token storage/refresh in Redis via token refresh service
+
+### Local Development and Operations
+- Start everything (local): `python src/start_all_services.py` (comprehensive startup) or start Function host with `func start` from `src`
+- **Enhanced**: Service management with cleanup, monitoring, and health checks
+- Webhook domain is set dynamically (ngrok) and pushed into `GRAPH_WEBHOOK_URL`
+- Sync V5 starts once tokens are verified; health and logs are stored in Redis
+
+### Test Suite Structure
+- **Integration Tests**: [src/Tests/integration/](mcp:src/Tests/integration/) - Live endpoint testing with manifest
+- **Component Tests**: Individual component testing (agent auth, delegated access, token API)
+- **Live Testing**: Phase 2 comprehensive testing with actual Microsoft Graph
+
+### Additional Documentation (reference)
+- Webhooks integration summary: [src/Documentation/MS_Graph_Webhook_Integration_COMPLETE.md](mcp:src/Documentation/MS_Graph_Webhook_Integration_COMPLETE.md)
+- Redis-first architecture notes: [src/Documentation/Redis_First_Architecture_Summary.md](mcp:src/Documentation/Redis_First_Architecture_Summary.md)
+- Planner sync details: [src/Documentation/Planner_Agent_Task_Creation_Guide.md](mcp:src/Documentation/Planner_Agent_Task_Creation_Guide.md)
+
+### Ground Rules for Agents and Contributors (enforced by code/design)
+- Prefer Redis-first access; avoid direct Graph calls from agents where Redis abstractions exist
+- Use webhook-driven flows with fallback polling instead of high-frequency polling
+- Keep endpoints idempotent and rate-limit aware; respect ETags and conflict resolution
+- Do not hard-code absolute paths; use environment-driven or repo-local discovery
+- Use function-level auth for internal endpoints; webhook ingress is anonymous by design
+
+If you need specifics, open the linked files above directly. This rule is kept concise and points to the exact, verified sources in the repo.

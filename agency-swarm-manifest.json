@@ -1,36 +1,49 @@
 {
 	"id": "37457991-6cb1-40db-a7ff-7c0625f2e1ee",
-	"acceptMappedClaims": null,
-	"accessTokenAcceptedVersion": null,
-	"addIns": [],
-	"allowPublicClient": true,
+	"deletedDateTime": null,
 	"appId": "fd79a94d-f572-4439-bba2-6465e0c40122",
-	"appRoles": [],
-	"oauth2AllowUrlPathMatching": false,
-	"createdDateTime": "2024-06-08T00:57:30Z",
-	"description": null,
-	"certification": null,
+	"applicationTemplateId": null,
 	"disabledByMicrosoftStatus": null,
+	"createdDateTime": "2024-06-08T00:57:30Z",
+	"displayName": "Agency-Swarm",
+	"description": null,
 	"groupMembershipClaims": null,
 	"identifierUris": [],
-	"informationalUrls": {
-		"termsOfService": null,
-		"support": null,
-		"privacy": null,
-		"marketing": null
+	"isDeviceOnlyAuthSupported": null,
+	"isFallbackPublicClient": true,
+	"nativeAuthenticationApisEnabled": null,
+	"notes": null,
+	"publisherDomain": "koviakbuilt.com",
+	"serviceManagementReference": null,
+	"signInAudience": "AzureADMultipleOrgs",
+	"tags": [
+		"apiConsumer",
+		"backgroundProcess",
+		"desktopApp"
+	],
+	"tokenEncryptionKeyId": null,
+	"samlMetadataUrl": null,
+	"defaultRedirectUri": null,
+	"certification": null,
+	"optionalClaims": null,
+	"requestSignatureVerification": null,
+	"addIns": [],
+	"api": {
+		"acceptMappedClaims": null,
+		"knownClientApplications": [],
+		"requestedAccessTokenVersion": null,
+		"oauth2PermissionScopes": [],
+		"preAuthorizedApplications": []
+	},
+	"appRoles": [],
+	"info": {
+		"logoUrl": null,
+		"marketingUrl": null,
+		"privacyStatementUrl": null,
+		"supportUrl": null,
+		"termsOfServiceUrl": null
 	},
 	"keyCredentials": [],
-	"knownClientApplications": [],
-	"logoUrl": null,
-	"logoutUrl": null,
-	"name": "Agency-Swarm",
-	"notes": null,
-	"oauth2AllowIdTokenImplicitFlow": false,
-	"oauth2AllowImplicitFlow": false,
-	"oauth2Permissions": [],
-	"oauth2RequirePostResponse": false,
-	"optionalClaims": null,
-	"orgRestrictions": [],
 	"parentalControlSettings": {
 		"countriesBlockedForMinors": [],
 		"legalAgeGroupRule": "Allow"
@@ -38,47 +51,35 @@
 	"passwordCredentials": [
 		{
 			"customKeyIdentifier": null,
-			"endDate": "2027-06-04T16:40:24.047Z",
-			"keyId": "0e0fd6c6-b46a-4271-8560-7704b0f1e147",
-			"startDate": "2025-06-04T16:40:24.047Z",
-			"value": null,
-			"createdOn": "2025-06-04T16:40:38.4613948Z",
+			"displayName": "MS-MCP 2.0",
+			"endDateTime": "2027-06-04T16:40:24.047Z",
 			"hint": "sux",
-			"displayName": "MS-MCP 2.0"
+			"keyId": "0e0fd6c6-b46a-4271-8560-7704b0f1e147",
+			"secretText": null,
+			"startDateTime": "2025-06-04T16:40:24.047Z"
 		},
 		{
 			"customKeyIdentifier": null,
-			"endDate": "2027-05-24T17:46:14.075Z",
-			"keyId": "d4ed7e72-c292-4d96-9134-eca04cbca610",
-			"startDate": "2025-05-24T17:46:14.075Z",
-			"value": null,
-			"createdOn": "2025-05-24T17:46:29.0708804Z",
+			"displayName": "MS-MCP",
+			"endDateTime": "2027-05-24T17:46:14.075Z",
 			"hint": "UbN",
-			"displayName": "MS-MCP"
+			"keyId": "d4ed7e72-c292-4d96-9134-eca04cbca610",
+			"secretText": null,
+			"startDateTime": "2025-05-24T17:46:14.075Z"
 		},
 		{
 			"customKeyIdentifier": null,
-			"endDate": "2026-06-08T01:37:51.437Z",
-			"keyId": "850f41c4-27fe-4805-8880-19bb613a2857",
-			"startDate": "2024-06-08T01:37:51.437Z",
-			"value": null,
-			"createdOn": "2024-06-08T01:39:09.5975996Z",
+			"displayName": "Agency-Swarm Secret",
+			"endDateTime": "2026-06-08T01:37:51.437Z",
 			"hint": "fou",
-			"displayName": "Agency-Swarm Secret"
+			"keyId": "850f41c4-27fe-4805-8880-19bb613a2857",
+			"secretText": null,
+			"startDateTime": "2024-06-08T01:37:51.437Z"
 		}
 	],
-	"preAuthorizedApplications": [],
-	"publisherDomain": "koviakbuilt.com",
-	"replyUrlsWithType": [
-		{
-			"url": "http://localhost:8000/callback",
-			"type": "Web"
-		},
-		{
-			"url": "https://localhost/myapp",
-			"type": "Web"
-		}
-	],
+	"publicClient": {
+		"redirectUris": []
+	},
 	"requiredResourceAccess": [
 		{
 			"resourceAppId": "00000003-0000-0000-c000-000000000000",
@@ -100,15 +101,15 @@
 					"type": "Scope"
 				},
 				{
-					"id": "1ec239c2-d7c9-4623-a91a-a9775856bb36",
-					"type": "Scope"
-				},
-				{
 					"id": "12466101-c9b8-439a-8589-dd09ee67e8e9",
 					"type": "Scope"
 				},
 				{
-					"id": "767156cb-16ae-4d10-8f8b-41b657c8c8c8",
+					"id": "5922d31f-46c8-4404-9eaf-2117e390a8a4",
+					"type": "Scope"
+				},
+				{
+					"id": "ebf0f66e-9fb1-49e4-a278-222f76911cf4",
 					"type": "Scope"
 				},
 				{
@@ -133,6 +134,10 @@
 				},
 				{
 					"id": "7e9a077b-3711-42b9-b7cb-5fa5f3f7fea7",
+					"type": "Scope"
+				},
+				{
+					"id": "c5a9e2b1-faf6-41d4-8875-d381aa549b24",
 					"type": "Scope"
 				},
 				{
@@ -164,14 +169,6 @@
 					"type": "Scope"
 				},
 				{
-					"id": "0e263e50-5827-48a4-b97c-d940288653c7",
-					"type": "Scope"
-				},
-				{
-					"id": "c5366453-9fb0-48a5-a156-24f0c49a4b84",
-					"type": "Scope"
-				},
-				{
 					"id": "ff91d191-45a0-43fd-b837-bd682c4a0b0f",
 					"type": "Scope"
 				},
@@ -180,7 +177,15 @@
 					"type": "Scope"
 				},
 				{
+					"id": "d11625a6-fe21-4fc6-8d3d-063eba5525ad",
+					"type": "Scope"
+				},
+				{
 					"id": "9769c687-087d-48ac-9cb3-c37dde652038",
+					"type": "Scope"
+				},
+				{
+					"id": "b02c54f8-eb48-4c50-a9f0-a149e5a2012f",
 					"type": "Scope"
 				},
 				{
@@ -189,14 +194,6 @@
 				},
 				{
 					"id": "c6068dc7-a791-46a4-a811-b8228e6649ab",
-					"type": "Scope"
-				},
-				{
-					"id": "3a1e4806-a744-4c70-80fc-223bf8582c46",
-					"type": "Scope"
-				},
-				{
-					"id": "5447fe39-cb82-4c1a-b977-520e67e724eb",
 					"type": "Scope"
 				},
 				{
@@ -212,6 +209,10 @@
 					"type": "Scope"
 				},
 				{
+					"id": "ef2779dc-ef1b-4211-8310-8a0ac2450081",
+					"type": "Scope"
+				},
+				{
 					"id": "085ca537-6565-41c2-aca7-db852babc212",
 					"type": "Scope"
 				},
@@ -224,6 +225,10 @@
 					"type": "Scope"
 				},
 				{
+					"id": "302bcbb5-855a-4e49-ae20-94a331b0281e",
+					"type": "Scope"
+				},
+				{
 					"id": "4e46008b-f24c-477d-8fff-7bb4ec7aafe0",
 					"type": "Scope"
 				},
@@ -232,31 +237,11 @@
 					"type": "Scope"
 				},
 				{
-					"id": "d04bb851-cb7c-4146-97c7-ca3e71baf56c",
-					"type": "Scope"
-				},
-				{
-					"id": "e0a7cdbb-08b0-4697-8264-0069786e9674",
-					"type": "Scope"
-				},
-				{
 					"id": "652390e4-393a-48de-9484-05f9b1212954",
 					"type": "Scope"
 				},
 				{
-					"id": "570282fd-fa5c-430d-a7fd-fc8dc98a9dca",
-					"type": "Scope"
-				},
-				{
-					"id": "7b9103a5-4610-446b-9670-80643382c1fa",
-					"type": "Scope"
-				},
-				{
-					"id": "a4b8392a-d8d1-4954-a029-8e668a39a170",
-					"type": "Scope"
-				},
-				{
-					"id": "b11fa0e7-fdb7-4dc9-b1f1-59facd463480",
+					"id": "bebf0bb6-2ff3-4295-a17d-f3561da294fb",
 					"type": "Scope"
 				},
 				{
@@ -276,6 +261,18 @@
 					"type": "Scope"
 				},
 				{
+					"id": "077fde41-7e0b-4c5b-bcd1-e9d743a30c80",
+					"type": "Scope"
+				},
+				{
+					"id": "df96e8a0-f4e1-4ecf-8d83-a429f822cbd6",
+					"type": "Scope"
+				},
+				{
+					"id": "82305458-296d-4edd-8b0b-74dd74c34526",
+					"type": "Scope"
+				},
+				{
 					"id": "818c620a-27a9-40bd-a6a5-d96f7d610b4b",
 					"type": "Scope"
 				},
@@ -288,14 +285,6 @@
 					"type": "Scope"
 				},
 				{
-					"id": "dfabfca6-ee36-4db2-8208-7a28381419b3",
-					"type": "Scope"
-				},
-				{
-					"id": "615e26af-c38a-4150-ae3e-c3b0d4cb1d6a",
-					"type": "Scope"
-				},
-				{
 					"id": "64ac0503-b4fa-45d9-b544-71a463f05da0",
 					"type": "Scope"
 				},
@@ -304,27 +293,11 @@
 					"type": "Scope"
 				},
 				{
-					"id": "190c2bb6-1fdd-4fec-9aa2-7d571b5e1fe3",
-					"type": "Scope"
-				},
-				{
-					"id": "a65f2972-a4f8-4f5e-afd7-69ccb046d5dc",
-					"type": "Scope"
-				},
-				{
-					"id": "30b87d18-ebb1-45db-97f8-82ccb1f0190c",
-					"type": "Scope"
-				},
-				{
 					"id": "37f7f235-527c-4136-accd-4a02d197296e",
 					"type": "Scope"
 				},
 				{
 					"id": "087502c2-5263-433e-abe3-8f77231a0627",
-					"type": "Scope"
-				},
-				{
-					"id": "ba47897c-39ec-4d83-8086-ee8256fa737d",
 					"type": "Scope"
 				},
 				{
@@ -356,59 +329,11 @@
 					"type": "Scope"
 				},
 				{
-					"id": "50fd364f-9d93-4ae1-b170-300e87cccf84",
-					"type": "Scope"
-				},
-				{
-					"id": "f1d91a8f-88e7-4774-8401-b668d5bca0c5",
-					"type": "Scope"
-				},
-				{
-					"id": "8c026be3-8e26-4774-9372-8d5d6f21daff",
-					"type": "Scope"
-				},
-				{
-					"id": "62ade113-f8e0-4bf9-a6ba-5acb31db32fd",
-					"type": "Scope"
-				},
-				{
-					"id": "9619b88a-8a25-48a7-9571-d23be0337a79",
-					"type": "Scope"
-				},
-				{
-					"id": "501d06f8-07b8-4f18-b5c6-c191a4af7a82",
-					"type": "Scope"
-				},
-				{
-					"id": "d01b97e9-cbc0-49fe-810a-750afd5527a3",
-					"type": "Scope"
-				},
-				{
-					"id": "c1499fe0-52b1-4b22-bed2-7a244e0e879f",
-					"type": "Scope"
-				},
-				{
-					"id": "435644c6-a5b1-40bf-8f52-fe8e5b53e19c",
-					"type": "Scope"
-				},
-				{
-					"id": "0da165c7-3f15-4236-b733-c0b0f6abe41d",
-					"type": "Scope"
-				},
-				{
-					"id": "1ff1be21-34eb-448c-9ac9-ce1f506b2a68",
+					"id": "cb530fca-534b-4e72-aa74-bca7e8bbd06f",
 					"type": "Scope"
 				},
 				{
 					"id": "63f27281-c9d9-4f29-94dd-6942f7f1feb0",
-					"type": "Scope"
-				},
-				{
-					"id": "07919803-6073-4cd8-bc55-28077db0ee10",
-					"type": "Scope"
-				},
-				{
-					"id": "b1a7d408-cab0-47d2-a2a5-a74a3733600d",
 					"type": "Scope"
 				},
 				{
@@ -424,15 +349,11 @@
 					"type": "Scope"
 				},
 				{
+					"id": "6aedf524-7e1c-45a7-bd76-ded8cab8d0fc",
+					"type": "Scope"
+				},
+				{
 					"id": "347e3c16-30f3-4ac7-9b52-fc3c053de9c9",
-					"type": "Scope"
-				},
-				{
-					"id": "404d76f0-e10e-460a-92be-ef19600c54d1",
-					"type": "Scope"
-				},
-				{
-					"id": "aa07f155-3612-49b8-a147-6c590df35536",
 					"type": "Scope"
 				},
 				{
@@ -552,11 +473,19 @@
 					"type": "Scope"
 				},
 				{
+					"id": "48638b3c-ad68-4383-8ac4-e6880ee6ca57",
+					"type": "Scope"
+				},
+				{
 					"id": "39d65650-9d3e-4223-80db-a335590d027e",
 					"type": "Scope"
 				},
 				{
 					"id": "a9ff19c2-f369-4a95-9a25-ba9d460efc8e",
+					"type": "Scope"
+				},
+				{
+					"id": "59dacb05-e88d-4c13-a684-59f1afc8cc98",
 					"type": "Scope"
 				},
 				{
@@ -644,15 +573,7 @@
 					"type": "Scope"
 				},
 				{
-					"id": "a154be20-db9c-4678-8ab7-66f6cc099a59",
-					"type": "Scope"
-				},
-				{
 					"id": "b340eb25-3456-403f-be2f-af7a0d370277",
-					"type": "Scope"
-				},
-				{
-					"id": "b4e74841-8e56-480b-be8b-910348b18b4c",
 					"type": "Scope"
 				},
 				{
@@ -675,10 +596,22 @@
 					"id": "20d02fff-a0ef-49e7-a46e-019d4a6523b7",
 					"type": "Scope"
 				},
-				{
-					"id": "d38d189c-e29b-4344-8b3b-829bfa81380b",
-					"type": "Scope"
-				},
+			{
+				"id": "d38d189c-e29b-4344-8b3b-829bfa81380b",
+				"type": "Scope"
+			},
+			{
+				"id": "1ec239c2-d7c9-4623-a91a-a9775856bb36",
+				"type": "Scope"
+			},
+			{
+				"id": "5f8c59db-677d-491f-a6b8-5f174b11ec1d",
+				"type": "Scope"
+			},
+			{
+				"id": "314874da-47d6-4978-88dc-cf0d37f0bb82",
+				"type": "Scope"
+			},
 				{
 					"id": "dc149144-f292-421e-b185-5953f2e98d7f",
 					"type": "Role"
@@ -793,6 +726,10 @@
 				},
 				{
 					"id": "7e847308-e030-4183-9899-5235d7270f58",
+					"type": "Role"
+				},
+				{
+					"id": "a3410be2-8e48-4f32-8454-c29a7465209d",
 					"type": "Role"
 				},
 				{
@@ -1267,9 +1204,38 @@
 					"id": "1dccb351-c4e4-4e09-a8d1-7a9ecbf027cc",
 					"type": "Role"
 				},
+			{
+				"id": "23211fc1-f9d1-4e8e-8e9e-08a5d0a109bb",
+				"type": "Role"
+			},
+			{
+				"id": "df021288-bdef-4463-88db-98f22de89214",
+				"type": "Role"
+			},
+			{
+				"id": "bf394140-e372-4bf9-a898-299cfc7564e5",
+				"type": "Role"
+			},
+			{
+				"id": "2f51be20-0bb4-4fed-bf7b-db946066c75e",
+				"type": "Role"
+			}
+			]
+		},
+		{
+			"resourceAppId": "2d4d3d8e-2be3-4bef-9f87-7875a61c29de",
+			"resourceAccess": [
 				{
-					"id": "23211fc1-f9d1-4e8e-8e9e-08a5d0a109bb",
-					"type": "Role"
+					"id": "f554dcfe-c273-4d79-9354-4f18f8464b3e",
+					"type": "Scope"
+				},
+				{
+					"id": "c1c07f53-0865-4ba2-8ca8-36d29aba66f9",
+					"type": "Scope"
+				},
+				{
+					"id": "ab111d9c-370c-4905-a23f-788795f510dc",
+					"type": "Scope"
 				}
 			]
 		},
@@ -1289,44 +1255,44 @@
 					"type": "Scope"
 				}
 			]
-		},
-		{
-			"resourceAppId": "2d4d3d8e-2be3-4bef-9f87-7875a61c29de",
-			"resourceAccess": [
-				{
-					"id": "f554dcfe-c273-4d79-9354-4f18f8464b3e",
-					"type": "Scope"
-				},
-				{
-					"id": "93d1f902-06e8-4c6f-8894-1eab0283b521",
-					"type": "Scope"
-				},
-				{
-					"id": "7edff6c9-f308-4b8b-9a6d-847e041e880a",
-					"type": "Scope"
-				},
-				{
-					"id": "47eb48ff-1c59-42e3-9634-b5c6e17a0a4b",
-					"type": "Scope"
-				},
-				{
-					"id": "c1c07f53-0865-4ba2-8ca8-36d29aba66f9",
-					"type": "Scope"
-				},
-				{
-					"id": "ab111d9c-370c-4905-a23f-788795f510dc",
-					"type": "Scope"
-				}
-			]
 		}
 	],
-	"samlMetadataUrl": null,
-	"signInUrl": null,
-	"signInAudience": "AzureADMultipleOrgs",
-	"tags": [
-		"apiConsumer",
-		"backgroundProcess",
-		"desktopApp"
-	],
-	"tokenEncryptionKeyId": null
+	"verifiedPublisher": {
+		"displayName": null,
+		"verifiedPublisherId": null,
+		"addedDateTime": null
+	},
+	"web": {
+		"homePageUrl": null,
+		"logoutUrl": null,
+		"redirectUris": [
+			"http://localhost:8000/callback",
+			"https://localhost/myapp"
+		],
+		"implicitGrantSettings": {
+			"enableAccessTokenIssuance": false,
+			"enableIdTokenIssuance": false
+		},
+		"redirectUriSettings": [
+			{
+				"uri": "http://localhost:8000/callback",
+				"index": null
+			},
+			{
+				"uri": "https://localhost/myapp",
+				"index": null
+			}
+		]
+	},
+	"servicePrincipalLockConfiguration": {
+		"isEnabled": true,
+		"allProperties": true,
+		"credentialsWithUsageVerify": true,
+		"credentialsWithUsageSign": true,
+		"identifierUris": false,
+		"tokenEncryptionKeyId": true
+	},
+	"spa": {
+		"redirectUris": []
+	}
 }
