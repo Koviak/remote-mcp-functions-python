@@ -76,13 +76,16 @@ class AgentAuthManager:
         Returns:
             Access token string or None if authentication fails
         """
+        # Determine normalized scope (supports master superset)
+        normalized_scope = self._determine_normalized_scope(scope)
+
         # Check cache first
-        cached_token = self._get_cached_token(scope)
+        cached_token = self._get_cached_token(normalized_scope)
         if cached_token:
             return cached_token
         
         # Check stored token
-        stored_token = self._get_stored_token(scope)
+        stored_token = self._get_stored_token(normalized_scope)
         if stored_token:
             return stored_token
         
@@ -91,23 +94,40 @@ class AgentAuthManager:
         
         # Method 1: Username/Password (ROPC) - Best for autonomous agents
         if self.agent_username and self.agent_password:
-            token = self._acquire_token_with_ropc(scope)
+            token = self._acquire_token_with_ropc(normalized_scope)
         
         # Method 2: Certificate authentication
         elif self.certificate_path and os.path.exists(self.certificate_path):
-            token = self._acquire_token_with_certificate(scope)
+            token = self._acquire_token_with_certificate(normalized_scope)
         
         # Method 3: Managed Identity (for Azure-hosted agents)
         elif self._is_running_in_azure():
-            token = self._acquire_token_with_managed_identity(scope)
+            token = self._acquire_token_with_managed_identity(normalized_scope)
         
         # Store and cache the token
         if token:
-            self._cache_token(scope, token)
-            self._store_token(scope, token)
+            self._cache_token(normalized_scope, token)
+            self._store_token(normalized_scope, token)
             return token.token
         
         return None
+
+    def _determine_normalized_scope(self, requested_scope: str) -> str:
+        """Return a canonical, normalized scope string.
+
+        - If ANNIKA_DELEGATED_MASTER_SCOPES is set, use it as the effective scope.
+        - Always include minimal bootstrap scopes.
+        - Normalize by dedupe + sort for stable Redis/cache keys.
+        """
+        env_master = os.getenv("ANNIKA_DELEGATED_MASTER_SCOPES", "").strip()
+        effective = env_master if env_master else (requested_scope or "")
+        # Build normalized canonical key
+        parts = [p for p in effective.split() if p]
+        # Ensure minimal bootstrap scopes are present
+        baseline = ["openid", "profile", "offline_access", "User.Read"]
+        parts.extend(baseline)
+        normalized = " ".join(sorted(set(parts)))
+        return normalized
     
     def _acquire_token_with_ropc(self, scope: str) -> Optional[AccessToken]:
         """

@@ -7,6 +7,7 @@ always have access to valid tokens.
 """
 
 import logging
+import os
 import asyncio
 from datetime import datetime
 from typing import Optional
@@ -84,34 +85,18 @@ class TokenRefreshService:
             time.sleep(self.refresh_interval)
     
     def _acquire_initial_tokens(self):
-        """Acquire initial tokens for common scopes"""
+        """Acquire initial tokens using master superset scope if configured."""
         try:
-            # Common delegated scopes to prefetch for /me endpoints only
-            scopes = [
-                # Minimal baseline token; other endpoints add feature scopes
-                "openid profile offline_access User.Read",
-                # Chat read/list and write bundles
-                "openid profile offline_access User.Read Chat.Read Chat.ReadBasic",
-                "openid profile offline_access User.Read Chat.ReadWrite",
-                # Mail and Calendar examples (extend as needed)
-                "openid profile offline_access User.Read Mail.ReadWrite",
-                "openid profile offline_access User.Read Mail.Send",
-                "openid profile offline_access User.Read Calendars.ReadWrite",
-            ]
-            
-            for scope in scopes:
-                logger.info(f"Acquiring initial token for scope: {scope}")
-                token = self.auth_manager.get_agent_user_token(scope)
-                
-                if token:
-                    logger.info(
-                        f"✅ Successfully acquired initial token for {scope}"
-                    )
-                else:
-                    logger.warning(
-                        f"⚠️  Failed to acquire initial token for {scope}"
-                    )
-                    
+            master = os.getenv("ANNIKA_DELEGATED_MASTER_SCOPES", "").strip()
+            target_scope = (
+                master if master else "openid profile offline_access User.Read"
+            )
+            logger.info("Acquiring initial delegated token for master scope")
+            token = self.auth_manager.get_agent_user_token(target_scope)
+            if token:
+                logger.info("Successfully acquired initial delegated token")
+            else:
+                logger.warning("Failed to acquire initial delegated token")
         except Exception as e:
             logger.error(f"Error acquiring initial tokens: {e}")
     

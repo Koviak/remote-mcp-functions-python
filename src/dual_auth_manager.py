@@ -71,7 +71,7 @@ class DualAuthManager:
     def get_token(
         self, 
         token_type: TokenType = "delegated",
-        scope: str = "https://graph.microsoft.com/.default"
+        scope: str = ""
     ) -> Optional[str]:
         """
         Get the appropriate token type
@@ -95,8 +95,10 @@ class DualAuthManager:
         # Get fresh token
         if token_type == "delegated":
             token = self._get_delegated_token(scope)
+            effective_scope = scope
         else:
-            token = self._get_application_token(scope)
+            effective_scope = scope or "https://graph.microsoft.com/.default"
+            token = self._get_application_token(effective_scope)
         
         # Cache the token
         if token:
@@ -106,16 +108,19 @@ class DualAuthManager:
                 "expires_at": expires_at
             }
             
-            # Also store in Redis for other services
-            self._store_token_in_redis(token_type, scope, token)
+            # Only store application tokens here; delegated tokens are stored by agent_auth_manager
+            if token_type == "application":
+                # Store using the effective scope actually requested
+                self._store_token_in_redis(token_type, effective_scope, token)
         
         return token
     
     def _get_delegated_token(self, scope: str) -> Optional[str]:
-        """Get delegated access token (user context)"""
+        """Get delegated access token (user context) honoring requested scopes."""
         try:
-            # Use existing agent token system
-            token = get_agent_token()
+            # Pass through scopes so normalization applies in agent_auth_manager
+            scope_to_request = (scope or "").strip()
+            token = get_agent_token(scope_to_request)
             if token:
                 logger.debug("✅ Delegated token acquired via agent auth")
                 return token
@@ -160,10 +165,8 @@ class DualAuthManager:
                 # Calculate expiration timestamp (50 minutes from now)
                 expires_on = int((datetime.now() + timedelta(minutes=50)).timestamp())
                 
-                # Use the correct scope format for Redis storage
+                # Preserve existing application token scope prefix to avoid breaking behavior
                 redis_scope = f"{token_type}:{scope}"
-                
-                # Store using the correct method signature
                 success = self.redis_manager.store_token(
                     token=token,
                     expires_on=expires_on,

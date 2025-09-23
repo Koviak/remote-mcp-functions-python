@@ -2251,6 +2251,48 @@ class WebhookDrivenPlannerSync:
                 return False
 
             else:
+                # Fallback on 403: try creating in an accessible plan without bucketId
+                if response.status_code == 403:
+                    try:
+                        headers_auth = {"Authorization": f"Bearer {token}"}
+                        plans = await self._get_all_plans_for_polling(headers_auth)
+                        current_plan = planner_data.get("planId")
+                        alt_plan = None
+                        for p in plans:
+                            pid = p.get("id")
+                            if pid and pid != current_plan:
+                                alt_plan = pid
+                                break
+                        if alt_plan:
+                            planner_data["planId"] = alt_plan
+                            planner_data.pop("bucketId", None)
+                            response2 = requests.post(
+                                f"{GRAPH_API_ENDPOINT}/planner/tasks",
+                                headers=headers,
+                                json=planner_data,
+                                timeout=10,
+                            )
+                            if response2.status_code == 201:
+                                planner_task = response2.json()
+                                planner_id = planner_task["id"]
+                                annika_id = annika_task.get("id")
+                                await self._store_id_mapping(annika_id, planner_id)
+                                etag = planner_task.get("@odata.etag", "")
+                                await self._store_etag(planner_id, etag)
+                                await self._log_sync_operation(
+                                    SyncOperation.CREATE.value,
+                                    annika_id,
+                                    planner_id,
+                                    "success (fallback)",
+                                )
+                                logger.info(
+                                    f"✅ Created Planner task via fallback plan: {annika_task.get('title')}"
+                                )
+                                self.rate_limiter.reset()
+                                return True
+                    except Exception as fb_err:
+                        logger.debug(f"Create fallback failed: {fb_err}")
+
                 logger.error(f"Failed to create Planner task: {response.status_code}")
                 logger.error(f"Response: {response.text}")
 
@@ -2410,7 +2452,25 @@ class WebhookDrivenPlannerSync:
                 logger.error("No token available for task deletion")
                 return False
 
+            # Fetch latest ETag to satisfy concurrency requirements
+            get_resp = requests.get(
+                f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            )
+            etag = None
+            if get_resp.status_code == 200:
+                try:
+                    etag = get_resp.json().get("@odata.etag")
+                except Exception:
+                    etag = None
+
             headers = {"Authorization": f"Bearer {token}"}
+            if etag:
+                headers["If-Match"] = etag
+            else:
+                headers["If-Match"] = "*"
+
             response = requests.delete(
                 f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                 headers=headers,

@@ -1,6 +1,6 @@
 name: ms_mcp_system_architecture
-version: 2.2
-date: 2025-09-21
+version: 2.3
+date: 2025-09-22
 description: Global scope and architecture for Remote MCP Functions (Python) with Microsoft Graph, Redis-first design, webhook-driven Planner sync, and HTTP/MCP endpoints
 tags: [architecture, microsoft-graph, redis, mcp, webhook-sync, azure-functions]
 
@@ -24,14 +24,17 @@ This repository implements a production-ready remote MCP (Model Context Protocol
   - Registers MCP tools (`hello_mcp`, `get_snippet`, `save_snippet`) and additional tools
   - Registers HTTP endpoints via helpers below
   - **Enhanced**: Local services orchestration with DISABLE_LOCAL_SERVICES flag, token refresh service startup
-- **HTTP Endpoints aggregation**: Graph wrappers and agent endpoints (calendars, events, planner, metadata, webhook handler, etc.)
-  - File: [src/http_endpoints.py](mcp:src/http_endpoints.py) — **4700+ lines** of comprehensive Microsoft Graph API wrappers
-  - Verified routes in code:
+- **HTTP Endpoints — Modular Architecture (fully implemented)**: Graph wrappers and agent endpoints are organized into modules under `src/http_endpoints/` with a thin legacy compatibility layer
+  - Directory: [src/http_endpoints/](mcp:src/http_endpoints/)
+    - Shared utilities: `http_common.py`
+    - Registration: `http_registration.py` (master `register_all_endpoints`)
+    - Service modules: `http_basic.py`, `http_users_groups.py`, `http_planner.py`, `http_tasks.py`, `http_buckets.py`, `http_mail.py`, `http_calendar.py`, `http_teams.py`, `http_files.py`, `http_security.py`, `http_task_formats.py`, `http_webhooks.py`
+  - Compatibility: [src/http_endpoints.py](mcp:src/http_endpoints.py) delegates to `http_endpoints.http_registration.register_all_endpoints(app)` to preserve legacy imports
+  - Verified routes in code (examples):
     - `POST /api/graph_webhook` (Graph webhooks ingress)
     - `GET /api/metadata` (cached metadata access via query params)
     - `POST /api/agent/tasks` (create agent task)
     - `POST /api/planner/poll` (trigger immediate Planner poll)
-    - Numerous Microsoft Graph wrappers (e.g., calendars/events and Planner task board formats)
 - **Webhook-driven Planner Sync (V5)**: real-time sync using Microsoft Graph webhooks with fallback polling
   - File: [src/planner_sync_service_v5.py](mcp:src/planner_sync_service_v5.py)
   - **V5 Features**: Circuit breaker pattern, batch operations, transaction logging, health monitoring, exponential backoff
@@ -234,19 +237,34 @@ annika:teams:chats:history           # Recent chat events (50 max)
 ### Configuration (validated sources)
 - Environment variables resolved via `.env` and `local.settings.json`; loaded early by [src/load_env.py](mcp:src/load_env.py) and startup scripts
 - Common vars: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AGENT_USER_NAME`, `AGENT_PASSWORD`, `DEFAULT_PLANNER_PLAN_ID`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `GRAPH_WEBHOOK_URL`
-- **New**: `DISABLE_LOCAL_SERVICES` flag for production deployment
+- New: `ANNIKA_DELEGATED_MASTER_SCOPES` — union of delegated scopes used for superset token
+- New: `DISABLE_LOCAL_SERVICES` flag for production deployment
 - ngrok usage and domain are managed dynamically in [src/start_all_services.py](mcp:src/start_all_services.py)
 
 ### Authentication Modes (as implemented)
 - MCP tools: app-only (`ClientSecretCredential`) for Graph
-- HTTP endpoints: delegated or app-only; On-Behalf-Of is shown for HTTP triggers only (MCP triggers cannot access headers)
-- Token storage/refresh in Redis via token refresh service
+- HTTP endpoints: delegated (preferred superset via `get_agent_token()`; scope normalization enforced) or app-only fallback; OBO is not used for autonomous flows
+- Token storage/refresh in Redis via token refresh service; delegated tokens keyed by normalized scopes
+
+### Delegated Token Management (authoritative)
+- ROPC-only for delegated access (no interactive, no OBO); use `agent_auth_manager`
+- Scope normalization utility applied everywhere delegated tokens are keyed/retrieved:
+  - Trim → split whitespace → dedupe → sort → join with single space
+  - Always include bootstrap scopes when minting: `openid profile offline_access User.Read`
+- Master delegated superset token via `ANNIKA_DELEGATED_MASTER_SCOPES`; `get_agent_token()` returns superset when scope omitted
+- Refresh strategy: `token_refresh_service` prewarms/refreshes superset (and optionally minimal bootstrap) only
+- Redis keys and TTLs:
+  - `annika:tokens:agent:{normalized_scope}` (delegated)
+  - `annika:tokens:user:{user_id}:{normalized_scope}` (unused in autonomous mode)
+  - TTL = `expires_on - now - 300s` (no fabricated expiry)
+- App tokens unchanged; never log raw tokens or passwords; scrub PII and honor claims challenges
 
 ### Local Development and Operations
 - Start everything (local): `python src/start_all_services.py` (comprehensive startup) or start Function host with `func start` from `src`
-- **Enhanced**: Service management with cleanup, monitoring, and health checks
+- Enhanced: Service management with cleanup, monitoring, and health checks
 - Webhook domain is set dynamically (ngrok) and pushed into `GRAPH_WEBHOOK_URL`
 - Sync V5 starts once tokens are verified; health and logs are stored in Redis
+- HTTP endpoints registration source of truth: `http_endpoints/http_registration.py` (`register_all_endpoints(app)`); legacy `http_endpoints.py` delegates
 
 ### Test Suite Structure
 - **Integration Tests**: [src/Tests/integration/](mcp:src/Tests/integration/) - Live endpoint testing with manifest
@@ -257,6 +275,7 @@ annika:teams:chats:history           # Recent chat events (50 max)
 - Webhooks integration summary: [src/Documentation/MS_Graph_Webhook_Integration_COMPLETE.md](mcp:src/Documentation/MS_Graph_Webhook_Integration_COMPLETE.md)
 - Redis-first architecture notes: [src/Documentation/Redis_First_Architecture_Summary.md](mcp:src/Documentation/Redis_First_Architecture_Summary.md)
 - Planner sync details: [src/Documentation/Planner_Agent_Task_Creation_Guide.md](mcp:src/Documentation/Planner_Agent_Task_Creation_Guide.md)
+- Modular HTTP endpoints guide: [.cursor/rules/http-endpoints-modular-architecture.mdc](mdc:.cursor/rules/http-endpoints-modular-architecture.mdc)
 
 ### Ground Rules for Agents and Contributors (enforced by code/design)
 - Prefer Redis-first access; avoid direct Graph calls from agents where Redis abstractions exist
