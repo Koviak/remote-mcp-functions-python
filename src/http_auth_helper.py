@@ -9,7 +9,7 @@ import os
 import logging
 from typing import Optional
 import azure.functions as func
-from azure.identity import ClientSecretCredential, OnBehalfOfCredential
+from azure.identity import ClientSecretCredential
 from agent_auth_manager import get_agent_token
 
 
@@ -25,31 +25,9 @@ def get_http_access_token(req: func.HttpRequest = None,
     Returns:
         Access token or None
     """
-    # Check for user token from built-in auth (delegated access)
-    if req and prefer_delegated:
-        user_token = req.headers.get('X-MS-TOKEN-AAD-ACCESS-TOKEN')
-        
-        if user_token:
-            try:
-                # Use OnBehalfOf flow
-                credential = OnBehalfOfCredential(
-                    tenant_id=os.getenv("AZURE_TENANT_ID"),
-                    client_id=os.getenv("AZURE_CLIENT_ID"),
-                    client_secret=os.getenv("AZURE_CLIENT_SECRET"),
-                    user_assertion=user_token
-                )
-                
-                scope = os.getenv("DOWNSTREAM_API_SCOPE",
-                                  "https://graph.microsoft.com/.default")
-                token = credential.get_token(scope)
-                
-                logging.info("Using delegated access (OBO) for HTTP endpoint")
-                return token.token
-                
-            except Exception as e:
-                logging.warning(f"OBO failed, falling back to app-only: {e}")
+    # Fully autonomous: do not attempt OBO; always use agent delegated when preferred
     
-    # Check if agent credentials are available (for autonomous scenarios)
+    # Agent delegated (ROPC via agent_auth_manager)
     if prefer_delegated:
         agent_token = get_agent_token()
         if agent_token:

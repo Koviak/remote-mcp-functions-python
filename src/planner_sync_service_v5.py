@@ -17,6 +17,7 @@ import logging
 import os
 import time
 import uuid
+import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
@@ -196,6 +197,11 @@ class WebhookDrivenPlannerSync:
         self.running = False
         # Quick-poll scheduling to tighten feedback after local edits
         self.quick_poll_task = None
+        self.last_quick_poll_at: float = 0.0
+        try:
+            self.quick_poll_min_interval = int(os.environ.get("MIN_QUICK_POLL_INTERVAL_SECONDS", "300"))
+        except Exception:
+            self.quick_poll_min_interval = 300
 
         # Components
         self.rate_limiter = RateLimitHandler()
@@ -210,6 +216,10 @@ class WebhookDrivenPlannerSync:
         self.webhook_subscriptions = {}
         self.webhook_configs = {}
         self.webhook_renewal_interval = 3600  # 1 hour
+        try:
+            self.poll_interval = int(os.environ.get("PLANNER_POLL_INTERVAL_SECONDS", "3600"))
+        except Exception:
+            self.poll_interval = 3600
 
         # Batch processing
         self.pending_uploads = []
@@ -217,6 +227,22 @@ class WebhookDrivenPlannerSync:
         self.batch_timeout = 5  # seconds
         self.batch_processing = False  # Flag to prevent concurrent batch processing
         self.batch_scheduled = False  # Flag to prevent scheduling multiple batch tasks
+        # Optional Graph $batch for creates (safer subset) – config gated
+        self.batch_writes_enabled = os.environ.get("BATCH_WRITES_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+        self.max_graph_batch = 20
+
+        # Discovery caches (per-cycle)
+        self.plan_cache: List[Dict] = []
+        self.plan_cache_time: float = 0.0
+        self.bucket_cache: Dict[str, Dict[str, any]] = {}
+
+        # Cleanup/housekeeping
+        self.cleanup_enabled = os.environ.get("CLEANUP_ENABLED", "false").lower() == "true"
+        self.cleanup_dry_run = os.environ.get("CLEANUP_DRY_RUN", "true").lower() == "true"
+        try:
+            self.cleanup_interval = int(os.environ.get("CLEANUP_INTERVAL_SECONDS", "21600"))
+        except Exception:
+            self.cleanup_interval = 21600
 
     async def start(self):
         """Start the webhook-driven sync service."""
@@ -264,8 +290,247 @@ class WebhookDrivenPlannerSync:
             self._health_monitor(),              # Health checks
             self._webhook_renewal_loop(),        # Keep webhooks alive
             self._planner_polling_loop(),        # Planner polling loop
+            self._pending_queue_worker(),        # Process pending Redis queue
+            self._housekeeping_loop(),           # Redis housekeeping
             return_exceptions=True
         )
+
+    async def _housekeeping_loop(self) -> None:
+        """Low-priority Redis housekeeping per spec; dry-run unless enabled."""
+        while self.running:
+            try:
+                await asyncio.sleep(self.cleanup_interval)
+                if not self.cleanup_enabled:
+                    continue
+
+                # ID map normalization (forward string + reverse exists)
+                cursor = 0
+                pattern = f"{PLANNER_ID_MAP_PREFIX}*"
+                while True:
+                    cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=200)
+                    for key in keys:
+                        annika_id = key.replace(PLANNER_ID_MAP_PREFIX, "")
+                        v = await self.redis_client.get(key)
+                        planner_id = None
+                        if v:
+                            if isinstance(v, str) and v.strip().startswith("{"):
+                                try:
+                                    obj = json.loads(v)
+                                    planner_id = obj.get("planner_id") or obj.get("plannerId") or obj.get("planner")
+                                except Exception:
+                                    planner_id = None
+                            else:
+                                planner_id = v
+                        if planner_id:
+                            # Ensure reverse mapping exists
+                            reverse_key = f"annika:task:mapping:planner:{planner_id}"
+                            if self.cleanup_dry_run:
+                                await self.redis_client.lpush("annika:cleanup:log", json.dumps({
+                                    "op": "ensure_reverse_map",
+                                    "annika_id": annika_id,
+                                    "planner_id": planner_id,
+                                }))
+                            else:
+                                await self.redis_client.set(reverse_key, annika_id)
+                        else:
+                            # Malformed mapping; skip
+                            pass
+                    if cursor == 0:
+                        break
+
+                # ETag orphans: delete where no reverse mapping exists
+                cursor = 0
+                etag_prefix = ETAG_PREFIX
+                while True:
+                    cursor, keys = await self.redis_client.scan(cursor, match=f"{etag_prefix}*", count=200)
+                    for ekey in keys:
+                        pid = ekey.replace(etag_prefix, "")
+                        reverse = await self.redis_client.get(f"annika:task:mapping:planner:{pid}")
+                        if not reverse:
+                            if self.cleanup_dry_run:
+                                await self.redis_client.lpush("annika:cleanup:log", json.dumps({
+                                    "op": "delete_orphan_etag",
+                                    "planner_id": pid,
+                                }))
+                            else:
+                                await self.redis_client.delete(ekey)
+                    if cursor == 0:
+                        break
+
+                # Lists bounds and TTLs
+                await self.redis_client.ltrim("annika:webhook:log", 0, 499)
+                await self.redis_client.expire("annika:webhooks:notifications", 3600)
+                await self.redis_client.ltrim("annika:sync:failed", 0, 999)
+                await self.redis_client.expire("annika:sync:failed", 7 * 24 * 60 * 60)
+
+                # Graph caches TTL enforcement
+                for prefix in ("annika:graph:plans:", "annika:graph:buckets:"):
+                    cursor = 0
+                    while True:
+                        cursor, keys = await self.redis_client.scan(cursor, match=f"{prefix}*", count=200)
+                        for k in keys:
+                            ttl = await self.redis_client.ttl(k)
+                            if ttl is None or ttl < 0 or ttl > 300:
+                                await self.redis_client.expire(k, 300)
+                        if cursor == 0:
+                            break
+
+                # Health TTL
+                ttl = await self.redis_client.ttl("annika:sync:health")
+                if ttl is None or ttl < 0 or ttl > 300:
+                    await self.redis_client.expire("annika:sync:health", 300)
+
+                # Housekeeping heartbeat
+                await self.redis_client.set("annika:cleanup:stats", json.dumps({
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "dry_run": self.cleanup_dry_run,
+                }), ex=300)
+
+            except Exception as e:
+                logger.debug(f"Housekeeping loop error: {e}")
+
+    def _processed_set_key(self) -> str:
+        """Return today's processed identity set key."""
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        return f"annika:sync:processed:{today}"
+
+    async def _ensure_key_ttl(self, key: str, seconds: int) -> None:
+        try:
+            ttl = await self.redis_client.ttl(key)
+            if ttl is None or ttl < 0:
+                await self.redis_client.expire(key, seconds)
+        except Exception:
+            pass
+
+    async def _pending_queue_worker(self) -> None:
+        """Consume operations from annika:sync:pending with retry/backoff and dedup."""
+        MAX_RETRIES = 5
+        BACKOFF_BASE = 2
+        PROCESSED_TTL = 2 * 24 * 60 * 60  # 2 days
+
+        while self.running:
+            try:
+                result = await self.redis_client.brpop(PENDING_OPS_KEY, timeout=5)
+                if not result:
+                    # Timeout: loop and check running flag again
+                    continue
+
+                # redis-py may return (key, value) or [key, value]
+                raw = result[1] if isinstance(result, (list, tuple)) and len(result) == 2 else result
+                try:
+                    op = json.loads(raw)
+                except Exception:
+                    # Malformed entry → drop to failed list
+                    await self.redis_client.lpush(FAILED_OPS_KEY, json.dumps({
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "error": "malformed_operation",
+                        "raw": raw if isinstance(raw, str) else str(raw),
+                    }))
+                    await self.redis_client.ltrim(FAILED_OPS_KEY, 0, 999)
+                    await self._ensure_key_ttl(FAILED_OPS_KEY, 7 * 24 * 60 * 60)
+                    continue
+
+                op_type = op.get("type") or op.get("operation")
+                annika_id = op.get("task_id") or op.get("annika_id")
+                identity = f"{op_type}:{annika_id}"
+
+                # Respect scheduled next_retry if present
+                next_retry = op.get("next_retry")
+                if next_retry:
+                    try:
+                        due = datetime.fromisoformat(next_retry.replace("Z", "+00:00"))
+                        if due > datetime.utcnow():
+                            # Not yet due: push back to the queue tail
+                            await self.redis_client.rpush(PENDING_OPS_KEY, json.dumps(op))
+                            # Small sleep to avoid tight loop on same entry
+                            await asyncio.sleep(0.1)
+                            continue
+                    except Exception:
+                        # Ignore parsing errors and treat as due now
+                        pass
+
+                # Dedup processed identities across restarts
+                processed_key = self._processed_set_key()
+                try:
+                    if identity and await self.redis_client.sismember(processed_key, identity):
+                        continue
+                except Exception:
+                    pass
+
+                success = False
+                error_detail = None
+
+                try:
+                    if op_type == "create":
+                        task = await self._get_annika_task(annika_id)
+                        if task:
+                            success = await self._create_planner_task(task)
+                        else:
+                            error_detail = "annika_task_not_found"
+                    elif op_type == "update":
+                        task = await self._get_annika_task(annika_id)
+                        if task:
+                            planner_id = await self._get_planner_id(annika_id)
+                            if planner_id:
+                                success = await self._update_planner_task(planner_id, task)
+                            else:
+                                # If no mapping, upgrade to create
+                                success = await self._create_planner_task(task)
+                        else:
+                            error_detail = "annika_task_not_found"
+                    elif op_type == "delete":
+                        planner_id = await self._get_planner_id(annika_id)
+                        if planner_id:
+                            success = await self._delete_planner_task(planner_id)
+                        else:
+                            # Treat missing mapping as already deleted
+                            success = True
+                    else:
+                        error_detail = f"unknown_operation:{op_type}"
+                except Exception as exc:
+                    error_detail = f"exception:{type(exc).__name__}:{str(exc)[:160]}"
+
+                if success:
+                    try:
+                        await self.redis_client.sadd(processed_key, identity)
+                        await self._ensure_key_ttl(processed_key, PROCESSED_TTL)
+                    except Exception:
+                        pass
+                    await self._log_sync_operation(
+                        op_type or "unknown",
+                        annika_id,
+                        None,
+                        "success"
+                    )
+                else:
+                    # Retry or fail out
+                    retry_count = int(op.get("retry_count", 0)) + 1
+                    if retry_count <= MAX_RETRIES:
+                        # Exponential backoff with jitter
+                        base = BACKOFF_BASE ** min(retry_count, 8)
+                        delay = min(base, 300) + random.uniform(0, 1.0)
+                        next_due = (datetime.utcnow() + timedelta(seconds=delay)).isoformat() + "Z"
+                        op["retry_count"] = retry_count
+                        op["next_retry"] = next_due
+                        if error_detail:
+                            op["last_error"] = error_detail
+                        await self.redis_client.rpush(PENDING_OPS_KEY, json.dumps(op))
+                    else:
+                        fail_entry = {
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "operation": op_type,
+                            "annika_id": annika_id,
+                            "status": "failed",
+                            "error": error_detail or "max_retries_exceeded",
+                        }
+                        await self.redis_client.lpush(FAILED_OPS_KEY, json.dumps(fail_entry))
+                        await self.redis_client.ltrim(FAILED_OPS_KEY, 0, 999)
+                        await self._ensure_key_ttl(FAILED_OPS_KEY, 7 * 24 * 60 * 60)
+
+            except Exception as loop_exc:
+                # Do not crash the worker; log and continue
+                logger.error("Pending queue worker error: %s", loop_exc)
+                await asyncio.sleep(0.5)
 
     async def stop(self):
         """Stop the sync service."""
@@ -648,7 +913,7 @@ class WebhookDrivenPlannerSync:
 
             logger.info("%s webhook: no existing subscription found; creating new", webhook_name)
 
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     f"{GRAPH_API_ENDPOINT}/subscriptions",
                     headers=headers,
@@ -740,7 +1005,7 @@ class WebhookDrivenPlannerSync:
                 continue
             headers = {"Authorization": f"Bearer {token}"}
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=15.0) as client:
                     resp = await client.get(
                         f"{GRAPH_API_ENDPOINT}/subscriptions/{sub_id}",
                         headers=headers,
@@ -785,7 +1050,7 @@ class WebhookDrivenPlannerSync:
             "Content-Type": "application/json",
         }
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.get(
                     f"{GRAPH_API_ENDPOINT}/subscriptions", headers=headers, timeout=30
                 )
@@ -876,7 +1141,7 @@ class WebhookDrivenPlannerSync:
                     "expirationDateTime": new_expiration
                 }
 
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=15.0) as client:
                     response = await client.patch(
                         f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
                         headers=headers,
@@ -941,7 +1206,7 @@ class WebhookDrivenPlannerSync:
 
         for webhook_type, subscription_id in self.webhook_subscriptions.items():
             try:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=15.0) as client:
                     response = await client.delete(
                         f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
                         headers=headers,
@@ -1028,7 +1293,7 @@ class WebhookDrivenPlannerSync:
             headers = {"Authorization": f"Bearer {token}"} if token else None
             expires = None
             if headers:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=15.0) as client:
                     resp = await client.get(
                         f"{GRAPH_API_ENDPOINT}/subscriptions/{sub_id}",
                         headers=headers,
@@ -1631,6 +1896,35 @@ class WebhookDrivenPlannerSync:
 
             logger.info(f"📤 Processing upload batch of {len(batch)} tasks")
 
+            # Optional: Use Graph $batch for creates only (safe subset, no ETag deps)
+            if self.batch_writes_enabled and batch:
+                create_tasks: list[dict] = []
+                non_create_tasks: list[dict] = []
+                for t in batch:
+                    try:
+                        tid = t.get("id")
+                        if tid:
+                            mapped = await self._get_planner_id(tid)
+                            if mapped:
+                                non_create_tasks.append(t)
+                            else:
+                                create_tasks.append(t)
+                        else:
+                            create_tasks.append(t)
+                    except Exception:
+                        non_create_tasks.append(t)
+
+                if create_tasks:
+                    try:
+                        await self._batch_create_planner_tasks(create_tasks[: self.max_graph_batch])
+                        if len(create_tasks) > self.max_graph_batch:
+                            self.pending_uploads = create_tasks[self.max_graph_batch:] + self.pending_uploads
+                    except Exception as e:
+                        logger.debug(f"Graph $batch create failed, falling back to single ops: {e}")
+                        non_create_tasks.extend(create_tasks)
+
+                batch = non_create_tasks
+
             for task in batch:
                 annika_id = task.get("id")
                 if annika_id:
@@ -1665,6 +1959,74 @@ class WebhookDrivenPlannerSync:
         finally:
             # Always reset the flag to allow future batch processing
             self.batch_processing = False
+
+    async def _batch_create_planner_tasks(self, tasks: list[dict]) -> None:
+        """Create tasks via Graph $batch (creates only)."""
+        if not tasks:
+            return
+        token = get_agent_token()
+        if not token:
+            raise RuntimeError("No token for batch create")
+
+        # Build individual create payloads first with plan/bucket validation drop
+        requests_payload = []
+        planner_endpoint = f"{GRAPH_API_ENDPOINT}/planner/tasks"
+        for idx, annika_task in enumerate(tasks):
+            # Build Planner payload using adapter
+            body = self.adapter.annika_to_planner(annika_task)
+            plan_id = await self._determine_plan_for_task(annika_task)
+            if not plan_id:
+                continue
+            body["planId"] = plan_id
+            # Drop bucketId if unknown (safe)
+            try:
+                bucket_id = body.get("bucketId")
+                if bucket_id:
+                    cached = self.bucket_cache.get(plan_id)
+                    ids = cached.get("ids", set()) if cached and (time.time() - cached.get("ts", 0)) < 300 else set()
+                    if ids and bucket_id not in ids:
+                        body.pop("bucketId", None)
+                    elif not ids:
+                        body.pop("bucketId", None)
+            except Exception:
+                body.pop("bucketId", None)
+
+            requests_payload.append({
+                "id": f"req{idx}",
+                "method": "POST",
+                "url": "/planner/tasks",
+                "headers": {"Content-Type": "application/json"},
+                "body": body,
+            })
+
+        if not requests_payload:
+            return
+
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        batch_body = {"requests": requests_payload}
+        resp = requests.post(f"{GRAPH_API_ENDPOINT}/$batch", headers=headers, json=batch_body, timeout=20)
+        if resp.status_code != 200:
+            raise RuntimeError(f"$batch returned {resp.status_code}")
+
+        # Process results: store mappings and ETags for successes
+        data = resp.json()
+        for r in data.get("responses", []):
+            try:
+                status = r.get("status")
+                if status in (200, 201):
+                    body = r.get("body", {})
+                    planner_id = body.get("id")
+                    # Map: find original annika task by title/heuristic
+                    # Conservative: skip mapping if we can't resolve; single path will pick it up later
+                    # Best-effort: rely on follow-up single ops to reconcile
+                    if planner_id:
+                        etag = body.get("@odata.etag", "")
+                        await self._store_etag(planner_id, etag)
+                elif status in (429, 500, 502, 503, 504):
+                    # Force single-op fallback on transient errors
+                    raise RuntimeError("Transient in batch results")
+            except Exception:
+                continue
 
     # ========== HELPER METHODS ==========
 
@@ -1772,7 +2134,7 @@ class WebhookDrivenPlannerSync:
                 await self.redis_client.set(
                     "annika:sync:health",
                     json.dumps(metrics),
-                    ex=3600  # Expire after 1 hour
+                    ex=300  # Align TTL to 5 minutes per spec
                 )
 
             except Exception as e:
@@ -2181,29 +2543,56 @@ class WebhookDrivenPlannerSync:
 
             planner_data["planId"] = plan_id
 
+            # Skip plans marked inaccessible (403s)
+            try:
+                if await self.redis_client.sismember("annika:planner:inaccessible_plans", plan_id):
+                    logger.info("Skipping inaccessible plan %s for create", plan_id)
+                    # Attempt to pick alternative plan from cached list
+                    headers_auth = {"Authorization": f"Bearer {token}"}
+                    plans = await self._get_all_plans_for_polling(headers_auth)
+                    alt = None
+                    for p in plans:
+                        pid = p.get("id")
+                        if pid and pid != plan_id:
+                            alt = pid
+                            break
+                    if alt:
+                        planner_data["planId"] = alt
+                        plan_id = alt
+            except Exception:
+                pass
+
             # Validate bucketId belongs to selected plan; drop if invalid to avoid 404s
             try:
                 bucket_id = planner_data.get("bucketId")
                 if bucket_id:
-                    buckets_resp = requests.get(
-                        f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/buckets",
-                        headers={"Authorization": f"Bearer {token}"},
-                        timeout=10,
-                    )
-                    if buckets_resp.status_code == 200:
-                        bucket_ids = {b.get("id") for b in buckets_resp.json().get("value", [])}
-                        if bucket_id not in bucket_ids:
-                            logger.warning(
-                                "Dropping invalid bucketId %s for plan %s; will let Graph choose default bucket",
-                                bucket_id,
-                                plan_id,
-                            )
-                            planner_data.pop("bucketId", None)
+                    cached = self.bucket_cache.get(plan_id)
+                    bucket_ids: set[str] = set()
+                    if cached and (time.time() - cached.get("ts", 0)) < 300:
+                        bucket_ids = cached.get("ids", set())
                     else:
-                        # If we cannot verify, prefer to send without bucketId to avoid invalid ID errors
+                        buckets_resp = requests.get(
+                            f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/buckets?$select=id",
+                            headers={"Authorization": f"Bearer {token}"},
+                            timeout=10,
+                        )
+                        if buckets_resp.status_code == 200:
+                            bucket_ids = {b.get("id") for b in buckets_resp.json().get("value", [])}
+                            self.bucket_cache[plan_id] = {"ids": bucket_ids, "ts": time.time()}
+                            try:
+                                await self.redis_client.set(f"annika:graph:buckets:{plan_id}", json.dumps(list(bucket_ids)), ex=300)
+                            except Exception:
+                                pass
+                    if bucket_ids and bucket_id not in bucket_ids:
+                        logger.warning(
+                            "Dropping invalid bucketId %s for plan %s; will let Graph choose default bucket",
+                            bucket_id,
+                            plan_id,
+                        )
+                        planner_data.pop("bucketId", None)
+                    elif not bucket_ids:
                         logger.debug(
-                            "Bucket list fetch failed (%s) for plan %s; removing bucketId to avoid 404",
-                            buckets_resp.status_code,
+                            "Bucket set unknown for plan %s; removing bucketId to avoid 404",
                             plan_id,
                         )
                         planner_data.pop("bucketId", None)
@@ -2251,6 +2640,62 @@ class WebhookDrivenPlannerSync:
                 return False
 
             else:
+                # Fallback on 403: try creating in an accessible plan without bucketId
+                if response.status_code == 403:
+                    try:
+                        headers_auth = {"Authorization": f"Bearer {token}"}
+                        plans = await self._get_all_plans_for_polling(headers_auth)
+                        current_plan = planner_data.get("planId")
+                        alt_plan = None
+                        for p in plans:
+                            pid = p.get("id")
+                            if pid and pid != current_plan:
+                                alt_plan = pid
+                                break
+                        if alt_plan:
+                            planner_data["planId"] = alt_plan
+                            planner_data.pop("bucketId", None)
+                            response2 = requests.post(
+                                f"{GRAPH_API_ENDPOINT}/planner/tasks",
+                                headers=headers,
+                                json=planner_data,
+                                timeout=10,
+                            )
+                            if response2.status_code == 201:
+                                planner_task = response2.json()
+                                planner_id = planner_task["id"]
+                                annika_id = annika_task.get("id")
+                                await self._store_id_mapping(annika_id, planner_id)
+                                etag = planner_task.get("@odata.etag", "")
+                                await self._store_etag(planner_id, etag)
+                                try:
+                                    # Cache plan selection for this Annika task (5 minutes)
+                                    await self.redis_client.set(
+                                        f"annika:planner:plan_choice:{annika_id}", alt_plan, ex=300
+                                    )
+                                except Exception:
+                                    pass
+                                await self._log_sync_operation(
+                                    SyncOperation.CREATE.value,
+                                    annika_id,
+                                    planner_id,
+                                    "success (fallback)",
+                                )
+                                logger.info(
+                                    f"✅ Created Planner task via fallback plan: {annika_task.get('title')}"
+                                )
+                                self.rate_limiter.reset()
+                                return True
+                    except Exception as fb_err:
+                        logger.debug(f"Create fallback failed: {fb_err}")
+                    finally:
+                        try:
+                            if current_plan:
+                                await self.redis_client.sadd("annika:planner:inaccessible_plans", current_plan)
+                                await self.redis_client.expire("annika:planner:inaccessible_plans", 600)
+                        except Exception:
+                            pass
+
                 logger.error(f"Failed to create Planner task: {response.status_code}")
                 logger.error(f"Response: {response.text}")
 
@@ -2410,7 +2855,25 @@ class WebhookDrivenPlannerSync:
                 logger.error("No token available for task deletion")
                 return False
 
+            # Fetch latest ETag to satisfy concurrency requirements
+            get_resp = requests.get(
+                f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            )
+            etag = None
+            if get_resp.status_code == 200:
+                try:
+                    etag = get_resp.json().get("@odata.etag")
+                except Exception:
+                    etag = None
+
             headers = {"Authorization": f"Bearer {token}"}
+            if etag:
+                headers["If-Match"] = etag
+            else:
+                headers["If-Match"] = "*"
+
             response = requests.delete(
                 f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                 headers=headers,
@@ -2440,6 +2903,40 @@ class WebhookDrivenPlannerSync:
                 retry_after = int(response.headers.get("Retry-After", 60))
                 self.rate_limiter.handle_rate_limit(retry_after)
                 return False
+            elif response.status_code == 412:
+                # Precondition failed due to ETag; fetch fresh ETag and retry once
+                try:
+                    get_resp2 = requests.get(
+                        f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
+                        headers={"Authorization": f"Bearer {token}"},
+                        timeout=10,
+                    )
+                    new_etag = None
+                    if get_resp2.status_code == 200:
+                        try:
+                            new_etag = get_resp2.json().get("@odata.etag")
+                        except Exception:
+                            new_etag = None
+                    retry_headers = {"Authorization": f"Bearer {token}"}
+                    retry_headers["If-Match"] = new_etag or "*"
+                    response2 = requests.delete(
+                        f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
+                        headers=retry_headers,
+                        timeout=10,
+                    )
+                    if response2.status_code in (200, 204, 404):
+                        annika_id = await self._get_annika_id(planner_id)
+                        if annika_id:
+                            await self._remove_mapping(annika_id, planner_id)
+                        await self._log_sync_operation(
+                            SyncOperation.DELETE.value,
+                            annika_id,
+                            planner_id,
+                            "success",
+                        )
+                        return True
+                except Exception:
+                    pass
             else:
                 logger.error(
                     f"Failed to delete Planner task {planner_id}: {response.status_code}"
@@ -2512,15 +3009,22 @@ class WebhookDrivenPlannerSync:
 
     async def _determine_plan_for_task(self, annika_task: Dict) -> Optional[str]:
         """Determine which plan a task should go to."""
-        # You can customize this logic based on task properties
-        # For now, use default plan from environment or Redis config
-
         # Check if task has a specific plan preference
         task_plan = annika_task.get("plan_id")
         if task_plan:
             return task_plan
 
-        # Check Redis config
+        # Short-lived plan choice cache per Annika task (fallback successes)
+        try:
+            annika_id = annika_task.get("id")
+            if annika_id:
+                cached_choice = await self.redis_client.get(f"annika:planner:plan_choice:{annika_id}")
+                if cached_choice:
+                    return cached_choice
+        except Exception:
+            pass
+
+        # Check Redis default config
         default_plan = await self.redis_client.get("annika:config:default_plan_id")
         if default_plan:
             return default_plan
@@ -2532,12 +3036,12 @@ class WebhookDrivenPlannerSync:
     # ========== PLANNER POLLING ==========
 
     async def _planner_polling_loop(self):
-        """Poll all known Planner plans for task changes every hour."""
-        logger.info("⏰ Starting Planner polling loop (every hour)")
+        """Poll all known Planner plans for task changes; interval is config-driven."""
+        logger.info(f"⏰ Starting Planner polling loop (every {self.poll_interval}s)")
 
         while self.running:
             try:
-                await asyncio.sleep(3600)  # Wait 1 hour (3600 seconds)
+                await asyncio.sleep(self.poll_interval)
 
                 if not self.running:
                     break
@@ -2559,10 +3063,13 @@ class WebhookDrivenPlannerSync:
 
             async def _delayed_poll():
                 try:
-                    await asyncio.sleep(max(1, min(delay_seconds, 60)))
-                    if self.running:
+                    jitter = random.uniform(0, 5.0)
+                    await asyncio.sleep(max(1, min(delay_seconds, 60)) + jitter)
+                    now = time.time()
+                    if self.running and (now - self.last_quick_poll_at) >= self.quick_poll_min_interval:
                         logger.info(f"⏱️ Quick poll triggered after local update (delay={delay_seconds}s)")
                         await self._poll_all_planner_tasks()
+                        self.last_quick_poll_at = now
                 except asyncio.CancelledError:
                     return
                 except Exception as e:
@@ -2721,13 +3228,18 @@ class WebhookDrivenPlannerSync:
 
     async def _get_all_plans_for_polling(self, headers: Dict) -> List[Dict]:
         """Get all accessible plans (personal + group plans) - based on V4 approach."""
+        # Per-cycle memoization (5 minutes)
+        now = time.time()
+        if self.plan_cache and (now - self.plan_cache_time) < 300:
+            return self.plan_cache
+
         all_plans = []
 
         try:
             logger.info("🔍 Getting personal plans...")
             # Personal plans
             response = requests.get(
-                f"{GRAPH_API_ENDPOINT}/me/planner/plans",
+                f"{GRAPH_API_ENDPOINT}/me/planner/plans?$select=id,title",
                 headers=headers,
                 timeout=15
             )
@@ -2741,7 +3253,7 @@ class WebhookDrivenPlannerSync:
             logger.info("🔍 Getting group memberships...")
             # Group plans
             response = requests.get(
-                f"{GRAPH_API_ENDPOINT}/me/memberOf",
+                f"{GRAPH_API_ENDPOINT}/me/memberOf?$select=id,displayName,@odata.type",
                 headers=headers,
                 timeout=15
             )
@@ -2768,7 +3280,7 @@ class WebhookDrivenPlannerSync:
                             url = (f"{GRAPH_API_ENDPOINT}/groups/{group_id}"
                                    "/planner/plans")
                             plans_resp = requests.get(
-                                url, headers=headers, timeout=10
+                                url + "?$select=id,title", headers=headers, timeout=10
                             )
 
                             if plans_resp.status_code == 200:
@@ -2804,6 +3316,14 @@ class WebhookDrivenPlannerSync:
             logger.error(f"Error getting plans: {e}")
 
         logger.info(f"📋 Total plans found: {len(all_plans)}")
+        # Cache results for this cycle
+        self.plan_cache = all_plans
+        self.plan_cache_time = now
+        try:
+            # Optional Redis index for external consumers
+            await self.redis_client.set("annika:graph:plans:index", json.dumps([p.get("id") for p in all_plans if p.get("id")]), ex=300)
+        except Exception:
+            pass
         return all_plans
 
     async def trigger_immediate_poll(self):
