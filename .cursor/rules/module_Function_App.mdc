@@ -1,0 +1,97 @@
+---
+description: Azure Functions host and MCP bootstrap for Remote MCP Functions – apply when touching the function entrypoint, MCP tool registration, or health probes
+alwaysApply: false
+---
+
+# Function_App Module
+
+> **Related Rules**: [ms-mcp-system-architecture.mdc](mdc:.cursor/rules/ms-mcp-system-architecture.mdc), [module_HTTP_Endpoints.mdc](mdc:.cursor/rules/module_HTTP_Endpoints.mdc), [module_Token_Service.mdc](mdc:.cursor/rules/module_Token_Service.mdc), [module_Webhook_System.mdc](mdc:.cursor/rules/module_Webhook_System.mdc)
+> **Dependencies**: Token Service (delegated/app tokens), HTTP Endpoints (route registration), Webhook System (background initialisers), Planner Sync module
+> **Exports**: Azure Function `FunctionApp` instance, MCP tool triggers, readiness/health routes
+
+## Module Overview
+- **Purpose**: Host the Azure Functions entrypoint, register HTTP + MCP routes, start background services (token refresh, webhook/chat managers), and expose health probes for the remote MCP stack.
+- **Entry Points**: `src/function_app.py`
+- **Key Interfaces**: `register_http_endpoints(function_app)`, `register_additional_tools(app)`, `register_delegated_tools(app)`, `start_token_refresh_service()`, background `initialize_webhook_handler()` + `initialize_chat_subscription_manager()` threads.
+
+## Complete File Inventory
+### Core Files
+- **[function_app.py](mdc:src/function_app.py)**: Azure Functions `FunctionApp` definition, route bindings, MCP tool triggers, background bootstrap threads.
+- **[additional_tools.py](mdc:src/additional_tools.py)**: App-only MCP tools (Teams, Files, Reports) registered from `function_app`.
+- **[additional_tools_delegated.py](mdc:src/additional_tools_delegated.py)**: Delegated MCP tools that require agent ROPC tokens; imported during registration.
+
+### Configuration Files
+- **[host.json](mdc:src/host.json)**: Functions host configuration including health monitor tuning.
+- **[local.settings.json](mdc:src/local.settings.json)**: Local dev settings used by `load_env`/`function_app` for environment hydration (never commit secrets).
+
+### Test Files
+- **[test_http_endpoints_live.py](mdc:src/Tests/integration/test_http_endpoints_live.py)**: Validates that `register_http_endpoints` wiring remains compatible with the Function App.
+- **[test_delegated_tools.py](mdc:src/Tests/test_delegated_tools.py)**: Ensures delegated MCP tools exposed via `additional_tools_delegated` are discoverable and callable.
+
+## Function Trace Mapping
+### `FunctionApp` bootstrap → HTTP/MCP registration → Background services
+```
+readiness_check in function_app.py
+├── returns fast JSON payload for external probes
+├── used by start_all_services.wait_for_function_app
+└── complements sync_health_check/chat_sub_health below
+
+register_http_endpoints in http_endpoints.py
+├── called from FunctionApp setup (module dependency)
+├── imports endpoints.admin, planner, tasks_buckets, …
+└── binds 70+ HTTP routes onto `app`
+
+register_additional_tools / register_delegated_tools in additional_tools*.py
+├── invoked from FunctionApp at import-time
+└── expose MCP triggers `list_teams`, `list_channels`, …
+
+start_token_refresh_service in token_refresh_service.py
+├── launched during module import (threaded loop)
+├── pulls Redis token metadata via RedisTokenManager
+└── calls AgentAuthManager.get_agent_user_token to mint/refresh
+
+init_webhook_handler / init_chat_sub_manager in function_app.py
+├── spawn background threads
+├── event loop run_until_complete(initialize_webhook_handler)
+└── depend on Webhook System module for Redis pub/sub wiring
+
+sync_health_check / chat_sub_health in function_app.py
+└── expose JSON health snapshots for planner sync + chat subscriptions
+```
+
+## Implementation Patterns
+### Background Thread Initialisation – [module_Webhook_System.mdc](mdc:.cursor/rules/module_Webhook_System.mdc)
+- **Files**: `src/function_app.py`
+- **Functions**: `init_webhook_handler`, `init_chat_sub_manager`
+- **Rule Reference**: Background services are spawned in daemon threads; follow webhook module guidance when altering thread lifecycles.
+
+### MCP Tool Registration – [module_MCP_Tools.mdc](mdc:.cursor/rules/module_MCP_Tools.mdc)
+- **Files**: `src/function_app.py`, `src/additional_tools.py`, `src/additional_tools_delegated.py`
+- **Functions**: `register_additional_tools`, `register_delegated_tools`
+- **Rule Reference**: Tools must specify `toolProperties` schemas compatible with Azure Functions MCP trigger binding.
+
+## Module Dependencies
+### Internal Dependencies
+- `function_app` imports `register_http_endpoints` (HTTP Endpoints module) to bind all REST routes.
+- `start_token_refresh_service` (Token Service module) must be initialised before delegated HTTP handlers are used.
+- Webhook initialisers depend on async setup functions from the Webhook System module.
+
+### External Dependencies
+- **Azure Functions runtime**: `azure.functions` binding for HTTP/MCP triggers.
+- **Azure Identity**: Used indirectly by MCP tools for app-only Graph tokens.
+- **Redis**: Health checks and MCP tools assume Redis availability via downstream modules.
+
+## Health Check Functions
+- **`readiness_check`**: Lightweight probe returning `{"status":"ready"}` for supervisors – `src/function_app.py`.
+- **`sync_health_check`**: Reports planner sync status placeholder; ensure Planner module keeps contract – `src/function_app.py`.
+- **`chat_sub_health`**: Async health endpoint relaying `ChatSubscriptionManager.get_subscription_health()` – `src/function_app.py`.
+
+## Configuration Requirements
+- **Environment Variables**: `DEFAULT_PLANNER_PLAN_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AGENT_USER_NAME`, `AGENT_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `GRAPH_WEBHOOK_URL`, `DISABLE_LOCAL_SERVICES`.
+- **Redis Keys**: Reads health snapshots written by Planner/Webhook modules (`annika:sync:health`, `annika:chat_subscriptions:*`).
+- **External Services**: Microsoft Graph (via delegated/app tokens), Azure Blob Storage for snippet tool bindings.
+
+## Common Issues & Solutions
+- **Issue**: Missing `DEFAULT_PLANNER_PLAN_ID` prevents sync initialisation. **Solution**: Populate env var (or local.settings.json) before starting services; verify via `ensure_configuration()` logs.
+- **Issue**: Background threads crash silently when `DISABLE_LOCAL_SERVICES=1`. **Solution**: Guard logic already logs skip; ensure downstream services handle disabled mode before re-enabling.
+- **Issue**: MCP tool triggers fail with 401. **Solution**: Check Token Service module for delegated/app token availability and confirm required scopes are granted.

@@ -27,6 +27,36 @@ Identify modules based on:
 - **Maintenance boundaries**: Logical groupings for updates and debugging
 
 
+## Expected Modules (codebase-wide baseline)
+
+Annika primary repo:
+- `module_System_One.mdc`
+- `module_System_Two.mdc`
+- `module_Task_Manager.mdc`
+- `module_MCP_Server.mdc`
+- `module_Agent_System.mdc`
+- `module_Redis_Management.mdc`
+- `module_UI_System.mdc`
+- `module_Planner_Integration.mdc`
+- `module_Memory_System.mdc`
+- `module_Logging_System.mdc`
+- `module_OpenAI_Integration.mdc`
+- `module_Document_Processing.mdc`
+- `module_Web_Research.mdc`
+
+Remote MCP Functions (this repository) **must add**:
+- `module_Function_App.mdc`
+- `module_HTTP_Endpoints.mdc`
+- `module_Token_Service.mdc`
+- `module_Auth_Manager.mdc`
+- `module_Planner_Sync.mdc`
+- `module_Webhook_System.mdc`
+- `module_Chat_Subscriptions.mdc`
+- `module_Graph_Metadata.mdc`
+- `module_Start_Services.mdc`
+
+Always extend this list when new modules emerge; link each rule from the appropriate `agents.md` files.
+
 ## Module Rule Template Structure
 ```markdown
 ---
@@ -131,7 +161,7 @@ alwaysApply: false
 
 ## Deliverables
 1. **Module rule files**: One per identified module
-2. **Master program file**: `Annika_AGI_Program.mdc`
+2. **Master program file**:
 3. **Obsolete file list**: Files that appear unused or deprecated
 4. **Dependency graph**: Visual representation of module relationships
 5. **Refactoring recommendations**: Suggestions for cleaning up the codebase

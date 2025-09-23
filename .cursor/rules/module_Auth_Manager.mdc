@@ -1,0 +1,86 @@
+---
+description: Delegated/application auth manager module for Remote MCP – apply when updating agent authentication flows or scope normalization logic
+alwaysApply: false
+---
+
+# Auth_Manager Module
+
+> **Related Rules**: [module_Token_Service.mdc](mdc:.cursor/rules/module_Token_Service.mdc), [active-scopes.mdc](mdc:.cursor/rules/active-scopes.mdc), [module_Function_App.mdc](mdc:.cursor/rules/module_Function_App.mdc)
+> **Dependencies**: Token Service (Redis storage), Azure Identity libraries, Environment configuration
+> **Exports**: `get_agent_token`, `AgentAuthManager`, delegated scope normalization helpers
+
+## Module Overview
+- **Purpose**: Acquire and cache delegated/app tokens for autonomous agents using ROPC, certificate, or managed identity flows with Redis persistence.
+- **Entry Points**: `src/agent_auth_manager.py`, `src/dual_auth_manager.py`, `src/http_auth_helper.py`.
+- **Key Interfaces**: `get_agent_token(scope)`, `AgentAuthManager.get_agent_user_token`, `dual_auth_manager.get_application_token`, `dual_auth_manager.get_delegated_token`.
+
+## Complete File Inventory
+### Core Files
+- **[agent_auth_manager.py](mdc:src/agent_auth_manager.py)**: Core class handling ROPC login, scope normalization, Redis-backed caching.
+- **[dual_auth_manager.py](mdc:src/dual_auth_manager.py)**: Bridges delegated/app auth flows, uses Redis for app token caching.
+- **[http_auth_helper.py](mdc:src/http_auth_helper.py)**: Legacy helper providing HTTP endpoint auth selection (delegated vs app-only).
+
+### Supporting Files
+- **[load_env.py](mdc:src/load_env.py)**: Ensures `.env` values loaded before auth modules initialize.
+- **[Documentation/Redis_First_Architecture_Summary.md](mdc:src/Documentation/Redis_First_Architecture_Summary.md)**: Discusses auth/token caching strategy.
+
+### Test Files
+- **[Tests/test_agent_auth.py](mdc:src/Tests/test_agent_auth.py)**: Exercises scope normalization & token acquisition.
+- **[Tests/test_delegated_access.py](mdc:src/Tests/test_delegated_access.py)**: Validates delegated flows across HTTP endpoints.
+- **[Tests/test_http_delegated.py](mdc:src/Tests/test_http_delegated.py)**: Ensures HTTP endpoints honor delegated tokens.
+
+## Function Trace Mapping
+### `get_agent_token` → Auth manager → Redis token manager
+```
+get_agent_token(scope)
+├── AgentAuthManager (singleton via get_auth_manager)
+├── AgentAuthManager.get_agent_user_token(scope)
+│   ├── _determine_normalized_scope(scope or master env)
+│   ├── _get_cached_token -> in-memory cache
+│   ├── _get_stored_token -> RedisTokenManager.get_token
+│   ├── _acquire_token_with_ropc / certificate / managed identity
+│   └── _store_token -> RedisTokenManager.store_token
+└── Returns access token string (or None)
+
+dual_auth_manager.get_application_token(scope)
+├── RedisTokenManager store/get for app tokens
+└── Falls back to Azure Identity ClientSecretCredential
+
+dual_auth_manager.get_delegated_token(scope)
+└── Delegates to `get_agent_token(scope)` (ensures single source of truth)
+```
+
+## Implementation Patterns
+### Scope Normalization – [active-scopes.mdc](mdc:.cursor/rules/active-scopes.mdc)
+- **Files**: `agent_auth_manager.py`
+- **Functions**: `_determine_normalized_scope`
+- **Rule Reference**: Always include `openid profile offline_access User.Read`; dedupe + sort scopes for consistent Redis keys.
+
+### Redis-backed Token Cache – [module_Token_Service.mdc](mdc:.cursor/rules/module_Token_Service.mdc)
+- **Files**: `agent_auth_manager.py`, `dual_auth_manager.py`
+- **Functions**: `_store_token`, `_get_stored_token`, `get_redis_token_manager`
+- **Rule Reference**: Never instantiate raw `redis.Redis`; rely on `RedisTokenManager` for connection pooling and TTL enforcement.
+
+## Module Dependencies
+### Internal Dependencies
+- Relies on Token Service for Redis storage and refresh; ensure schema stays aligned.
+- HTTP endpoints import `get_agent_token`; keep signature stable.
+- Planner Sync + Chat Subscription modules depend on delegated token availability.
+
+### External Dependencies
+- Azure Identity (CertificateCredential, ManagedIdentityCredential).
+- Microsoft Graph OAuth2 token endpoint (for ROPC).
+- Environment configuration (`AZURE_*`, `AGENT_*`, `ANNIKA_DELEGATED_MASTER_SCOPES`).
+
+## Health Check Functions
+- No direct health endpoints; rely on Token Service health + login success logs. Consider adding explicit probes if token acquisition fails repeatedly.
+
+## Configuration Requirements
+- **Environment Variables**: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AGENT_USER_NAME`, `AGENT_PASSWORD`, optional `AGENT_CERTIFICATE_PATH`, `ANNIKA_DELEGATED_MASTER_SCOPES`.
+- **Redis Keys**: Shares `annika:tokens:*` namespace with Token Service.
+- **External Services**: Microsoft Graph OAuth2 endpoint; ensure ROPC permitted in tenant.
+
+## Common Issues & Solutions
+- **Issue**: ROPC returns `AADSTS65001` (consent required). **Solution**: Update delegated scopes to consented set; verify tenant admin approval; adjust `ANNIKA_DELEGATED_MASTER_SCOPES`.
+- **Issue**: Token churn (frequent ROPC calls). **Solution**: Inspect Redis TTLs, confirm Token Service running, ensure `_get_cached_token` path not bypassed.
+- **Issue**: Managed identity/certificate fallback failing. **Solution**: Provide explicit logs; ensure environment variables/certs deployed before enabling fallback code paths.

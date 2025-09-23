@@ -1,0 +1,102 @@
+---
+description: Graph webhook ingestion and routing module for Remote MCP – apply when modifying webhook handler, subscription management, or pub/sub routing
+alwaysApply: false
+---
+
+# Webhook_System Module
+
+> **Related Rules**: [module_Planner_Sync.mdc](mdc:.cursor/rules/module_Planner_Sync.mdc), [module_Chat_Subscriptions.mdc](mdc:.cursor/rules/module_Chat_Subscriptions.mdc), [module_Function_App.mdc](mdc:.cursor/rules/module_Function_App.mdc)
+> **Dependencies**: Auth Manager (subscription tokens), Redis, Token Service, Planner Sync module
+> **Exports**: Webhook handler, subscription initialisers, CLI utilities for monitoring webhooks
+
+## Module Overview
+- **Purpose**: Handle Microsoft Graph webhook callbacks, manage subscription lifecycle, and route notifications into Redis for downstream processing.
+- **Entry Points**: `src/webhook_handler.py`, `src/start_all_services.py` (service manager), `src/setup_local_webhooks.py`, `src/webhook_monitor.py`.
+- **Key Interfaces**: `initialize_webhook_handler()`, `WebhookService` internals, `graph_webhook_http` (HTTP endpoint).
+
+## Complete File Inventory
+### Core Files
+- **[webhook_handler.py](mdc:src/webhook_handler.py)**: Async webhook handler initialisation, Redis pub/sub routing, notification validation.
+- **[setup_local_webhooks.py](mdc:src/setup_local_webhooks.py)**: CLI helper to register local webhooks.
+- **[webhook_monitor.py](mdc:src/webhook_monitor.py)**: Diagnostic tool to monitor webhook health + logs.
+- **[start_all_services.py](mdc:src/start_all_services.py)**: Starts webhook handler/background services; interacts with Planner Sync and chat subscriptions.
+- **[startup_local_services.py](mdc:src/startup_local_services.py)**: Lighter-weight local startup verifying webhooks and tokens.
+
+### Supporting Files
+- **[chat_subscription_manager.py](mdc:src/chat_subscription_manager.py)**: Manages Teams chat subscriptions (linked module; documented separately).
+- **[graph_subscription_manager.py](mdc:src/graph_subscription_manager.py)**: Legacy subscription helper used by startup scripts.
+- **[Documentation/MS_Graph_Webhook_Integration_COMPLETE.md](mdc:src/Documentation/MS_Graph_Webhook_Integration_COMPLETE.md)**: Detailed webhook flow documentation.
+
+### Test Files
+- **[test_webhook_flow.py](mdc:src/test_webhook_flow.py)**
+- **[test_webhook_permissions.py](mdc:src/test_webhook_permissions.py)**
+- **[test_webhook_permissions_simple.py](mdc:src/test_webhook_permissions_simple.py)**
+- **[Tests/test_subscription_renewal.py](mdc:src/Tests/test_subscription_renewal.py)**: Validates subscription renewal logic.
+
+## Function Trace Mapping
+### Webhook handler initialisation → Redis routing → Planner sync interaction
+```
+initialize_webhook_handler()
+├── loads env via load_env (if needed)
+├── gets Redis async client
+├── subscribes to key channels (Planner, Teams)
+└── starts background tasks: _process_notifications, _renew_subscriptions
+
+WebhookService._process_notifications()
+├── receives Graph payloads (from `graph_webhook_http` or queue)
+├── validates `clientState`
+├── publishes to Redis channel `annika:planner:webhook`
+└── logs to `annika:webhook:log`
+
+Function App `graph_webhook_http`
+├── Handles validationToken (GET), returns plain text
+├── For notifications: pushes into Redis list/ channel used by WebhookService
+└── Ensures 202/200 responses to Graph
+
+start_all_services.ServiceManager.start_local_services()
+├── start ngrok → set `GRAPH_WEBHOOK_URL`
+├── start Azure Function host (func)
+├── call initialize_webhook_handler (thread)
+└── run Planner sync + chat subscription managers
+
+webhook_monitor.py
+├── Polls Redis logs/keys
+├── Provides CLI visibility into active notifications + health keys
+```
+
+## Implementation Patterns
+### Redis Pub/Sub Routing – [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc)
+- **Files**: `webhook_handler.py`
+- **Functions**: `_publish_notification`
+- **Rule Reference**: Publish canonical payload to `annika:planner:webhook`; trim `annika:webhook:log` to 500 entries; maintain TTL for `annika:webhooks:notifications`.
+
+### Subscription Renewal – Webhook best practices
+- **Files**: `webhook_handler.py`, `chat_subscription_manager.py`, `start_all_services.py`
+- **Functions**: `_renew_subscriptions`, `renew_expiring_subscriptions`
+- **Rule Reference**: Renew before expiration (typically 15 minutes for Teams, 1 hour default); escalate failures via logs/Redis keys.
+
+## Module Dependencies
+### Internal Dependencies
+- Planner Sync consumes notifications published by this module.
+- Chat Subscription manager (separate module) is initialised alongside to cover Teams messages.
+- Token Service ensures delegated tokens available for subscription creation/renewal.
+
+### External Dependencies
+- Microsoft Graph webhook endpoints – requires reachable `GRAPH_WEBHOOK_URL` (ngrok or production URL).
+- Azure Functions HTTP endpoint `graph_webhook_http` for Graph POST callbacks.
+- Redis pub/sub for routing notifications.
+
+## Health Check Functions
+- **`start_all_services.wait_for_function_app()`** indirectly verifies webhook endpoint availability.
+- **`chat_sub_health`** (Function App) relies on Chat Subscription manager but pertains to webhook health.
+- **Webhook monitor** CLI inspects `annika:sync:webhook_status`, `annika:webhook:log` for debugging.
+
+## Configuration Requirements
+- **Environment Variables**: `GRAPH_WEBHOOK_URL`, `GRAPH_WEBHOOK_CLIENT_STATE`, `NGROK_*` overrides, `DISABLE_LOCAL_SERVICES`.
+- **Redis Keys**: `annika:webhook:log`, `annika:webhooks:notifications`, `annika:planner:webhook`, `annika:sync:webhook_status`.
+- **External Services**: ngrok (dev), Azure Functions host, Microsoft Graph subscriptions (needs delegated token with `Webhook.Notifications` scopes as configured).
+
+## Common Issues & Solutions
+- **Issue**: Graph validation returning 400. **Solution**: Ensure `graph_webhook_http` echoes `validationToken` query string exactly; check ngrok URL set in environment.
+- **Issue**: Subscriptions expiring. **Solution**: Confirm renewal loops running; inspect Redis keys for `status: failed_permission`; re-run `setup_local_webhooks.py` to recreate.
+- **Issue**: Notifications not reaching Planner Sync. **Solution**: Verify Redis pub/sub channel; ensure WebhookService publishes to `annika:planner:webhook`; check log trimming not deleting messages prematurely.

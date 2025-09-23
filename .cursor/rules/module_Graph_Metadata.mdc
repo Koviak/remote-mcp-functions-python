@@ -1,0 +1,86 @@
+---
+description: Microsoft Graph metadata caching module – apply when touching metadata manager, cache TTLs, or metadata HTTP endpoints
+alwaysApply: false
+---
+
+# Graph_Metadata Module
+
+> **Related Rules**: [module_HTTP_Endpoints.mdc](mdc:.cursor/rules/module_HTTP_Endpoints.mdc), [module_Token_Service.mdc](mdc:.cursor/rules/module_Token_Service.mdc), [module_Planner_Sync.mdc](mdc:.cursor/rules/module_Planner_Sync.mdc)
+> **Dependencies**: Redis for caching, Auth Manager for Graph access, HTTP endpoints for metadata queries
+> **Exports**: `GraphMetadataManager` singleton, cache helpers used across endpoints and sync service
+
+## Module Overview
+- **Purpose**: Provide cache-first access to Microsoft Graph metadata (users, groups, plans, buckets, tasks) to reduce API load and latency.
+- **Entry Points**: `src/graph_metadata_manager.py`, consumed by HTTP endpoints and Planner Sync.
+- **Key Interfaces**: `GraphMetadataManager.get_user`, `get_group`, `get_plan`, `get_bucket`, `get_task`, `get_metadata(type, id)`.
+
+## Complete File Inventory
+### Core Files
+- **[graph_metadata_manager.py](mdc:src/graph_metadata_manager.py)**: Implements caching, TTL management, cache invalidation, Graph fetch fallbacks.
+
+### Supporting Files
+- **[Documentation/Redis_First_Architecture_Summary.md](mdc:src/Documentation/Redis_First_Architecture_Summary.md)**: Describes metadata caching strategy.
+- **[Documentation/Comprehensive_Endpoints_Summary.md](mdc:src/Documentation/Comprehensive_Endpoints_Summary.md)**: References metadata endpoints.
+
+### Test Files
+- **[Tests/test_http_delegated.py](mdc:src/Tests/test_http_delegated.py)** (indirect coverage for metadata endpoints).
+- **[Tests/test_planner_sync_deletion.py](mdc:src/Tests/test_planner_sync_deletion.py)** (ensures metadata reads align with sync expectations).
+
+## Function Trace Mapping
+### Metadata fetch flow
+```
+GraphMetadataManager.get_user(user_id)
+├── _get_cache_key("users", user_id)
+├── _get_from_cache(key)
+├── If hit: return cached JSON
+└── If miss: _fetch_from_graph("users", user_id)
+        ├── uses delegated/app token (via Auth Manager helper)
+        ├── requests Graph `/users/{id}`
+        └── stores result with TTL (24h)
+
+get_metadata(metadata_type, resource_id)
+├── Normalises type (users, groups, plans, buckets, tasks)
+├── Delegates to type-specific getter
+└── Raises ValueError for unsupported types
+
+Planner Sync `_load_plan_cache`
+├── Calls `get_plan(plan_id)`
+└── Uses cached data to reduce Graph calls
+```
+
+## Implementation Patterns
+### TTL Strategy – [ms-mcp-system-architecture.mdc](mdc:.cursor/rules/ms-mcp-system-architecture.mdc)
+- **Files**: `graph_metadata_manager.py`
+- **Values**:
+  - Users/Groups: 24 hours
+  - Plans/Buckets: 24 hours (overridden by housekeeping to 300s when necessary)
+  - Tasks: Persistent (no expiry)
+- **Rule Reference**: Maintain TTLs consistent with architecture spec; tasks persist, metadata caches expire regularly.
+
+### Redis JSON Storage – [redis-json.mdc](mdc:.cursor/rules/redis-json.mdc)
+- **Files**: `graph_metadata_manager.py`
+- **Functions**: `_set_cache_value`, `_get_from_cache`
+- **Rule Reference**: Store serialized JSON strings; ensure decode_responses=True for Redis client.
+
+## Module Dependencies
+### Internal Dependencies
+- Auth Manager for acquiring tokens (delegated preferred, fallback to app-only where appropriate).
+- HTTP endpoints rely on this module for `/api/metadata` route.
+- Planner Sync uses caches for plan/bucket lookups to reduce Graph calls.
+
+### External Dependencies
+- Redis (host/port/password from environment).
+- Microsoft Graph (users, groups, planner) APIs.
+
+## Health Check Functions
+- No dedicated health endpoint; rely on logging and Redis availability. Consider adding metrics (cache hit rate) if necessary.
+
+## Configuration Requirements
+- **Environment Variables**: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `GRAPH_METADATA_TTL_*` overrides (if implemented).
+- **Redis Keys**: `annika:graph:users:{id}`, `annika:graph:groups:{id}`, `annika:graph:plans:{id}`, `annika:graph:buckets:{id}`, `annika:graph:tasks:{id}`.
+- **External Services**: Microsoft Graph endpoints accessible with delegated/app tokens.
+
+## Common Issues & Solutions
+- **Issue**: Stale metadata (user/bucket changes). **Solution**: Use Graph webhook notifications to invalidate cache or adjust TTLs; housekeeping loop in Planner Sync enforces TTL ≤300s for buckets/plans when configured.
+- **Issue**: Cache misses causing Graph throttling. **Solution**: Verify `_ensure_cache_initialized` executed; consider increasing TTL or prewarming data.
+- **Issue**: Serialization errors. **Solution**: Ensure all Graph responses stored as JSON serializable dicts; handle non-JSON fields gracefully.

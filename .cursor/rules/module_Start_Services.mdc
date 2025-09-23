@@ -1,0 +1,94 @@
+---
+description: Local services startup orchestration module – apply when modifying start_all_services/startup_local_services scripts or service manager logic
+alwaysApply: false
+---
+
+# Start_Services Module
+
+> **Related Rules**: [module_Webhook_System.mdc](mdc:.cursor/rules/module_Webhook_System.mdc), [module_Planner_Sync.mdc](mdc:.cursor/rules/module_Planner_Sync.mdc), [module_Function_App.mdc](mdc:.cursor/rules/module_Function_App.mdc), [module_Chat_Subscriptions.mdc](mdc:.cursor/rules/module_Chat_Subscriptions.mdc)
+> **Dependencies**: Auth Manager (token verification), Webhook system, Planner sync, Azure Functions host, ngrok
+> **Exports**: CLI startup orchestration (`start_all_services.py`, `startup_local_services.py`), service management utilities
+
+## Module Overview
+- **Purpose**: Coordinate local development services for Remote MCP (ngrok tunnel, Azure Functions host, webhook setup, Planner sync, chat subscriptions) with orderly startup/shutdown.
+- **Entry Points**: `src/start_all_services.py`, `src/startup_local_services.py`.
+- **Key Interfaces**: `ServiceManager.start_local_services()`, `ServiceManager.stop_all()`, `start_local_services()` (async wrapper), CLI execution via `python start_all_services.py`.
+
+## Complete File Inventory
+### Core Files
+- **[start_all_services.py](mdc:src/start_all_services.py)**: Comprehensive service manager that starts ngrok, function host, webhook handler, planner sync, chat subscriptions, monitors health, handles shutdown.
+- **[startup_local_services.py](mdc:src/startup_local_services.py)**: Lightweight manager focusing on ngrok + webhook setup + subscription monitoring for simple workflows.
+
+### Supporting Files
+- **[monitor_sync.py](mdc:monitor_sync.py)** (repo root): Legacy monitor (if present) – verify before using.
+- **[setup_local_webhooks.py](mdc:src/setup_local_webhooks.py)**: Support script invoked by service manager.
+- **[setup_teams_subscriptions.py](mdc:src/setup_teams_subscriptions.py)**: Additional helper for chat subscriptions.
+
+### Test Files
+- No direct automated tests; rely on integration tests (`test_phase2_*`) and manual verification scripts.
+
+## Function Trace Mapping
+### Comprehensive startup workflow
+```
+ServiceManager.start_all()
+├── _resolve_ngrok() / _resolve_func() to locate executables
+├── start_ngrok() -> ensures tunnel, updates GRAPH_WEBHOOK_URL
+├── start_function_app() -> launches Azure Functions host (`func start`)
+├── wait_for_function_app() -> polls health endpoints
+├── setup_webhooks() -> triggers webhook registration
+├── start_sync_service() -> runs Planner Sync V5 (async)
+├── start_chat_subscription_manager() -> ensures chat subs active
+├── monitor background tasks (health, renewal)
+└── Handles graceful shutdown via stop_all()
+
+startup_local_services.start_all_services()
+├── Load local.settings.json to hydrate env vars
+├── Verify authentication (delegated + app tokens)
+├── start_ngrok()
+├── setup_webhooks() using GraphSubscriptionManager
+└── spawn subscription monitor task
+
+stop_all()
+├── Stop Planner sync
+├── Cancel background tasks
+├── Terminate ngrok + func processes (platform aware)
+└── Ensure ports freed (7071, 4040)
+```
+
+## Implementation Patterns
+### Executable Resolution – developer environment resilience
+- **Files**: `start_all_services.py`
+- **Functions**: `_resolve_ngrok`, `_resolve_func`
+- **Rule Reference**: Respect env overrides (`NGROK_EXE`, `FUNC_PATH`), add directories to PATH dynamically, avoid hard-coded user paths.
+
+### Graceful Shutdown – Windows-friendly
+- **Files**: `start_all_services.py`
+- **Functions**: `stop_all`, `_ensure_port_closed`
+- **Rule Reference**: Use `CREATE_NEW_PROCESS_GROUP` + `CTRL_BREAK_EVENT` on Windows; fallback to terminate/kill cross-platform.
+
+## Module Dependencies
+### Internal Dependencies
+- Webhook module for `initialize_webhook_handler`.
+- Planner Sync module for `start`/`stop` of sync service.
+- Chat Subscription module for global/per-chat subscription management.
+- Auth Manager to verify tokens before launching dependent services.
+
+### External Dependencies
+- ngrok for public tunneling (development).
+- Azure Functions Core Tools (`func`).
+- Microsoft Graph (webhook creation validation).
+
+## Health Check Functions
+- `wait_for_function_app()` hitting `/api/health/ready` (Function App module).
+- Logging messages detailing each stage (start, health, shutdown).
+- For monitoring, rely on redis keys from dependent modules (`annika:sync:health`, `annika:chat_subscriptions:*`).
+
+## Configuration Requirements
+- **Environment Variables**: `NGROK_*` overrides, `DISABLE_LOCAL_SERVICES`, `GRAPH_WEBHOOK_URL`, Azure + agent credentials, Planner defaults.
+- **Files**: `.env`, `local.settings.json` (loaded by `load_env` or startup scripts).
+- **External Services**: Docker/Redis container must be running; Graph accessible.
+
+## Common Issues & Solutions
+- **Issue**: ngrok not found. **Solution**: Set `NGROK_EXE` or place binary in `src/tools/`; check `_resolve_ngrok` logs.
+- **Issue**: Function host fails to start (port in use). **Solution**: `start_all_services` auto-closes existing processes; verify port 7071 free.
+- **Issue**: Token verification fails at startup. **Solution**: Confirm `.env` and `local.settings.json` values; ensure delegated scopes consented; check Token Service logs.

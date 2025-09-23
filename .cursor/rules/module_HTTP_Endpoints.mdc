@@ -1,0 +1,108 @@
+---
+description: Remote MCP HTTP endpoints module with modular handlers and registration details – apply when updating HTTP routes, planner/task REST APIs, or endpoint auth flows
+alwaysApply: false
+---
+
+# HTTP_Endpoints Module
+
+> **Related Rules**: [module_Function_App.mdc](mdc:.cursor/rules/module_Function_App.mdc), [http-endpoints-modular-architecture.mdc](mdc:.cursor/rules/http-endpoints-modular-architecture.mdc), [module_Auth_Manager.mdc](mdc:.cursor/rules/module_Auth_Manager.mdc), [module_Token_Service.mdc](mdc:.cursor/rules/module_Token_Service.mdc)
+> **Dependencies**: Auth Manager (delegated/app tokens), Graph Metadata module, Planner Sync module (for webhook callbacks), Chat Subscriptions/Webhook modules (for `/api/graph_webhook`)
+> **Exports**: 70+ Azure Function HTTP routes covering Planner, Tasks, Mail, Calendar, Teams, Files, Security APIs
+
+## Module Overview
+- **Purpose**: Provide a modular, maintainable Microsoft Graph HTTP API surface for agents and orchestrators via Azure Functions.
+- **Entry Points**: `src/http_endpoints.py` (compatibility layer), `src/endpoints/*.py` (modular handlers), `src/endpoints/common.py`.
+- **Key Interfaces**: `register_http_endpoints(function_app)` called from `function_app.py`, per-module `register_endpoints(app)` functions within `src/endpoints`.
+
+## Complete File Inventory
+### Core Files
+- **[http_endpoints.py](mdc:src/http_endpoints.py)**: Backward-compatible registration delegating to modular endpoints; maintains legacy imports/tests.
+- **[endpoints/common.py](mdc:src/endpoints/common.py)**: Shared helpers – Graph base URL, access token helpers, JSON headers, delegated/app selection logic.
+- **[endpoints/admin.py](mdc:src/endpoints/admin.py)**: Tenant admin endpoints (list groups/users, planner checks).
+- **[endpoints/planner.py](mdc:src/endpoints/planner.py)**: Planner plan/task CRUD wrappers.
+- **[endpoints/tasks_buckets.py](mdc:src/endpoints/tasks_buckets.py)**: Task details, bucket CRUD, user tasks.
+- **[endpoints/planner_formats.py](mdc:src/endpoints/planner_formats.py)**: Planner board format utilities.
+- **[endpoints/mail.py](mdc:src/endpoints/mail.py)**: Mail folder listing, message send/receive, attachments.
+- **[endpoints/calendar.py](mdc:src/endpoints/calendar.py)**: Calendar views, event CRUD, meeting helpers.
+- **[endpoints/teams.py](mdc:src/endpoints/teams.py)**: Teams/channel operations, chat message posting.
+- **[endpoints/files_sites.py](mdc:src/endpoints/files_sites.py)**: OneDrive/SharePoint drive and item retrieval.
+- **[endpoints/security_reports.py](mdc:src/endpoints/security_reports.py)**: Usage/security reports.
+- **[endpoints/agent_webhook.py](mdc:src/endpoints/agent_webhook.py)**: Graph webhook ingress handler + Agent task endpoints.
+- **[endpoints/agent_tools.py](mdc:src/endpoints/agent_tools.py)**: REST helpers for agent tooling (e.g., metadata, manual poll).
+- **[endpoints/users_groups.py](mdc:src/endpoints/users_groups.py)**: Delegated user/group management, membership edits, password resets.
+
+### Configuration Files
+- **[endpoints/__init__.py](mdc:src/endpoints/__init__.py)**: Package marker, describes modular intent.
+- **[Documentation/Comprehensive_Endpoints_Summary.md](mdc:src/Documentation/Comprehensive_Endpoints_Summary.md)**: High-level endpoint reference (keep aligned with modules).
+
+### Test Files
+- **[Tests/integration/test_http_endpoints_live.py](mdc:src/Tests/integration/test_http_endpoints_live.py)**: Validates endpoint registration + live Graph expectations.
+- **[Tests/test_http_delegated.py](mdc:src/Tests/test_http_delegated.py)**: Delegated scope handling tests.
+- **[Tests/test_planner_sync_deletion.py](mdc:src/Tests/test_planner_sync_deletion.py)**: Planner HTTP interactions verifying delete flows.
+
+## Function Trace Mapping
+### `register_http_endpoints` → modular registration → exec path per route
+```
+register_http_endpoints in http_endpoints.py
+├── imports endpoints.* modules (admin, planner, tasks_buckets, ...)
+├── binds app.route("plans", methods=[...])(ep_planner.*)
+└── ensures legacy signature for Function App + tests
+
+endpoints/planner.register_endpoints (implicit via admin import)
+├── functions like create_plan_http → Graph POST /planner/plans
+│   ├── get_access_token() (app token) fallback → ClientSecretCredential
+│   └── GraphMetadataManager (via common) for caching when needed
+└── update_task_progress_http ties into Planner Sync module semantics
+
+endpoints/agent_webhook.graph_webhook_http
+├── Handles Graph validation (validationToken query)
+├── Publishes notifications to Redis channel `annika:planner:webhook`
+└── Triggers Planner Sync V5 queue worker
+
+endpoints/users_groups.reset_password_http
+├── Requires delegated scope `User.ReadWrite.All`
+├── Utilises `get_agent_token(scope)` from Auth Manager
+└── Graph PATCH /users/{id}/authentication/methods
+
+endpoints/mail.send_message_http
+├── Prioritises delegated token via Auth Manager
+├── Fallback to app-only `/users/{id}/sendMail` when configured
+└── Maintains consistent error JSON for agents
+```
+
+## Implementation Patterns
+### Auth Negotiation – [module_Auth_Manager.mdc](mdc:.cursor/rules/module_Auth_Manager.mdc)
+- **Files**: `endpoints/common.py`, `endpoints/mail.py`, `endpoints/users_groups.py`
+- **Functions**: `get_delegated_or_app_token`, `send_message_http`, `reset_password_http`
+- **Rule Reference**: Always request delegated scopes via Auth Manager; use app-only fallback only where Graph supports it.
+
+### Metadata Cache Usage – [module_Graph_Metadata.mdc](mdc:.cursor/rules/module_Graph_Metadata.mdc)
+- **Files**: `endpoints/agent_tools.py` (metadata route), `endpoints/planner.py`
+- **Functions**: `get_metadata_http`, `list_plans_http`
+- **Rule Reference**: Use `GraphMetadataManager` to avoid direct Graph hits; respect TTL strategy.
+
+## Module Dependencies
+### Internal Dependencies
+- Depends on Auth Manager + Token Service for delegated/app tokens.
+- Planner endpoints integrate with Planner Sync module (shared schema + Redis keys).
+- Webhook handler uses Webhook System module utilities (Redis pub/sub + validation).
+
+### External Dependencies
+- Microsoft Graph REST APIs (Planner, Tasks, Mail, Teams, SharePoint).
+- Redis (publish webhook notifications, metadata caching).
+- Azure Functions HTTP bindings.
+
+## Health Check Functions
+- **`hello_http`** (`endpoints/agent_webhook.py`): Simple connectivity test.
+- **`graph_webhook_http`**: Handles validation; use for health/troubleshooting Graph subscriptions.
+- Additional health surfaces exposed via Function App (`sync_health_check`, `chat_sub_health`) rely on endpoints module to remain consistent.
+
+## Configuration Requirements
+- **Environment Variables**: `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, delegated scopes configured via Auth Manager, `AGENT_USER_ID` for app fallbacks.
+- **Redis Keys**: `annika:planner:webhook`, metadata caches (`annika:graph:*`), `annika:sync:*` for Planner interactions.
+- **External Services**: Microsoft Graph endpoints per service area; ensure delegated scopes granted (see `active-scopes.mdc`).
+
+## Common Issues & Solutions
+- **Issue**: 401 on `/api/me/*` endpoints. **Solution**: Ensure delegated token available; update Auth Manager scopes or confirm agent credentials.
+- **Issue**: Planner create returns 403. **Solution**: Check `DEFAULT_PLANNER_PLAN_ID`, ensure agent membership; examine Planner Sync fallback caches.
+- **Issue**: Webhook validation fails (400). **Solution**: Confirm `GRAPH_WEBHOOK_URL` matches ngrok/public URL; ensure validationToken is echoed as plain text.

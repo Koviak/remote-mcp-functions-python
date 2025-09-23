@@ -1,0 +1,89 @@
+---
+description: Token refresh and Redis storage module for Remote MCP – apply when modifying token lifecycles, Redis token schemas, or refresh scheduling
+alwaysApply: false
+---
+
+# Token_Service Module
+
+> **Related Rules**: [module_Auth_Manager.mdc](mdc:.cursor/rules/module_Auth_Manager.mdc), [module_Function_App.mdc](mdc:.cursor/rules/module_Function_App.mdc), [module_HTTP_Endpoints.mdc](mdc:.cursor/rules/module_HTTP_Endpoints.mdc)
+> **Dependencies**: Auth Manager (delegated token acquisition), Redis config module, Background services orchestrated by Function App
+> **Exports**: Background token refresh threads (sync + async), RedisTokenManager API
+
+## Module Overview
+- **Purpose**: Maintain delegated/app tokens in Redis with automatic refresh to support HTTP endpoints and MCP tools.
+- **Entry Points**: `src/token_refresh_service.py`, `src/mcp_redis_config.py`.
+- **Key Interfaces**: `start_token_refresh_service()`, `get_redis_token_manager()`, `RedisTokenManager.store_token/get_token/get_all_active_tokens`.
+
+## Complete File Inventory
+### Core Files
+- **[token_refresh_service.py](mdc:src/token_refresh_service.py)**: Background service to pre-warm and refresh delegated tokens; exposes sync + async service classes and global start/stop helpers.
+- **[mcp_redis_config.py](mdc:src/mcp_redis_config.py)**: Redis connection + token storage management (namespacing, TTL logic, health checks).
+
+### Test Files
+- **[Tests/test_redis_token_storage.py](mdc:src/Tests/test_redis_token_storage.py)**: Validates Redis storage semantics.
+- **[Tests/test_token_api_endpoints.py](mdc:src/Tests/test_token_api_endpoints.py)**: Exercises HTTP token APIs relying on this module.
+- **[Tests/test_delegated_access.py](mdc:src/Tests/test_delegated_access.py)**: Confirms delegated tokens flow from Auth Manager through Redis caches.
+
+## Function Trace Mapping
+### Token refresh loop → Redis manager → Auth manager
+```
+TokenRefreshService.start
+├── _acquire_initial_tokens() – prewarms delegated master scope
+├── spawns thread -> _run_refresh_loop()
+└── loop calls _refresh_tokens()
+
+_refresh_tokens()
+├── redis_manager.get_all_active_tokens()
+├── for each token expiring within buffer
+│   └── _refresh_single_token(scope, user_id)
+└── update_refresh_count(scope, user_id)
+
+_refresh_single_token()
+├── auth_manager.get_agent_user_token(scope)
+└── RedisTokenManager.update_refresh_count to persist metadata
+
+RedisTokenManager.store_token()
+├── builds key `annika:tokens:{agent|user}:{scope}`
+├── TTL = expires_on - now - 300s
+└── adds key to set `annika:tokens:active`
+
+RedisTokenManager.get_token()
+├── fetch JSON payload from Redis
+├── checks TTL buffer > 5 minutes
+└── returns token metadata or removes expired entry
+```
+
+## Implementation Patterns
+### Redis Token Namespace – [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc)
+- **Files**: `mcp_redis_config.py`
+- **Functions**: `_get_key`, `store_token`, `get_token`
+- **Rule Reference**: Keys must follow `annika:tokens:*` convention with JSON payload + TTL buffer.
+
+### Delegated Master Scope – [active-scopes.mdc](mdc:.cursor/rules/active-scopes.mdc)
+- **Files**: `token_refresh_service.py`
+- **Functions**: `_acquire_initial_tokens`
+- **Rule Reference**: Ensure `ANNIKA_DELEGATED_MASTER_SCOPES` only includes ROPC-supported scopes; refresh service must respect environment configuration.
+
+## Module Dependencies
+### Internal Dependencies
+- Auth Manager provides token acquisition; this module must not call Graph directly except through Auth Manager.
+- Function App starts `start_token_refresh_service()` during module import; ensure idempotent start/stop semantics.
+- HTTP Token API endpoints depend on RedisTokenManager for read/write operations.
+
+### External Dependencies
+- **Redis**: Host, port, password from environment; uses blocking `redis` (sync) client with connection pooling.
+- **Microsoft Graph**: Accessed via Auth Manager credential flows.
+
+## Health Check Functions
+- **`RedisTokenManager.health_check()`**: Pings Redis to validate connection.
+- **Token API endpoints** (see HTTP module) surface health state using this module.
+
+## Configuration Requirements
+- **Environment Variables**: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, optional pool/timeout overrides, `ANNIKA_DELEGATED_MASTER_SCOPES`.
+- **Redis Keys**: `annika:tokens:agent:{scope}`, `annika:tokens:user:{user_id}:{scope}`, `annika:tokens:active`.
+- **External Services**: Microsoft Graph via Auth Manager; no direct HTTP requests here besides logging.
+
+## Common Issues & Solutions
+- **Issue**: Tokens expire despite refresh service. **Solution**: Confirm `refresh_buffer` value (default 900s) and ensure agent credentials valid; check Redis clock skew.
+- **Issue**: Redis connection failures on startup. **Solution**: Verify `.env` settings, ensure Redis container running, adjust pool size/timeouts via env vars.
+- **Issue**: Duplicate threads spawned. **Solution**: `start_token_refresh_service()` guards; ensure module imported only once or call `stop_token_refresh_service()` during teardown.

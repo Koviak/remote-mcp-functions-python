@@ -1,0 +1,94 @@
+---
+description: Teams chat subscription manager module – apply when altering chat subscription creation, renewal, or Redis state handling
+alwaysApply: false
+---
+
+# Chat_Subscriptions Module
+
+> **Related Rules**: [module_Webhook_System.mdc](mdc:.cursor/rules/module_Webhook_System.mdc), [module_Auth_Manager.mdc](mdc:.cursor/rules/module_Auth_Manager.mdc), [module_Token_Service.mdc](mdc:.cursor/rules/module_Token_Service.mdc)
+> **Dependencies**: Delegated chat scopes via Auth Manager, Redis for subscription tracking, Webhook callback endpoint
+> **Exports**: `ChatSubscriptionManager` async API, background initialisation invoked from Function App/startup scripts
+
+## Module Overview
+- **Purpose**: Manage Microsoft Teams chat subscriptions (global and per-chat) to ensure webhook notifications reach Annika.
+- **Entry Points**: `src/chat_subscription_manager.py`, invoked via `start_all_services.py` and `function_app.py` background threads.
+- **Key Interfaces**: `ChatSubscriptionManager.subscribe_to_all_existing_chats()`, `create_chat_subscription(chat_id)`, `renew_expiring_subscriptions()`, `get_subscription_health()`.
+
+## Complete File Inventory
+### Core Files
+- **[chat_subscription_manager.py](mdc:src/chat_subscription_manager.py)**: Contains async manager class, subscription creation/renewal logic, Redis interactions.
+
+### Supporting Files
+- **[discover_teams_chats.py](mdc:src/discover_teams_chats.py)**, **[check_chat_messages.py](mdc:src/check_chat_messages.py)**, **[check_subscriptions.py](mdc:src/check_subscriptions.py)**: CLI utilities for diagnosing chat subscriptions.
+- **[setup_teams_subscriptions.py](mdc:src/setup_teams_subscriptions.py)**: One-off setup script for Teams subscriptions.
+- **[listen_for_teams_messages.py](mdc:src/listen_for_teams_messages.py)**: Diagnostic listener for chat messages.
+
+### Test Files
+- **[Tests/test_chat_tools.py](mdc:src/Tests/test_chat_tools.py)**
+- **[Tests/test_subscription_renewal.py](mdc:src/Tests/test_subscription_renewal.py)** (shared with webhook module).
+- **[test_teams_webhooks.py](mdc:src/test_teams_webhooks.py)**
+
+## Function Trace Mapping
+### Subscription manager lifecycle
+```
+ChatSubscriptionManager.initialize()
+├── Creates Redis async client (host/port/password)
+├── Pings connection
+└── Logs success
+
+subscribe_to_all_existing_chats()
+├── Checks Redis key `annika:chat_subscriptions:global`
+├── Attempts global subscription /me/chats/getAllMessages
+│   ├── On success: store hash with `mode=global`
+│   └── On 403: marks status=failed_permission, falls back to per-chat creation
+└── For fallback: discover chats via `discover_all_chats()` and call `create_chat_subscription`
+
+create_chat_subscription(chat_id)
+├── Requests delegated token with Chat scopes
+├── POST `/subscriptions` for `/chats/{chat_id}/messages`
+├── Stores Redis hash `annika:chat_subscriptions:{chat_id}` with `mode=per_chat`
+
+renew_expiring_subscriptions()
+├── Scans Redis keys `annika:chat_subscriptions:*`
+├── If expires within 15 minutes, PATCH subscription
+└── On 404, deletes key and recreates global/per-chat subscriptions
+
+get_subscription_health()
+└── Returns counts of tracked/active/expired subscriptions using Redis TTLs
+```
+
+## Implementation Patterns
+### Redis Hash Schema – [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc)
+- **Files**: `chat_subscription_manager.py`
+- **Fields**: `subscription_id`, `created_at`, `expires_at`, `status`, `mode`.
+- **Rule Reference**: Always record `mode` (global vs per_chat) and maintain TTL/cleanup for failed entries.
+
+### Delegated Scope Handling – [active-scopes.mdc](mdc:.cursor/rules/active-scopes.mdc)
+- **Files**: `chat_subscription_manager.py`
+- **Scopes**: `Chat.Read`, `Chat.ReadWrite`, `Chat.ReadBasic` as needed for discovery.
+- **Rule Reference**: Acquire delegated tokens through Auth Manager; ensure scopes present in master delegated list.
+
+## Module Dependencies
+### Internal Dependencies
+- Relies on Auth Manager for delegated chat scopes.
+- Webhook System uses these subscriptions to deliver Teams notifications.
+- Function App `chat_sub_health` endpoint calls `get_subscription_health()` for observability.
+
+### External Dependencies
+- Microsoft Graph chat subscription endpoints.
+- Redis for state persistence.
+- Azure Functions webhook endpoint for notification delivery.
+
+## Health Check Functions
+- **`get_subscription_health()`**: Aggregates active/expired counts for Function App health route.
+- Start scripts log subscription creation/renewal status to Redis keys; monitor `annika:chat_subscriptions:*` values.
+
+## Configuration Requirements
+- **Environment Variables**: `GRAPH_WEBHOOK_URL`, chat delegated scopes, `REDIS_HOST/PORT/PASSWORD`.
+- **Redis Keys**: `annika:chat_subscriptions:global`, `annika:chat_subscriptions:{chat_id}`.
+- **External Services**: Graph subscriptions require accessible webhook URL and valid delegated token.
+
+## Common Issues & Solutions
+- **Issue**: 403 on global subscription. **Solution**: Fallback to per-chat subscriptions; ensure agent has appropriate permissions; monitor Redis key status.
+- **Issue**: Subscriptions expire frequently. **Solution**: Ensure `renew_expiring_subscriptions` runs (invoked by startup services); check logs for renewal failures.
+- **Issue**: Missing chat notifications. **Solution**: Verify webhook endpoint running, Graph subscriptions active, Redis hashes `status=active` with valid `expires_at`.

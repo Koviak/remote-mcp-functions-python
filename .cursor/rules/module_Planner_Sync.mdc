@@ -1,0 +1,105 @@
+---
+description: Planner Sync V5 module mapping for Remote MCP – apply when touching planner_sync_service, webhook ingestion, or Annika↔Planner ID maps
+alwaysApply: false
+---
+
+# Planner_Sync Module
+
+> **Related Rules**: [planner-annika-sync-fixes-and-trace.mdc](mdc:.cursor/rules/planner-annika-sync-fixes-and-trace.mdc), [module_Webhook_System.mdc](mdc:.cursor/rules/module_Webhook_System.mdc), [module_Graph_Metadata.mdc](mdc:.cursor/rules/module_Graph_Metadata.mdc)
+> **Dependencies**: Auth Manager (token acquisition), Redis (state + queues), Webhook System (notifications), Token Service
+> **Exports**: `WebhookDrivenPlannerSync` async service, Redis key contracts for sync queues and mappings
+
+## Module Overview
+- **Purpose**: Provide webhook-driven bi-directional synchronization between Annika tasks (Redis) and Microsoft Planner using V5 enhancements.
+- **Entry Points**: `src/planner_sync_service_v5.py`, legacy `planner_sync_service_v3.py`/`v4.py` (reference / fallback), integration tests.
+- **Key Interfaces**: `WebhookDrivenPlannerSync.start()`, `WebhookDrivenPlannerSync._monitor_annika_changes()`, `_process_webhook_notifications()`, `_pending_queue_worker()`.
+
+## Complete File Inventory
+### Core Files
+- **[planner_sync_service_v5.py](mdc:src/planner_sync_service_v5.py)**: Primary implementation with webhook ingestion, queue workers, health monitoring, housekeeping.
+- **[planner_sync_service_v4.py](mdc:src/planner_sync_service_v4.py)**: Legacy reference (smart polling, upload/download loops).
+- **[planner_sync_service_v3.py](mdc:src/planner_sync_service_v3.py)**: Earlier sync implementation retained for historical context/tests.
+- **[annika_task_adapter.py](mdc:src/annika_task_adapter.py)**: Data transformations between Annika unified task schema and Planner task payloads.
+- **[token_api_endpoints.py](mdc:src/token_api_endpoints.py)**: Exposes sync health + manual refresh endpoints relying on sync state.
+
+### Test Files
+- **[Tests/test_planner_sync_deletion.py](mdc:src/Tests/test_planner_sync_deletion.py)**
+- **[Tests/test_v5_sync.py](mdc:src/Tests/test_v5_sync.py)**
+- **[Tests/test_phase2_*](mdc:src/test_phase2_comprehensive.py)**: Phase 2 comprehensive tests covering Planner sync flows.
+
+## Function Trace Mapping
+### `WebhookDrivenPlannerSync.start()` lifecycle
+```
+start()
+├── redis.Redis(...) -> connect + ping
+├── AnnikaTaskAdapter(self.redis_client)
+├── subscribe to `annika:tasks:updates`, `annika:planner:webhook`
+├── _load_existing_state() – ID maps, processed sets, cached TTLs
+├── _setup_webhooks() – ensures Graph subscriptions via Webhook System
+├── _initial_sync() – downloads new Planner tasks
+└── asyncio.gather(
+        _monitor_annika_changes(),
+        _process_webhook_notifications(),
+        _batch_processor(),
+        _health_monitor(),
+        _webhook_renewal_loop(),
+        _planner_polling_loop(),
+        _pending_queue_worker(),
+        _housekeeping_loop()
+    )
+
+_monitor_annika_changes()
+├── listens to Redis pub/sub
+├── on Annika updates -> _queue_upload(task_id)
+├── _queue_upload dedupes + schedules batch processing
+
+_process_webhook_notifications()
+├── consumes `annika:planner:webhook`
+├── fetches Planner task changes via Graph
+└── updates Annika tasks + ID maps
+
+_pending_queue_worker()
+├── BRPOP `annika:sync:pending`
+├── attempts upload/patch/delete
+└── pushes failures to `annika:sync:failed` with TTL + dedupe set `annika:sync:processed:{date}`
+
+_housekeeping_loop()
+├── (config gated) ensures ID map normalization, TTLs, log bounds
+└── writes `annika:cleanup:stats`
+```
+
+## Implementation Patterns
+### Redis Queue & Mapping – [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc)
+- **Files**: `planner_sync_service_v5.py`, `annika_task_adapter.py`
+- **Functions**: `_store_id_mapping`, `_get_planner_id`, `_pending_queue_worker`
+- **Rule Reference**: Use `annika:planner:id_map:{annika_id}` and `annika:task:mapping:planner:{planner_id}`; maintain TTL for cleanup keys and list bounds (e.g., 1000 entries).
+
+### Rate Limiting & Backoff – planner sync spec
+- **Files**: `planner_sync_service_v5.py`
+- **Classes**: `RateLimitHandler`, `_queue_upload`
+- **Rule Reference**: Always honor Graph 429/Retry-After; use exponential backoff capped at 5 minutes.
+
+## Module Dependencies
+### Internal Dependencies
+- Requires Auth Manager for delegated token (preferred) and Dual Auth Manager for app token fallback.
+- Webhook System publishes Graph notifications into `annika:planner:webhook` channel.
+- Graph Metadata module provides plan/bucket caches consumed during fallback create operations.
+
+### External Dependencies
+- Microsoft Graph Planner APIs (`/planner/tasks`, `/planner/plans`, `$batch`).
+- Redis for state, pub/sub, queue persistence.
+- Annika Task schema from primary repo (ensure compatibility with `annika_task_adapter`).
+
+## Health Check Functions
+- **`_health_monitor()`** writes `annika:sync:health` JSON with TTL 300s.
+- **Function App `sync_health_check`** surfaces placeholder data; align fields if sync contract evolves.
+
+## Configuration Requirements
+- **Environment Variables**: `DEFAULT_PLANNER_PLAN_ID`, `GRAPH_WEBHOOK_URL`, `MIN_QUICK_POLL_INTERVAL_SECONDS`, `PLANNER_POLL_INTERVAL_SECONDS`, `BATCH_WRITES_ENABLED`, `CLEANUP_ENABLED`, `CLEANUP_DRY_RUN`.
+- **Redis Keys**: `annika:planner:id_map:*`, `annika:planner:etag:*`, `annika:sync:*`, `annika:planner:plan_choice:*`, `annika:planner:inaccessible_plans`, metadata caches.
+- **External Services**: Planner webhooks (Graph subscription), Graph API endpoints, ngrok/dev tunnel for webhook ingress.
+
+## Common Issues & Solutions
+- **Issue**: Infinite recursion in upload queue. **Solution**: Ensure `_queue_upload` uses `asyncio.create_task` and guards (`batch_processing` flags) – already implemented; maintain when refactoring.
+- **Issue**: ETag mismatches causing 412 on delete. **Solution**: Fetch fresh ETag via GET before retry; fallback to wildcard `*` after logging (see delete path logic).
+- **Issue**: Planner fallback create hitting inaccessible plans. **Solution**: Check `annika:planner:inaccessible_plans` set TTL (600s) and ensure fallback plan discovery caches behave (plan_choice key).
