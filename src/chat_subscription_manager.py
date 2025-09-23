@@ -97,14 +97,16 @@ class ChatSubscriptionManager:
                 )
             if resp.status_code == 201:
                 data = resp.json()
+                now_iso = datetime.now(UTC).isoformat()
                 await self.redis_client.hset(
                     f"{REDIS_PREFIX}{chat_id}",
                     mapping={
                         "subscription_id": data.get("id"),
-                        "created_at": datetime.now(UTC).isoformat(),
+                        "created_at": now_iso,
+                        "updated_at": now_iso,
                         "expires_at": data.get("expirationDateTime"),
-                            "status": "active",
-                            "mode": "per_chat",
+                        "status": "active",
+                        "mode": "per_chat",
                     },
                 )
                 logger.info("Created chat subscription for %s", chat_id)
@@ -167,11 +169,13 @@ class ChatSubscriptionManager:
                 )
             if resp.status_code == 201:
                 data = resp.json()
+                now_iso = datetime.now(UTC).isoformat()
                 await self.redis_client.hset(
                     f"{REDIS_PREFIX}global",
                     mapping={
                         "subscription_id": data.get("id"),
-                        "created_at": datetime.now(UTC).isoformat(),
+                        "created_at": now_iso,
+                        "updated_at": now_iso,
                         "expires_at": data.get("expirationDateTime"),
                         "status": "active",
                         "mode": "global",
@@ -252,14 +256,24 @@ class ChatSubscriptionManager:
                 if resp.status_code == 200:
                     await self.redis_client.hset(
                         key,
-                        mapping={"expires_at": new_exp, "status": "active"},
+                        mapping={
+                            "expires_at": new_exp,
+                            "status": "active",
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        },
                     )
                 elif resp.status_code == 404:
                     logger.warning("Chat subscription missing, recreating")
                     await self.redis_client.delete(key)
                     await self.subscribe_to_all_existing_chats()
                 else:
-                    await self.redis_client.hset(key, mapping={"status": "failed"})
+                    await self.redis_client.hset(
+                        key,
+                        mapping={
+                            "status": "failed",
+                            "updated_at": datetime.now(UTC).isoformat(),
+                        },
+                    )
 
     async def cleanup_failed_subscriptions(self) -> None:
         if not self.redis_client:

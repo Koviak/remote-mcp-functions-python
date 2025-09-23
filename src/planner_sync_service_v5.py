@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 import httpx
 import redis.asyncio as redis
@@ -203,9 +203,34 @@ class WebhookDrivenPlannerSync:
         except Exception:
             self.quick_poll_min_interval = 300
 
+        try:
+            self.default_poll_interval = max(
+                self.quick_poll_min_interval,
+                int(os.environ.get("PLANNER_POLL_INTERVAL_SECONDS", "3600"))
+            )
+        except Exception:
+            self.default_poll_interval = max(self.quick_poll_min_interval, 3600)
+
+        try:
+            self.webhook_poll_interval = int(
+                os.environ.get("PLANNER_WEBHOOK_POLL_INTERVAL_SECONDS", "21600")
+            )
+        except Exception:
+            self.webhook_poll_interval = 21600
+
+        self.poll_interval = self.default_poll_interval
+        self.polling_enabled = self.poll_interval > 0
+        self.planner_webhooks_requested = False
+
+        try:
+            self.health_ttl = int(os.environ.get("SYNC_HEALTH_TTL_SECONDS", "300"))
+        except Exception:
+            self.health_ttl = 300
+
         # Components
         self.rate_limiter = RateLimitHandler()
         self.conflict_resolver = ConflictResolver()
+        self.http = requests.Session()
 
         # State tracking
         self.task_etags = {}
@@ -216,10 +241,6 @@ class WebhookDrivenPlannerSync:
         self.webhook_subscriptions = {}
         self.webhook_configs = {}
         self.webhook_renewal_interval = 3600  # 1 hour
-        try:
-            self.poll_interval = int(os.environ.get("PLANNER_POLL_INTERVAL_SECONDS", "3600"))
-        except Exception:
-            self.poll_interval = 3600
 
         # Batch processing
         self.pending_uploads = []
@@ -377,8 +398,8 @@ class WebhookDrivenPlannerSync:
 
                 # Health TTL
                 ttl = await self.redis_client.ttl("annika:sync:health")
-                if ttl is None or ttl < 0 or ttl > 300:
-                    await self.redis_client.expire("annika:sync:health", 300)
+                if ttl is None or ttl < 0 or ttl > self.health_ttl:
+                    await self.redis_client.expire("annika:sync:health", self.health_ttl)
 
                 # Housekeeping heartbeat
                 await self.redis_client.set("annika:cleanup:stats", json.dumps({
@@ -536,6 +557,12 @@ class WebhookDrivenPlannerSync:
         """Stop the sync service."""
         self.running = False
 
+        if getattr(self, 'http', None) is not None:
+            try:
+                self.http.close()
+            except Exception:
+                pass
+
         # Clean up webhooks
         await self._cleanup_webhooks()
 
@@ -648,6 +675,8 @@ class WebhookDrivenPlannerSync:
                 enable_planner_webhooks = True
         except Exception:
             enable_planner_webhooks = False
+
+        self.planner_webhooks_requested = enable_planner_webhooks
 
         # Setup multiple webhook subscriptions with appropriate tokens
         webhook_configs = [
@@ -817,6 +846,11 @@ class WebhookDrivenPlannerSync:
                         exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
                         if exp_dt > datetime.utcnow() + timedelta(minutes=5):
                             self.webhook_subscriptions[webhook_name] = data.get("subscription_id")
+                            self._apply_polling_strategy()
+                            await self._write_webhook_status(
+                                webhook_name,
+                                status="active",
+                            )
                             logger.info(
                                 f"{webhook_name} webhook already active: {data.get('subscription_id')}"
                             )
@@ -836,17 +870,14 @@ class WebhookDrivenPlannerSync:
                 if found:
                     sub_id = found.get("id")
                     self.webhook_subscriptions[webhook_name] = sub_id
-                    await self.redis_client.hset(
-                        WEBHOOK_STATUS_KEY,
+                    self._apply_polling_strategy()
+                    await self._write_webhook_status(
                         webhook_name,
-                        json.dumps(
-                            {
-                                "subscription_id": sub_id,
-                                "created_at": found.get("@odata.context", ""),
-                                "expires_at": found.get("expirationDateTime"),
-                                "resource": found.get("resource"),
-                            }
-                        ),
+                        subscription_id=sub_id,
+                        created_at=found.get("@odata.context", ""),
+                        expires_at=found.get("expirationDateTime"),
+                        resource=found.get("resource"),
+                        status="active",
                     )
                     logger.info(
                         "%s webhook: adopted existing subscription id=%s resource=%s expires=%s",
@@ -869,6 +900,81 @@ class WebhookDrivenPlannerSync:
         except Exception:
             pass
 
+        self._apply_polling_strategy()
+
+    def _resolve_webhook_name(self, client_state: Optional[str], resource: Optional[str]) -> Optional[str]:
+        client_state_value = client_state or ''
+        client_state_l = client_state_value.lower()
+        resource_value = resource or ''
+        resource_l = resource_value.lower()
+
+        planner_plan_prefix = 'annika_planner_plan_'
+        if client_state_l.startswith(planner_plan_prefix):
+            suffix = client_state_value[len(planner_plan_prefix):].strip()
+            if suffix:
+                return f"planner_plan_{suffix}_tasks"
+
+        if 'annika_planner_sync_v5' in client_state_l:
+            return 'planner_tasks'
+
+        if '/planner/plans/' in resource_l and '/tasks' in resource_l:
+            try:
+                after_prefix = resource_value.split('/planner/plans/', 1)[1]
+                plan_id = after_prefix.split('/', 1)[0]
+                if plan_id:
+                    return f"planner_plan_{plan_id}_tasks"
+            except Exception:
+                pass
+            return 'planner_tasks'
+
+        if '/planner/tasks' in resource_l:
+            return 'planner_tasks'
+        if 'groups' in client_state_l:
+            return 'groups'
+        if 'teams_chats' in client_state_l or '/chats' in resource_l:
+            return 'teams_chats'
+        if 'teams_channels' in client_state_l or ('/teams' in resource_l and '/channels' in resource_l) or '/teams/getallchannels' in resource_l:
+            return 'teams_channels'
+        return None
+
+    def _apply_polling_strategy(self) -> None:
+        interval = self.default_poll_interval
+        if self.planner_webhooks_requested:
+            has_planner = any(name.startswith('planner') for name in self.webhook_subscriptions)
+            if has_planner:
+                interval = max(self.quick_poll_min_interval, self.webhook_poll_interval)
+        if interval > 0:
+            interval = max(self.quick_poll_min_interval, interval)
+        if interval <= 0:
+            if self.polling_enabled:
+                logger.info('Planner polling disabled by configuration (interval <= 0)')
+            self.polling_enabled = False
+            self.poll_interval = 0
+        else:
+            if interval != self.poll_interval:
+                logger.info('Planner polling interval set to %ss', interval)
+            self.poll_interval = interval
+            self.polling_enabled = True
+
+    async def _write_webhook_status(self, name: str, **fields: Any) -> None:
+        try:
+            existing_raw = await self.redis_client.hget(WEBHOOK_STATUS_KEY, name)
+            existing = json.loads(existing_raw) if existing_raw else {}
+        except Exception:
+            existing = {}
+        for key, value in fields.items():
+            if value is None:
+                continue
+            if key == 'last_event':
+                existing['last_event'] = value
+            else:
+                existing[key] = value
+        if 'last_event' not in existing:
+            existing['last_event'] = None
+        existing['updated_at'] = datetime.utcnow().isoformat()
+        await self.redis_client.hset(WEBHOOK_STATUS_KEY, name, json.dumps(existing))
+
+
     async def _create_webhook(self, cfg: dict) -> None:
         """Create a single webhook subscription and store its state."""
         webhook_name = cfg.get("name")
@@ -890,17 +996,14 @@ class WebhookDrivenPlannerSync:
             if preexisting:
                 sub_id = preexisting.get("id")
                 self.webhook_subscriptions[webhook_name] = sub_id
-                await self.redis_client.hset(
-                    WEBHOOK_STATUS_KEY,
+                self._apply_polling_strategy()
+                await self._write_webhook_status(
                     webhook_name,
-                    json.dumps(
-                        {
-                            "subscription_id": sub_id,
-                            "created_at": preexisting.get("@odata.context", ""),
-                            "expires_at": preexisting.get("expirationDateTime"),
-                            "resource": preexisting.get("resource"),
-                        }
-                    ),
+                    subscription_id=sub_id,
+                    created_at=preexisting.get("@odata.context", ""),
+                    expires_at=preexisting.get("expirationDateTime"),
+                    resource=preexisting.get("resource"),
+                    status="active",
                 )
                 logger.info(
                     "%s webhook: adopted existing subscription id=%s resource=%s expires=%s",
@@ -925,17 +1028,14 @@ class WebhookDrivenPlannerSync:
                 sub = response.json()
                 sub_id = sub["id"]
                 self.webhook_subscriptions[webhook_name] = sub_id
-                await self.redis_client.hset(
-                    WEBHOOK_STATUS_KEY,
+                self._apply_polling_strategy()
+                await self._write_webhook_status(
                     webhook_name,
-                    json.dumps(
-                        {
-                            "subscription_id": sub_id,
-                            "created_at": datetime.utcnow().isoformat(),
-                            "expires_at": sub["expirationDateTime"],
-                            "resource": config["resource"],
-                        }
-                    ),
+                    subscription_id=sub_id,
+                    created_at=datetime.utcnow().isoformat(),
+                    expires_at=sub["expirationDateTime"],
+                    resource=config.get("resource"),
+                    status="active",
                 )
                 logger.info(
                     f"✅ {webhook_name} webhook subscription created: {sub_id}"
@@ -957,17 +1057,13 @@ class WebhookDrivenPlannerSync:
                     if existing:
                         sub_id = existing.get("id")
                         self.webhook_subscriptions[webhook_name] = sub_id
-                        await self.redis_client.hset(
-                            WEBHOOK_STATUS_KEY,
+                        await self._write_webhook_status(
                             webhook_name,
-                            json.dumps(
-                                {
-                                    "subscription_id": sub_id,
-                                    "created_at": existing.get("@odata.context", ""),
-                                    "expires_at": existing.get("expirationDateTime"),
-                                    "resource": existing.get("resource"),
-                                }
-                            ),
+                            subscription_id=sub_id,
+                            created_at=existing.get("@odata.context", ""),
+                            expires_at=existing.get("expirationDateTime"),
+                            resource=existing.get("resource"),
+                            status="active",
                         )
                         logger.info(
                             "%s webhook: adopted existing subscription (quota) id=%s resource=%s expires=%s",
@@ -1153,15 +1249,10 @@ class WebhookDrivenPlannerSync:
                     logger.info(f"✅ Renewed webhook: {webhook_type}")
                     # Update Redis status with new expiration
                     try:
-                        status = await self.redis_client.hget(
-                            WEBHOOK_STATUS_KEY, webhook_type
-                        )
-                        payload = json.loads(status) if status else {}
-                        payload["expires_at"] = new_expiration
-                        await self.redis_client.hset(
-                            WEBHOOK_STATUS_KEY,
+                        await self._write_webhook_status(
                             webhook_type,
-                            json.dumps(payload),
+                            expires_at=new_expiration,
+                            status="active",
                         )
                     except Exception:
                         pass
@@ -1173,6 +1264,7 @@ class WebhookDrivenPlannerSync:
                     if cfg:
                         await self.redis_client.hdel(WEBHOOK_STATUS_KEY, webhook_type)
                         self.webhook_subscriptions.pop(webhook_type, None)
+                        self._apply_polling_strategy()
                         await self._create_webhook(cfg)
                 else:
                     logger.error(
@@ -1246,6 +1338,21 @@ class WebhookDrivenPlannerSync:
                         except Exception:
                             pass
                         await self._handle_webhook_notification(notification_data)
+                        webhook_name = self._resolve_webhook_name(
+                            notification_data.get("clientState"),
+                            notification_data.get("resource"),
+                        )
+                        if webhook_name:
+                            try:
+                                await self._write_webhook_status(
+                                    webhook_name,
+                                    last_event=datetime.utcnow().isoformat(),
+                                    status="active",
+                                )
+                            except Exception:
+                                pass
+                            if webhook_name.startswith('planner'):
+                                self._apply_polling_strategy()
                         # For Planner task resources, trigger immediate detection
                         try:
                             resource = notification_data.get("resource", "")
@@ -1269,16 +1376,7 @@ class WebhookDrivenPlannerSync:
         resource = notification.get("resource", "")
         client_state = notification.get("clientState", "")
 
-        # Determine webhook name by clientState first, then resource
-        name: Optional[str] = None
-        if "groups" in client_state:
-            name = "groups"
-        elif "teams_chats" in client_state or "/chats" in resource:
-            name = "teams_chats"
-        elif "teams_channels" in client_state or (
-            "/teams" in resource and "/channels" in resource
-        ) or "/teams/getAllChannels" in resource:
-            name = "teams_channels"
+        name = self._resolve_webhook_name(client_state, resource)
         if not name:
             return
 
@@ -1288,6 +1386,7 @@ class WebhookDrivenPlannerSync:
 
         # Save mapping and attempt to record status in Redis
         self.webhook_subscriptions[name] = sub_id
+        self._apply_polling_strategy()
         try:
             token = self._token_for_webhook(name)
             headers = {"Authorization": f"Bearer {token}"} if token else None
@@ -1302,16 +1401,12 @@ class WebhookDrivenPlannerSync:
                 if resp.status_code == 200:
                     data = resp.json()
                     expires = data.get("expirationDateTime")
-            await self.redis_client.hset(
-                WEBHOOK_STATUS_KEY,
+            await self._write_webhook_status(
                 name,
-                json.dumps(
-                    {
-                        "subscription_id": sub_id,
-                        "resource": resource,
-                        "expires_at": expires,
-                    }
-                ),
+                subscription_id=sub_id,
+                resource=resource,
+                expires_at=expires,
+                status="active",
             )
         except Exception:
             pass
@@ -1347,7 +1442,7 @@ class WebhookDrivenPlannerSync:
                         token = get_agent_token()
                         if token:
                             headers = {"Authorization": f"Bearer {token}"}
-                            resp = requests.get(
+                            resp = self.http.get(
                                 f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                                 headers=headers,
                                 timeout=10,
@@ -1610,7 +1705,7 @@ class WebhookDrivenPlannerSync:
             headers = {"Authorization": f"Bearer {token}"}
 
             # First, get the group's Planner plans
-            plans_response = requests.get(
+            plans_response = self.http.get(
                 f"{GRAPH_API_ENDPOINT}/groups/{group_id}/planner/plans",
                 headers=headers,
                 timeout=10
@@ -1646,7 +1741,7 @@ class WebhookDrivenPlannerSync:
             headers = {"Authorization": f"Bearer {token}"}
 
             # Get all tasks for the plan
-            tasks_response = requests.get(
+            tasks_response = self.http.get(
                 f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/tasks",
                 headers=headers,
                 timeout=10
@@ -2004,7 +2099,7 @@ class WebhookDrivenPlannerSync:
 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         batch_body = {"requests": requests_payload}
-        resp = requests.post(f"{GRAPH_API_ENDPOINT}/$batch", headers=headers, json=batch_body, timeout=20)
+        resp = self.http.post(f"{GRAPH_API_ENDPOINT}/$batch", headers=headers, json=batch_body, timeout=20)
         if resp.status_code != 200:
             raise RuntimeError(f"$batch returned {resp.status_code}")
 
@@ -2134,7 +2229,7 @@ class WebhookDrivenPlannerSync:
                 await self.redis_client.set(
                     "annika:sync:health",
                     json.dumps(metrics),
-                    ex=300  # Align TTL to 5 minutes per spec
+                    ex=self.health_ttl
                 )
 
             except Exception as e:
@@ -2571,7 +2666,7 @@ class WebhookDrivenPlannerSync:
                     if cached and (time.time() - cached.get("ts", 0)) < 300:
                         bucket_ids = cached.get("ids", set())
                     else:
-                        buckets_resp = requests.get(
+                        buckets_resp = self.http.get(
                             f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/buckets?$select=id",
                             headers={"Authorization": f"Bearer {token}"},
                             timeout=10,
@@ -2605,7 +2700,7 @@ class WebhookDrivenPlannerSync:
                 "Content-Type": "application/json"
             }
 
-            response = requests.post(
+            response = self.http.post(
                 f"{GRAPH_API_ENDPOINT}/planner/tasks",
                 headers=headers,
                 json=planner_data,
@@ -2655,7 +2750,7 @@ class WebhookDrivenPlannerSync:
                         if alt_plan:
                             planner_data["planId"] = alt_plan
                             planner_data.pop("bucketId", None)
-                            response2 = requests.post(
+                            response2 = self.http.post(
                                 f"{GRAPH_API_ENDPOINT}/planner/tasks",
                                 headers=headers,
                                 json=planner_data,
@@ -2732,7 +2827,7 @@ class WebhookDrivenPlannerSync:
                 return False
 
             # Get current task for ETag
-            response = requests.get(
+            response = self.http.get(
                 f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=10
@@ -2754,7 +2849,7 @@ class WebhookDrivenPlannerSync:
                 plan_id = current_task.get("planId")
                 bucket_id = update_data.get("bucketId")
                 if plan_id and bucket_id:
-                    buckets_resp = requests.get(
+                    buckets_resp = self.http.get(
                         f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/buckets",
                         headers={"Authorization": f"Bearer {token}"},
                         timeout=10,
@@ -2786,7 +2881,7 @@ class WebhookDrivenPlannerSync:
             }
 
             # PATCH with simple backoff on throttling/transient errors
-            response = requests.patch(
+            response = self.http.patch(
                 f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                 headers=headers,
                 json=update_data,
@@ -2799,7 +2894,7 @@ class WebhookDrivenPlannerSync:
                 except Exception:
                     delay = 1.0
                 time.sleep(min(max(delay, 1.0), 5.0))
-                response = requests.patch(
+                response = self.http.patch(
                     f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                     headers=headers,
                     json=update_data,
@@ -2856,7 +2951,7 @@ class WebhookDrivenPlannerSync:
                 return False
 
             # Fetch latest ETag to satisfy concurrency requirements
-            get_resp = requests.get(
+            get_resp = self.http.get(
                 f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=10,
@@ -2874,7 +2969,7 @@ class WebhookDrivenPlannerSync:
             else:
                 headers["If-Match"] = "*"
 
-            response = requests.delete(
+            response = self.http.delete(
                 f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                 headers=headers,
                 timeout=10,
@@ -2906,7 +3001,7 @@ class WebhookDrivenPlannerSync:
             elif response.status_code == 412:
                 # Precondition failed due to ETag; fetch fresh ETag and retry once
                 try:
-                    get_resp2 = requests.get(
+                    get_resp2 = self.http.get(
                         f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                         headers={"Authorization": f"Bearer {token}"},
                         timeout=10,
@@ -2919,7 +3014,7 @@ class WebhookDrivenPlannerSync:
                             new_etag = None
                     retry_headers = {"Authorization": f"Bearer {token}"}
                     retry_headers["If-Match"] = new_etag or "*"
-                    response2 = requests.delete(
+                    response2 = self.http.delete(
                         f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
                         headers=retry_headers,
                         timeout=10,
@@ -3041,6 +3136,10 @@ class WebhookDrivenPlannerSync:
 
         while self.running:
             try:
+                if not self.polling_enabled or self.poll_interval <= 0:
+                    await asyncio.sleep(60)
+                    continue
+
                 await asyncio.sleep(self.poll_interval)
 
                 if not self.running:
@@ -3053,6 +3152,7 @@ class WebhookDrivenPlannerSync:
                 logger.error(f"Error in Planner polling loop: {e}")
                 # Continue running even if one poll fails
                 await asyncio.sleep(300)  # Wait 5 minutes before retrying
+
 
     async def _schedule_quick_poll(self, delay_seconds: int) -> None:
         """Schedule a one-off quick poll after local edits to reconcile Planner."""
@@ -3113,7 +3213,7 @@ class WebhookDrivenPlannerSync:
 
                 try:
                     # Get all tasks for this plan
-                    tasks_response = requests.get(
+                    tasks_response = self.http.get(
                         f"{GRAPH_API_ENDPOINT}/planner/plans/{plan_id}/tasks",
                         headers=headers,
                         timeout=15
@@ -3238,7 +3338,7 @@ class WebhookDrivenPlannerSync:
         try:
             logger.info("🔍 Getting personal plans...")
             # Personal plans
-            response = requests.get(
+            response = self.http.get(
                 f"{GRAPH_API_ENDPOINT}/me/planner/plans?$select=id,title",
                 headers=headers,
                 timeout=15
@@ -3252,7 +3352,7 @@ class WebhookDrivenPlannerSync:
 
             logger.info("🔍 Getting group memberships...")
             # Group plans
-            response = requests.get(
+            response = self.http.get(
                 f"{GRAPH_API_ENDPOINT}/me/memberOf?$select=id,displayName,@odata.type",
                 headers=headers,
                 timeout=15
@@ -3279,7 +3379,7 @@ class WebhookDrivenPlannerSync:
 
                             url = (f"{GRAPH_API_ENDPOINT}/groups/{group_id}"
                                    "/planner/plans")
-                            plans_resp = requests.get(
+                            plans_resp = self.http.get(
                                 url + "?$select=id,title", headers=headers, timeout=10
                             )
 

@@ -50,3 +50,4 @@
 - When you add helper scripts (PowerShell, Python, bash), log invocation syntax, required env vars, and artifact destinations here plus the closest directory-level guide.
 - Structured outputs (`.cursor/artifacts/*.log`, `.cursor/artifacts/*.json`) are mandatory for test and startup runs. Remove transient artefacts after review unless they capture a reproducible defect.
 - Update this guide whenever setup steps, commands, or escalation paths change. Review the nearest `agents.md` during every PR per `.cursor/rules/agents-md.mdc`.
+- Keep all module rules up to date with any changes you make.  
