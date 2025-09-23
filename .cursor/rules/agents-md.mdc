@@ -1,0 +1,35 @@
+---
+description: How to author and maintain agents.md guides for any codebase
+alwaysApply: false
+---
+1. Start with a root `agents.md`
+   Every repo needs a top-level guide that orients an agent: mission, stack, entry points, global rules, environment bootstrap, commands, and escalation paths. Treat it as the agent-facing README.
+
+2. Keep the content actionable
+   Cover what a new teammate needs immediately:
+   - Project overview and active goals
+   - Build/test/lint commands with structured-output flags
+   - Policy/style references (rules files, contributing docs, security notes)
+   - Monitoring/log locations and how to inspect them
+   - Known caveats (feature flags, flaky tests, missing configs)
+
+3. Mirror the structure with nested guides
+   Large repos should place an `agents.md` in each subsystem directory. Each file should explain:
+   - Folder mission and key entry files
+   - Direct links to the relevant rule docs and specs
+   - Component-specific commands, fixtures, and observability touchpoints
+   - Escalation triggers or external dependencies
+
+4. Link to the source of truth, don’t duplicate it
+   Instead of restating policies, point to `.cursor/rules/*.mdc`, READMEs, ADRs, or service docs. Reference rule identifiers and file paths so agents can jump straight to canonical guidance.
+
+5. Capture automation and verification workflows
+   Whenever you add scripts or helper commands (e.g., `run_checks.sh`, `run_ui_checks.ps1`), document how to invoke them, required environment variables, and where they store artefacts. This keeps repeated maintenance tasks deterministic.
+
+6. Keep instructions evergreen
+   - Update the closest `agents.md` whenever build steps change, rules are added, or scripts are replaced.
+   - Record recurring issues (flaky tests, external outages) with guidance on detection and escalation.
+   - Use plain ASCII and concise language so tools can parse the files.
+
+7. Re-evaluate during reviews
+   When touching a directory, sanity-check its `agents.md`: are command snippets correct, do rule links resolve, and do new components need a sub-guide? Refresh the file as part of the change and note adjustments in your summary.
