@@ -135,7 +135,13 @@ class GraphWebhookHandler:
                 # Route to V5 sync service
                 await self.redis_client.publish(
                     "annika:planner:webhook",
-                    json.dumps(notification)
+                    json.dumps({
+                        "changeType": notification.get("changeType"),
+                        "resource": notification.get("resource"),
+                        "resourceData": notification.get("resourceData", {}),
+                        "clientState": client_state,
+                        "subscriptionId": notification.get("subscriptionId"),
+                    })
                 )
                 logger.debug("Routed Planner task notification to V5 sync service")
             else:

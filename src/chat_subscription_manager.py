@@ -103,7 +103,8 @@ class ChatSubscriptionManager:
                         "subscription_id": data.get("id"),
                         "created_at": datetime.now(UTC).isoformat(),
                         "expires_at": data.get("expirationDateTime"),
-                        "status": "active",
+                            "status": "active",
+                            "mode": "per_chat",
                     },
                 )
                 logger.info("Created chat subscription for %s", chat_id)

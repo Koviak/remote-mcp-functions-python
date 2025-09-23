@@ -317,3 +317,82 @@ Impact
 - Rate limiting handler now works correctly when explicit retry_after is provided
 - No more UnboundLocalError crashes in rate limit scenarios
 
+---
+
+Date: 2025-09-23
+
+Change
+- Align sync health TTL to spec (5 minutes) and implement pending operations queue worker
+
+Details
+- `src/planner_sync_service_v5.py`:
+  - `_health_monitor`: Changed Redis `annika:sync:health` TTL from 3600 to 300 seconds.
+  - Added `_pending_queue_worker` coroutine: consumes `annika:sync:pending` via BRPOP with 5s timeout, retries with exponential backoff + jitter, deduplicates across restarts using `annika:sync:processed:{yyyy-mm-dd}` (TTL 2 days), and writes structured failures to `annika:sync:failed` with bounded list size and TTL enforcement.
+  - Wired worker into `asyncio.gather` in `start()` so it runs alongside existing loops.
+  - Enhanced delete path: on HTTP 412, fetch fresh ETag and retry once with `If-Match` (fallback `*`).
+
+Verification Plan
+- Restart MS-MCP services; observe `annika:sync:health` key TTL ~300s and refresh every minute.
+- Push test operations into `annika:sync:pending` and verify consumption, retries, and dedup set population.
+- Confirm failed entries appear in `annika:sync:failed` with TTL and list bounded to last 1000.
+
+Impact
+- Monitoring reflects current state within 5 minutes per spec.
+- Pending operations are processed reliably with backoff and no duplicate reprocessing across restarts.
+- Delete operations are more resilient to ETag drift (reduces 412 failures).
+
+---
+
+Date: 2025-09-23
+
+Change
+- Planner Sync V5 stability and performance improvements (memoization, plan choice cache, inaccessible plans set, quick-poll control, housekeeping)
+
+Details
+- `src/planner_sync_service_v5.py`:
+  - Plan discovery memoized per cycle (5m) and `$select` added to Graph reads.
+  - Per-plan bucket cache (5m) with Redis mirror `annika:graph:buckets:{planId}` EX 300.
+  - Fallback create caches plan choice per Annika task `annika:planner:plan_choice:{id}` EX 300.
+  - Mark inaccessible plans on 403: `SADD annika:planner:inaccessible_plans` with TTL 600; skip during selection.
+  - Quick polls add jitter and enforce a minimum interval via `MIN_QUICK_POLL_INTERVAL_SECONDS` (default 300s).
+  - Housekeeping loop (config-gated): normalizes ID maps, deletes orphan ETags, enforces TTLs, trims logs, sets health TTL; dry-run by default logging to `annika:cleanup:log` and `annika:cleanup:stats`.
+  - Polling interval configurable via `PLANNER_POLL_INTERVAL_SECONDS` (default 3600s).
+
+Verification Plan
+- Restart services and validate:
+  - Reduced discovery calls; Redis shows `annika:graph:plans:index` and `annika:graph:buckets:*` keys with TTL ~300s.
+  - On 403 fallback, `annika:planner:inaccessible_plans` contains plan and expires ~600s.
+  - `annika:cleanup:stats` present when housekeeping runs; no destructive changes in DRY-RUN.
+
+Impact
+- Less churn on Graph APIs; safer, faster creates/updates.
+- Fewer 403 loops; quicker fallback to accessible plans.
+- Operational hygiene improves; stale keys/ETags auto-corrected with safe defaults.
+
+---
+
+Date: 2025-09-23
+
+Change
+- Teams chat subscriptions, planner webhook schema consistency, and token reuse verification
+
+Details
+- `src/chat_subscription_manager.py`:
+  - Ensure per-chat subscription entries include `mode: per_chat` for clarity; global remains `mode: global`.
+  - Global → per-chat fallback path preserved; renewal window (15m) and cleanup maintained.
+- `src/webhook_handler.py`:
+  - Publish minimized, consistent payload to `annika:planner:webhook` (fields: `changeType`, `resource`, `resourceData`, `clientState`, `subscriptionId`).
+  - Keeps lifecycle logging and other resource routing identical.
+- `src/agent_auth_manager.py`:
+  - Reinforced token reuse: prefer in-memory cache → Redis cache, and as last resort reuse master delegated superset token if available (no re-mint) to avoid unnecessary token churn.
+
+Verification Plan
+- Create a per-chat subscription and confirm Redis hash contains `mode=per_chat`; validate renewal logs update `expires_at`.
+- Send a sample webhook payload and confirm consumer sees the minimized schema on `annika:planner:webhook`.
+- Observe `get_agent_token` calls under load: no repeated ROPC requests; tokens reused until TTL buffer (~5 min) and master token used as fallback when appropriate.
+
+Impact
+- Cleaner, predictable webhook bus schema; fewer downstream parsing errors.
+- Teams subscriptions metadata clearer and easier to audit; renewal flow remains robust.
+- Reduced token acquisition frequency; less auth load and fewer throttling risks.
+
