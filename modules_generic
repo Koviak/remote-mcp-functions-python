@@ -1,0 +1,145 @@
+## **Prompt for Creating Modular Documentation System**
+
+```
+
+## Objective
+Create a comprehensive modular documentation system that maps every file, function, and their execution traces within each module. This will enable rapid identification of functional vs obsolete code and provide clear module boundaries for maintenance and development.
+
+## Task Overview
+1. **Analyze the entire codebase** to identify distinct functional modules
+2. **Create module-specific rules** in format `module_(Module_Name).mdc`
+3. **Map every file and function** within each module with execution traces
+4. **Create a master mapping file** `Annika_AGI_Program.mdc` showing module interconnections
+5. **Cross-reference existing rules** where functions implement specific patterns
+
+## Module Identification Criteria
+Identify modules based on:
+- **Functional cohesion**: Files that work together toward a specific purpose
+- **Dependency boundaries**: Clear input/output interfaces
+- **Deployment units**: Components that can be started/stopped independently
+- **Maintenance boundaries**: Logical groupings for updates and debugging
+
+
+## Expected Modules (codebase-wide baseline)
+
+1.
+2.
+3.
+4. etc...
+
+Always extend this list when new modules emerge; link each rule from the appropriate `agents.md` files.
+
+## Module Rule Template Structure
+```markdown
+---
+description: [Module_Name] module implementation with complete file mapping and function traces - apply when working on [specific contexts]
+alwaysApply: false
+---
+
+# [Module_Name] Module
+
+> **Related Rules**: [List relevant existing rules]
+> **Dependencies**: [Other modules this depends on]
+> **Exports**: [What this module provides to other modules]
+
+## Module Overview
+- **Purpose**: [What this module does]
+- **Entry Points**: [Main files that start/control this module]
+- **Key Interfaces**: [How other modules interact with this one]
+
+## Complete File Inventory
+### Core Files
+- **[filename.py](mdc:path/to/file)**: [Purpose] - [Key functions]
+- **[filename.py](mdc:path/to/file)**: [Purpose] - [Key functions]
+
+### Configuration Files
+- **[config.yaml](mdc:path/to/file)**: [Purpose]
+- **[schema.py](mdc:path/to/file)**: [Purpose]
+
+### Test Files
+- **[test_*.py](mdc:path/to/file)**: [Purpose]
+
+## Function Trace Mapping
+### [Main Function] → [Called Functions] → [Dependencies]
+```
+[Function Name] in [file.py]
+├── calls [function_a] in [file_a.py]
+│   ├── calls [function_a1] in [file_a1.py]
+│   └── calls [function_a2] in [file_a2.py]
+├── calls [function_b] in [file_b.py]
+│   └── calls [function_b1] in [file_b1.py]
+└── calls [function_c] in [file_c.py]
+```
+
+## Implementation Patterns
+### [Pattern Name] - [Rule Reference]
+- **Files**: [list of files using this pattern]
+- **Functions**: [specific functions implementing pattern]
+- **Rule Reference**: [link to existing rule like responses-structured-output.mdc]
+
+## Module Dependencies
+### Internal Dependencies
+- [file_a.py] depends on [file_b.py] for [purpose]
+
+### External Dependencies
+- [module_name] for [purpose]
+- [external_service] for [purpose]
+
+## Health Check Functions
+- **[function_name]**: [purpose] - [location]
+- **[function_name]**: [purpose] - [location]
+
+## Configuration Requirements
+- **Environment Variables**: [list required env vars]
+- **Redis Keys**: [list required Redis keys]
+- **External Services**: [list required services]
+
+## Common Issues & Solutions
+- **Issue**: [description] - **Solution**: [fix]
+- **Issue**: [description] - **Solution**: [fix]
+```
+
+## Master Program File Structure
+```markdown
+---
+description: Master program architecture mapping all modules and their interconnections - apply when working on system-wide architecture, module integration, or understanding the complete system
+alwaysApply: false
+---
+
+
+
+## Critical Dependencies
+1.
+2.
+3.
+4.
+
+## Analysis Instructions
+1. **Start with entry points**: Identify main files that start each module
+2. **Trace dependencies**: Follow imports and function calls to map complete dependency trees
+3. **Identify patterns**: Look for common implementation patterns and link to existing rules
+4. **Map interfaces**: Document how modules communicate with each other
+5. **Flag potential issues**: Note any circular dependencies or unclear boundaries
+6. **Validate functionality**: Ensure all listed files are actually used and functional
+
+## Success Criteria
+- Every file in the codebase is mapped to exactly one module
+- Function traces show complete execution paths
+- Module boundaries are clear and logical
+- Dependencies are explicitly documented
+- Obsolete/unused files are identified
+- Master file provides complete system overview
+
+## Deliverables
+1. **Module rule files**: One per identified module
+2. **Master program file**:
+3. **Obsolete file list**: Files that appear unused or deprecated
+4. **Dependency graph**: Visual representation of module relationships
+5. **Refactoring recommendations**: Suggestions for cleaning up the codebase
+
+This will create a comprehensive, maintainable documentation system that makes the codebase much more navigable and maintainable.
+```
+
+# Creating Cursor Rules
+
+Cursor rules are Markdown files with `.mdc` extensions stored in the `.cursor/rules` directory that provide context and guidance to AI agents working on your codebase. Each rule file contains frontmatter metadata (using YAML format between `---` markers) that controls when and how the rule is applied, followed by Markdown content that explains the rule's purpose and implementation details. The three main metadata properties are `alwaysApply` (boolean for rules that should always be active), `description` (string that helps agents decide when to fetch the rule), and `globs` (comma-separated patterns like `*.ts,*.tsx` for file-type-specific rules). You can reference files in your rules using the format `[filename.ext](mdc:path/to/file)` where the path is relative to the workspace root. Rules should be focused, actionable, and include specific implementation guidance rather than general advice, making them most effective when they contain concrete examples, code snippets, and clear "apply when" criteria to help agents make intelligent decisions about when to use each rule.

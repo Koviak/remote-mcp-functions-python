@@ -396,3 +396,21 @@ Impact
 - Teams subscriptions metadata clearer and easier to audit; renewal flow remains robust.
 - Reduced token acquisition frequency; less auth load and fewer throttling risks.
 
+Date: 2025-09-24
+
+Change
+- Reset Redis task data to resolve 403 Planner create loops and stale sync artifacts.
+
+Details
+- Added `src/Clear_All_Local_Task_Data.py` utility:
+  - Canonical wipe of `annika:tasks:*`, `annika:conscious_state`, `annika:consciousness:*:components:tasks`, `annika:agent_outputs:*`.
+  - Clears Planner crosswalk/cache keys (`annika:planner:id_map:*`, `annika:task:mapping:planner:*`, `annika:planner:tasks:*`, `annika:planner:etag:*`).
+  - Removes pending/failed sync queues (`annika:sync:pending`, `annika:sync:failed`, `annika:sync:last_upload:*`, `annika:sync:log`, `annika:sync:health`, `annika:sync:webhook_status`).
+  - Drops task pub/sub backlog (`annika:tasks:updates`, `annika:tasks:assignments`, `annika:tasks:completions`, `annika:tasks:queue`).
+  - Includes dry-run flag and verifies critical patterns are empty post-cleanup.
+- Executed script against Redis (deleted 2,445 keys); verification confirmed zero residual keys for `annika:tasks:*`, `annika:planner:id_map:*`, `annika:task:mapping:planner:*`.
+
+Impact
+- Local Redis no longer contains stale Annika/Planner task records that caused repeated 403 create attempts and dirty sync state.
+- Next MS-MCP start will repopulate from live Planner data only; prevents agents from acting on orphaned tasks.
+

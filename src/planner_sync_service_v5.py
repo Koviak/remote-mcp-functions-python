@@ -272,6 +272,7 @@ class WebhookDrivenPlannerSync:
         )
 
         self.running = True
+        self.poll_on_startup = False
 
         # Load existing state
         await self._load_existing_state()
@@ -2159,6 +2160,8 @@ class WebhookDrivenPlannerSync:
         logger.info("🔄 Performing minimal initial sync...")
 
         try:
+            synced_anything = False
+
             # Only sync tasks that have been modified in the last 24 hours
             # This catches any gaps without overwhelming the API
             cutoff_time = datetime.utcnow() - timedelta(hours=24)
@@ -2187,10 +2190,19 @@ class WebhookDrivenPlannerSync:
             for task in recent_tasks:
                 if await self._task_needs_upload(task):
                     await self._queue_upload(task)
+                    synced_anything = True
 
             # Also do an immediate Planner poll to catch any recent changes
             logger.info("🔍 Performing immediate Planner poll as part of initial sync...")
-            await self._poll_all_planner_tasks()
+            downloaded = await self._poll_all_planner_tasks()
+            if downloaded:
+                synced_anything = True
+
+            if not synced_anything:
+                logger.warning(
+                    "Initial sync detected no task changes. Planner may be empty or the agent lacks access; forcing immediate polling loop."
+                )
+                self.poll_on_startup = True
 
             logger.info("✅ Initial sync completed")
 
@@ -3041,7 +3053,13 @@ class WebhookDrivenPlannerSync:
 
         while self.running:
             try:
-                await asyncio.sleep(self.poll_interval)
+                if self.poll_on_startup:
+                    wait_seconds = 5
+                    self.poll_on_startup = False
+                else:
+                    wait_seconds = self.poll_interval
+
+                await asyncio.sleep(wait_seconds)
 
                 if not self.running:
                     break
