@@ -257,6 +257,7 @@ class WebhookDrivenPlannerSync:
         self.plan_cache_time: float = 0.0
         self.plan_cache_token_type: str = "unknown"
         self.bucket_cache: Dict[str, Dict[str, any]] = {}
+        self.last_read_token_choice: str = "delegated"
 
         # Cleanup/housekeeping
         self.cleanup_enabled = os.environ.get("CLEANUP_ENABLED", "false").lower() == "true"
@@ -1293,17 +1294,28 @@ class WebhookDrivenPlannerSync:
         token: Optional[str] = None
         try:
             token = get_application_token()
+            if token:
+                if self.last_read_token_choice != "application":
+                    logger.info("Using application token for Planner reads")
+                self.last_read_token_choice = "application"
+                return token, token_type
+            logger.warning("Application token unavailable for Planner reads; falling back to delegated")
         except Exception as exc:
-            logger.debug("Failed to acquire application token for Planner read: %s", exc)
-        if token:
-            return token, token_type
+            logger.error("Failed to acquire application token for Planner read: %s", exc)
 
         token_type = "delegated"
         try:
             token = get_agent_token()
+            if token:
+                if self.last_read_token_choice != "delegated":
+                    logger.info("Using delegated token for Planner reads")
+                self.last_read_token_choice = "delegated"
+                return token, token_type
+            logger.error("Delegated token unavailable for Planner reads")
         except Exception as exc:
-            logger.debug("Failed to acquire delegated token fallback: %s", exc)
+            logger.error("Failed to acquire delegated token fallback: %s", exc)
             token = None
+
         return token, token_type
 
     async def _cleanup_webhooks(self):
@@ -3207,9 +3219,24 @@ class WebhookDrivenPlannerSync:
                 logger.warning("No token available for Planner polling")
                 return
 
+            logger.debug(f"Planner polling using {token_type} token")
             headers = {"Authorization": f"Bearer {token}"}
 
             all_plans = await self._get_all_plans_for_polling(headers, token_type=token_type)
+
+            if not all_plans and token_type == "application":
+                logger.warning("Application token returned no plans; retrying with delegated fallback")
+                fallback_token = None
+                try:
+                    fallback_token = get_agent_token()
+                except Exception as exc:
+                    logger.error("Failed to acquire delegated fallback token: %s", exc)
+                if fallback_token:
+                    fallback_headers = {"Authorization": f"Bearer {fallback_token}"}
+                    all_plans = await self._get_all_plans_for_polling(fallback_headers, token_type="delegated")
+                else:
+                    logger.error("Delegated fallback token unavailable; aborting poll")
+                    return
 
             if not all_plans:
                 logger.warning("No plans found to poll")
@@ -3347,6 +3374,7 @@ class WebhookDrivenPlannerSync:
 
     async def _get_all_plans_for_polling(self, headers: Dict, token_type: str = "delegated") -> List[Dict]:
         """Get accessible Planner plans using delegated or application auth."""
+        logger.debug(f"Enumerating plans using {token_type} token")
         # Per-cycle memoization (5 minutes)
         now = time.time()
         if (
@@ -3369,9 +3397,10 @@ class WebhookDrivenPlannerSync:
                     response = self.http.get(next_url, headers=headers, timeout=30)
                     if response.status_code != 200:
                         logger.warning(
-                            "Failed to get tenant-wide plans (page %s): %s",
+                            "Failed to get tenant-wide plans (page %s): %s - %s",
                             page,
                             response.status_code,
+                            response.text[:256],
                         )
                         break
                     payload = response.json()
@@ -3397,7 +3426,7 @@ class WebhookDrivenPlannerSync:
                     personal_page += 1
                     response = self.http.get(personal_url, headers=headers, timeout=15)
                     if response.status_code != 200:
-                        logger.warning(f"Failed to get personal plans: {response.status_code}")
+                        logger.warning(f"Failed to get personal plans: {response.status_code} - {response.text[:256]}")
                         break
                     payload = response.json()
                     personal_plans = payload.get("value", [])
@@ -3423,7 +3452,7 @@ class WebhookDrivenPlannerSync:
                     member_page += 1
                     response = self.http.get(member_url, headers=headers, timeout=15)
                     if response.status_code != 200:
-                        logger.warning(f"Failed to get group memberships: {response.status_code}")
+                        logger.warning(f"Failed to get group memberships: {response.status_code} - {response.text[:256]}")
                         break
                     payload = response.json()
                     groups = payload.get("value", [])
