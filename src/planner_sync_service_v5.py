@@ -255,6 +255,7 @@ class WebhookDrivenPlannerSync:
         # Discovery caches (per-cycle)
         self.plan_cache: List[Dict] = []
         self.plan_cache_time: float = 0.0
+        self.plan_cache_token_type: str = "unknown"
         self.bucket_cache: Dict[str, Dict[str, any]] = {}
 
         # Cleanup/housekeeping
@@ -1286,6 +1287,25 @@ class WebhookDrivenPlannerSync:
             return None
         return None
 
+    def _get_preferred_read_token(self) -> tuple[Optional[str], str]:
+        """Return a Graph token for read operations, preferring application auth."""
+        token_type = "application"
+        token: Optional[str] = None
+        try:
+            token = get_application_token()
+        except Exception as exc:
+            logger.debug("Failed to acquire application token for Planner read: %s", exc)
+        if token:
+            return token, token_type
+
+        token_type = "delegated"
+        try:
+            token = get_agent_token()
+        except Exception as exc:
+            logger.debug("Failed to acquire delegated token fallback: %s", exc)
+            token = None
+        return token, token_type
+
     async def _cleanup_webhooks(self):
         """Clean up webhook subscriptions on shutdown."""
         logger.info("🧹 Cleaning up webhooks...")
@@ -1439,7 +1459,7 @@ class WebhookDrivenPlannerSync:
                     planner_id = resource_data.get("id")
                     if planner_id:
                         # Fetch latest and route to existing sync path
-                        token = get_agent_token()
+                        token, _ = self._get_preferred_read_token()
                         if token:
                             headers = {"Authorization": f"Bearer {token}"}
                             resp = self.http.get(
@@ -1698,7 +1718,7 @@ class WebhookDrivenPlannerSync:
     async def _poll_group_planner_tasks(self, group_id: str):
         """Poll Planner tasks for a specific group when the group changes."""
         try:
-            token = get_agent_token()
+            token, _ = self._get_preferred_read_token()
             if not token:
                 return
 
@@ -1734,7 +1754,7 @@ class WebhookDrivenPlannerSync:
     async def _poll_plan_tasks(self, plan_id: str):
         """Poll tasks for a specific Planner plan."""
         try:
-            token = get_agent_token()
+            token, _ = self._get_preferred_read_token()
             if not token:
                 return
 
@@ -3182,15 +3202,14 @@ class WebhookDrivenPlannerSync:
     async def _poll_all_planner_tasks(self):
         """Poll all accessible Planner plans for task changes."""
         try:
-            token = get_agent_token()
+            token, token_type = self._get_preferred_read_token()
             if not token:
                 logger.warning("No token available for Planner polling")
                 return
 
             headers = {"Authorization": f"Bearer {token}"}
 
-            # Get all plans using the same approach as V4 (groups + personal)
-            all_plans = await self._get_all_plans_for_polling(headers)
+            all_plans = await self._get_all_plans_for_polling(headers, token_type=token_type)
 
             if not all_plans:
                 logger.warning("No plans found to poll")
@@ -3326,102 +3345,154 @@ class WebhookDrivenPlannerSync:
             logger.error(f"Error checking if task needs sync: {e}")
             return True  # Err on the side of syncing
 
-    async def _get_all_plans_for_polling(self, headers: Dict) -> List[Dict]:
-        """Get all accessible plans (personal + group plans) - based on V4 approach."""
+    async def _get_all_plans_for_polling(self, headers: Dict, token_type: str = "delegated") -> List[Dict]:
+        """Get accessible Planner plans using delegated or application auth."""
         # Per-cycle memoization (5 minutes)
         now = time.time()
-        if self.plan_cache and (now - self.plan_cache_time) < 300:
+        if (
+            self.plan_cache
+            and (now - self.plan_cache_time) < 300
+            and self.plan_cache_token_type == token_type
+        ):
             return self.plan_cache
 
-        all_plans = []
+        all_plans: List[Dict] = []
 
         try:
-            logger.info("🔍 Getting personal plans...")
-            # Personal plans
-            response = self.http.get(
-                f"{GRAPH_API_ENDPOINT}/me/planner/plans?$select=id,title",
-                headers=headers,
-                timeout=15
-            )
-            if response.status_code == 200:
-                personal_plans = response.json().get("value", [])
-                all_plans.extend(personal_plans)
-                logger.info(f"   Found {len(personal_plans)} personal plans")
+            if token_type == "application":
+                logger.info("?? Getting tenant-wide plans (application auth)...")
+                next_url = f"{GRAPH_API_ENDPOINT}/planner/plans?$expand=details($select=sharedWith)"
+                page = 0
+                max_pages = 50
+                while next_url and page < max_pages:
+                    page += 1
+                    response = self.http.get(next_url, headers=headers, timeout=30)
+                    if response.status_code != 200:
+                        logger.warning(
+                            "Failed to get tenant-wide plans (page %s): %s",
+                            page,
+                            response.status_code,
+                        )
+                        break
+                    payload = response.json()
+                    chunk = payload.get("value", [])
+                    all_plans.extend(chunk)
+                    next_link = payload.get("@odata.nextLink")
+                    if next_link and next_link.startswith("/"):
+                        next_url = f"{GRAPH_API_ENDPOINT}{next_link}"
+                    else:
+                        next_url = next_link
+                    if next_url and page < max_pages:
+                        logger.debug("   Fetching additional plan page %s", page + 1)
+                if next_url and page >= max_pages:
+                    logger.warning("Plan pagination truncated after %s pages; continuing with partial list", page)
+                logger.info(f"   Found {len(all_plans)} plans via application auth")
             else:
-                logger.warning(f"Failed to get personal plans: {response.status_code}")
+                logger.info("?? Getting personal plans...")
+                personal_count = 0
+                personal_url = f"{GRAPH_API_ENDPOINT}/me/planner/plans?$select=id,title"
+                personal_page = 0
+                personal_max_pages = 50
+                while personal_url and personal_page < personal_max_pages:
+                    personal_page += 1
+                    response = self.http.get(personal_url, headers=headers, timeout=15)
+                    if response.status_code != 200:
+                        logger.warning(f"Failed to get personal plans: {response.status_code}")
+                        break
+                    payload = response.json()
+                    personal_plans = payload.get("value", [])
+                    personal_count += len(personal_plans)
+                    all_plans.extend(personal_plans)
+                    next_link = payload.get("@odata.nextLink")
+                    if next_link and next_link.startswith("/"):
+                        personal_url = f"{GRAPH_API_ENDPOINT}{next_link}"
+                    else:
+                        personal_url = next_link
+                if personal_url and personal_page >= personal_max_pages:
+                    logger.warning(f"Personal plan pagination truncated after {personal_page} pages; continuing with partial list")
+                logger.info(f"   Found {personal_count} personal plans")
 
-            logger.info("🔍 Getting group memberships...")
-            # Group plans
-            response = self.http.get(
-                f"{GRAPH_API_ENDPOINT}/me/memberOf?$select=id,displayName,@odata.type",
-                headers=headers,
-                timeout=15
-            )
-
-            if response.status_code == 200:
-                groups = response.json().get("value", [])
-                logger.info(f"   Found {len(groups)} group memberships")
-
+                logger.info("?? Getting group memberships...")
                 group_plan_count = 0
                 processed_groups = 0
+                total_groups = 0
+                member_url = f"{GRAPH_API_ENDPOINT}/me/memberOf?$select=id,displayName,@odata.type"
+                member_page = 0
+                member_max_pages = 50
+                while member_url and member_page < member_max_pages:
+                    member_page += 1
+                    response = self.http.get(member_url, headers=headers, timeout=15)
+                    if response.status_code != 200:
+                        logger.warning(f"Failed to get group memberships: {response.status_code}")
+                        break
+                    payload = response.json()
+                    groups = payload.get("value", [])
+                    total_groups += len(groups)
 
-                for item in groups:
-                    if item.get("@odata.type") == "#microsoft.graph.group":
+                    for item in groups:
+                        if item.get("@odata.type") != "#microsoft.graph.group":
+                            continue
                         group_id = item.get("id")
                         group_name = item.get("displayName", "Unknown")
                         processed_groups += 1
 
                         try:
-                            logger.debug(
-                                f"   [{processed_groups}/{len(groups)}] "
-                                f"Checking group: {group_name}"
-                            )
-
-                            url = (f"{GRAPH_API_ENDPOINT}/groups/{group_id}"
-                                   "/planner/plans")
-                            plans_resp = self.http.get(
-                                url + "?$select=id,title", headers=headers, timeout=10
-                            )
+                            logger.debug(f"   Processing group {processed_groups}: {group_name}")
+                            plans_url = f"{GRAPH_API_ENDPOINT}/groups/{group_id}/planner/plans?$select=id,title"
+                            plans_resp = self.http.get(plans_url, headers=headers, timeout=10)
 
                             if plans_resp.status_code == 200:
                                 group_plans = plans_resp.json().get("value", [])
                                 if group_plans:
-                                     all_plans.extend(group_plans)
-                                     group_plan_count += len(group_plans)
-                                     logger.debug(
-                                         f"      Added {len(group_plans)} "
-                                         f"plans from {group_name}"
-                                     )
+                                    all_plans.extend(group_plans)
+                                    group_plan_count += len(group_plans)
+                                    logger.debug(
+                                        f"      Added {len(group_plans)} plans from {group_name}"
+                                    )
                             elif plans_resp.status_code == 403:
                                 logger.debug(f"      No Planner access for group: {group_name}")
                             else:
-                                logger.debug(f"      Failed to get plans for {group_name}: {plans_resp.status_code}")
+                                logger.debug(
+                                    f"      Failed to get plans for {group_name}: {plans_resp.status_code}"
+                                )
 
                         except requests.exceptions.Timeout:
                             logger.warning(f"      Timeout getting plans for group: {group_name}")
                         except Exception as e:
                             logger.debug(f"      Error getting plans for {group_name}: {e}")
 
-                        # Add small delay to avoid rate limiting
                         if processed_groups % 5 == 0:
                             await asyncio.sleep(0.1)
 
-                logger.info(f"   Found {group_plan_count} plans across {processed_groups} groups")
-            else:
-                logger.warning(f"Failed to get group memberships: {response.status_code}")
+                    next_link = payload.get("@odata.nextLink")
+                    if next_link and next_link.startswith("/"):
+                        member_url = f"{GRAPH_API_ENDPOINT}{next_link}"
+                    else:
+                        member_url = next_link
+
+                if member_url and member_page >= member_max_pages:
+                    logger.warning(f"Group membership pagination truncated after {member_page} pages; continuing with partial list")
+
+                if total_groups:
+                    logger.info(f"   Found {group_plan_count} plans across {processed_groups} groups")
+                else:
+                    logger.info("   No group memberships returned")
 
         except requests.exceptions.Timeout:
             logger.error("Timeout getting plans - continuing with what we have")
         except Exception as e:
             logger.error(f"Error getting plans: {e}")
 
-        logger.info(f"📋 Total plans found: {len(all_plans)}")
-        # Cache results for this cycle
+        logger.info(f"?? Total plans found: {len(all_plans)}")
         self.plan_cache = all_plans
         self.plan_cache_time = now
+        self.plan_cache_token_type = token_type
         try:
-            # Optional Redis index for external consumers
-            await self.redis_client.set("annika:graph:plans:index", json.dumps([p.get("id") for p in all_plans if p.get("id")]), ex=300)
+            await self.redis_client.set(
+                "annika:graph:plans:index",
+                json.dumps([p.get("id") for p in all_plans if p.get("id")]),
+                ex=300,
+            )
         except Exception:
             pass
         return all_plans
@@ -3452,3 +3523,4 @@ if __name__ == "__main__":
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     asyncio.run(main())
+
