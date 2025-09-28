@@ -6063,3 +6063,593 @@ Stopping all services...
 2025-09-23T23:36:40 | INFO | __main__ | All services stopped.
 2025-09-23T23:36:41 | INFO | __main__ | 
 Goodbye!
+2025-09-28T16:44:16 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T16:44:18 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: d5f7a385-ec93-48e6-b995-42b8ce9d4718, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: dc5da8bc-c41b-4c54-a32d-55dc79cdf53d, function type: sync, timestamp (UTC): 2025-09-28 21:44:18.320591, sync threadpool max workers: 1000
+2025-09-28T16:44:18 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T16:44:30 | INFO | __main__ | Planner sync service V5 started
+2025-09-28T16:44:30 | INFO | __main__ | All services started successfully
+2025-09-28T16:44:30 | INFO | __main__ | Function App: http://0.0.0.0:7071
+2025-09-28T16:44:30 | INFO | __main__ | Webhook URL: https://agency-swarm.ngrok.app/api/graph_webhook
+2025-09-28T16:44:30 | INFO | __main__ | Planner sync service: Running
+2025-09-28T16:44:30 | INFO | __main__ | Webhooks: Configured
+2025-09-28T16:44:30 | INFO | __main__ | 
+==================================================
+2025-09-28T16:44:30 | INFO | __main__ | All services are running.
+2025-09-28T16:44:30 | INFO | __main__ | Press Ctrl+C to stop all services
+2025-09-28T16:44:30 | INFO | __main__ | ==================================================
+
+2025-09-28T16:44:30 | INFO | planner_sync_service_v5 | 🚀 Starting Webhook-Driven Planner Sync Service V5...
+2025-09-28T16:44:30 | INFO | annika_task_adapter | Initialized with 1 user mappings
+2025-09-28T16:44:30 | INFO | planner_sync_service_v5 | Loading existing state...
+2025-09-28T16:44:30 | INFO | planner_sync_service_v5 | Loaded 0 ID mappings and 0 ETags
+2025-09-28T16:44:30 | INFO | planner_sync_service_v5 | 🔗 Setting up Microsoft Graph webhooks...
+2025-09-28T16:44:30 | INFO | dual_auth_manager | Dual auth config - Tenant: cb629dfe...
+2025-09-28T16:44:30 | INFO | dual_auth_manager | Dual auth config - Client: fd79a94d...
+2025-09-28T16:44:30 | INFO | dual_auth_manager | Dual auth config - Secret: ***
+2025-09-28T16:44:30 | INFO | dual_auth_manager | ✅ Dual auth configuration validated
+2025-09-28T16:44:30 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+No body was attached to the request
+2025-09-28T16:44:31 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'max-age=86400, private'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'Access-Control-Allow-Origin': 'REDACTED'
+    'Access-Control-Allow-Methods': 'REDACTED'
+    'P3P': 'REDACTED'
+    'x-ms-request-id': 'f28987bd-3c72-4e42-a378-fae0634e8901'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Sun, 28 Sep 2025 21:44:31 GMT'
+    'Content-Length': '1753'
+2025-09-28T16:44:31 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
+Request method: 'POST'
+Request headers:
+    'Accept': 'application/json'
+    'x-client-sku': 'REDACTED'
+    'x-client-ver': 'REDACTED'
+    'x-client-os': 'REDACTED'
+    'x-ms-lib-capability': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-client-current-telemetry': 'REDACTED'
+    'x-client-last-telemetry': 'REDACTED'
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+A body is sent with the request
+2025-09-28T16:44:31 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'no-store, no-cache'
+    'Pragma': 'no-cache'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Expires': '-1'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'P3P': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-ms-request-id': '39cbf74b-128b-4d32-b99b-fe124c7a2e00'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-clitelem': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Sun, 28 Sep 2025 21:44:31 GMT'
+    'Content-Length': '7944'
+2025-09-28T16:44:31 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
+2025-09-28T16:44:31 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
+2025-09-28T16:44:31 | INFO | planner_sync_service_v5 | Planner webhooks disabled by config; skipping /planner/tasks subscriptions
+2025-09-28T16:44:31 | INFO | planner_sync_service_v5 | Planner plan-scoped webhooks disabled by config; skipping per-plan subscriptions
+2025-09-28T16:44:32 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:44:32 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:44:32 | INFO | planner_sync_service_v5 | groups webhook: no existing subscription found; creating new
+2025-09-28T16:44:33 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: d5f7a385-ec93-48e6-b995-42b8ce9d4718, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 5e67c49d-126a-4d78-9085-f81b35bb630c, function type: sync, timestamp (UTC): 2025-09-28 21:44:33.799307, sync threadpool max workers: 1000
+2025-09-28T16:44:33 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T16:44:34 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-09-28T16:44:34 | INFO | planner_sync_service_v5 | ✅ groups webhook subscription created: c9b7de43-ef04-4390-b725-a4a438d56884
+2025-09-28T16:44:35 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:44:35 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:44:35 | INFO | planner_sync_service_v5 | teams_chats webhook: no existing subscription found; creating new
+2025-09-28T16:44:35 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: d5f7a385-ec93-48e6-b995-42b8ce9d4718, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: e047cab4-2dd2-4e80-9abe-286c7ba851ae, function type: sync, timestamp (UTC): 2025-09-28 21:44:35.932017, sync threadpool max workers: 1000
+2025-09-28T16:44:35 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T16:44:42 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-09-28T16:44:42 | INFO | planner_sync_service_v5 | ✅ teams_chats webhook subscription created: ccf6754f-aedc-4786-b8d7-449b95b9d429
+2025-09-28T16:44:42 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:44:42 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:44:42 | INFO | planner_sync_service_v5 | teams_channels webhook: no existing subscription found; creating new
+2025-09-28T16:44:44 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: d5f7a385-ec93-48e6-b995-42b8ce9d4718, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 25916ba8-c8d8-4cc8-8c30-bbca10a8e439, function type: sync, timestamp (UTC): 2025-09-28 21:44:44.051073, sync threadpool max workers: 1000
+2025-09-28T16:44:44 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T16:44:49 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-09-28T16:44:49 | INFO | planner_sync_service_v5 | ✅ teams_channels webhook subscription created: ddea3d1a-331d-4425-9d69-ee56896e6822
+2025-09-28T16:44:50 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/c9b7de43-ef04-4390-b725-a4a438d56884 "HTTP/1.1 200 OK"
+2025-09-28T16:44:50 | INFO | planner_sync_service_v5 | webhook 'groups' in use: id=c9b7de43-ef04-4390-b725-a4a438d56884 resource=/groups expires=2025-09-29T21:44:31.766071Z
+2025-09-28T16:44:51 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/ccf6754f-aedc-4786-b8d7-449b95b9d429 "HTTP/1.1 200 OK"
+2025-09-28T16:44:51 | INFO | planner_sync_service_v5 | webhook 'teams_chats' in use: id=ccf6754f-aedc-4786-b8d7-449b95b9d429 resource=/chats expires=2025-09-29T21:44:31.766071Z
+2025-09-28T16:44:51 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/ddea3d1a-331d-4425-9d69-ee56896e6822 "HTTP/1.1 200 OK"
+2025-09-28T16:44:51 | INFO | planner_sync_service_v5 | webhook 'teams_channels' in use: id=ddea3d1a-331d-4425-9d69-ee56896e6822 resource=/teams/getAllChannels expires=2025-09-29T21:44:31.766071Z
+2025-09-28T16:44:51 | INFO | planner_sync_service_v5 | 🔄 Performing minimal initial sync...
+2025-09-28T16:44:51 | INFO | planner_sync_service_v5 | Found 0 recently modified tasks to sync
+2025-09-28T16:44:51 | INFO | planner_sync_service_v5 | 🔍 Performing immediate Planner poll as part of initial sync...
+2025-09-28T16:44:51 | INFO | planner_sync_service_v5 | 🔍 Getting tenant-wide plans with application permissions...
+2025-09-28T16:44:52 | WARNING | planner_sync_service_v5 | Failed to get Planner plans via application token: 403
+2025-09-28T16:44:52 | INFO | planner_sync_service_v5 |    Aggregated 0 plans using application permissions
+2025-09-28T16:44:52 | INFO | planner_sync_service_v5 | 📋 Total plans found: 0
+2025-09-28T16:44:52 | WARNING | planner_sync_service_v5 | No plans found to poll
+2025-09-28T16:44:52 | WARNING | planner_sync_service_v5 | Initial sync detected no task changes. Planner may be empty or the agent lacks access; forcing immediate polling loop.
+2025-09-28T16:44:52 | INFO | planner_sync_service_v5 | ✅ Initial sync completed
+2025-09-28T16:44:52 | INFO | planner_sync_service_v5 | 📤 Monitoring Annika changes for upload...
+2025-09-28T16:44:52 | INFO | planner_sync_service_v5 | 📥 Monitoring webhook notifications...
+2025-09-28T16:44:52 | INFO | planner_sync_service_v5 | ⏰ Starting Planner polling loop (every 3600s)
+2025-09-28T16:45:52 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-09-28T16:46:52 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-09-28T16:47:04 | INFO | __main__ | 
+Shutdown signal received...
+2025-09-28T16:47:04 | INFO | __main__ | 
+Cleaning up...
+2025-09-28T16:47:04 | INFO | __main__ | 
+Stopping all services...
+2025-09-28T16:47:04 | INFO | __main__ | Stopping Planner sync service V5...
+2025-09-28T16:47:04 | INFO | planner_sync_service_v5 | 🧹 Cleaning up webhooks...
+2025-09-28T16:47:05 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/c9b7de43-ef04-4390-b725-a4a438d56884 "HTTP/1.1 401 Unauthorized"
+2025-09-28T16:47:05 | WARNING | planner_sync_service_v5 | Failed to cleanup webhook groups: 401
+2025-09-28T16:47:05 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/ccf6754f-aedc-4786-b8d7-449b95b9d429 "HTTP/1.1 204 No Content"
+2025-09-28T16:47:05 | INFO | planner_sync_service_v5 | ✅ Cleaned up webhook: teams_chats
+2025-09-28T16:47:06 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/ddea3d1a-331d-4425-9d69-ee56896e6822 "HTTP/1.1 204 No Content"
+2025-09-28T16:47:06 | INFO | planner_sync_service_v5 | ✅ Cleaned up webhook: teams_channels
+2025-09-28T16:47:06 | INFO | planner_sync_service_v5 | Webhook-driven sync service stopped
+2025-09-28T16:47:06 | INFO | __main__ | Planner sync service V5 stopped.
+2025-09-28T16:47:06 | INFO | __main__ | Stopping ngrok...
+2025-09-28T16:47:06 | INFO | __main__ | ngrok stopped.
+2025-09-28T16:47:06 | INFO | __main__ | Stopping Azure Function App...
+2025-09-28T16:47:06 | INFO | __main__ | Function App stopped.
+2025-09-28T16:47:09 | INFO | __main__ | All services stopped.
+2025-09-28T16:47:10 | INFO | __main__ | 
+Goodbye!
+2025-09-28T16:48:27 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T16:48:32 | INFO | __main__ | Planner sync service V5 started
+2025-09-28T16:48:32 | INFO | __main__ | All services started successfully
+2025-09-28T16:48:32 | INFO | __main__ | Function App: http://0.0.0.0:7071
+2025-09-28T16:48:32 | INFO | __main__ | Webhook URL: https://agency-swarm.ngrok.app/api/graph_webhook
+2025-09-28T16:48:32 | INFO | __main__ | Planner sync service: Running
+2025-09-28T16:48:32 | INFO | __main__ | Webhooks: Configured
+2025-09-28T16:48:32 | INFO | __main__ | 
+==================================================
+2025-09-28T16:48:32 | INFO | __main__ | All services are running.
+2025-09-28T16:48:32 | INFO | __main__ | Press Ctrl+C to stop all services
+2025-09-28T16:48:32 | INFO | __main__ | ==================================================
+
+2025-09-28T16:48:32 | INFO | planner_sync_service_v5 | 🚀 Starting Webhook-Driven Planner Sync Service V5...
+2025-09-28T16:48:32 | INFO | annika_task_adapter | Initialized with 1 user mappings
+2025-09-28T16:48:32 | INFO | planner_sync_service_v5 | Loading existing state...
+2025-09-28T16:48:32 | INFO | planner_sync_service_v5 | Loaded 0 ID mappings and 0 ETags
+2025-09-28T16:48:32 | INFO | planner_sync_service_v5 | 🔗 Setting up Microsoft Graph webhooks...
+2025-09-28T16:48:32 | INFO | dual_auth_manager | Dual auth config - Tenant: cb629dfe...
+2025-09-28T16:48:32 | INFO | dual_auth_manager | Dual auth config - Client: fd79a94d...
+2025-09-28T16:48:32 | INFO | dual_auth_manager | Dual auth config - Secret: ***
+2025-09-28T16:48:32 | INFO | dual_auth_manager | ✅ Dual auth configuration validated
+2025-09-28T16:48:32 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+No body was attached to the request
+2025-09-28T16:48:33 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'max-age=86400, private'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'Access-Control-Allow-Origin': 'REDACTED'
+    'Access-Control-Allow-Methods': 'REDACTED'
+    'P3P': 'REDACTED'
+    'x-ms-request-id': 'dc5ec9ee-8775-4418-93a7-05dd3fb27400'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Sun, 28 Sep 2025 21:48:33 GMT'
+    'Content-Length': '1753'
+2025-09-28T16:48:33 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
+Request method: 'POST'
+Request headers:
+    'Accept': 'application/json'
+    'x-client-sku': 'REDACTED'
+    'x-client-ver': 'REDACTED'
+    'x-client-os': 'REDACTED'
+    'x-ms-lib-capability': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-client-current-telemetry': 'REDACTED'
+    'x-client-last-telemetry': 'REDACTED'
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+A body is sent with the request
+2025-09-28T16:48:33 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'no-store, no-cache'
+    'Pragma': 'no-cache'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Expires': '-1'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'P3P': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-ms-request-id': 'ab77b963-ea95-442a-a589-9d9addbc4100'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-clitelem': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Sun, 28 Sep 2025 21:48:33 GMT'
+    'Content-Length': '7944'
+2025-09-28T16:48:33 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
+2025-09-28T16:48:33 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
+2025-09-28T16:48:33 | INFO | planner_sync_service_v5 | Planner webhooks disabled by config; skipping /planner/tasks subscriptions
+2025-09-28T16:48:33 | INFO | planner_sync_service_v5 | Planner plan-scoped webhooks disabled by config; skipping per-plan subscriptions
+2025-09-28T16:48:33 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:48:33 | INFO | planner_sync_service_v5 | groups webhook: adopted existing subscription id=c9b7de43-ef04-4390-b725-a4a438d56884 resource=/groups expires=2025-09-29T21:44:31.766071Z
+2025-09-28T16:48:34 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:48:34 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:48:34 | INFO | planner_sync_service_v5 | teams_chats webhook: no existing subscription found; creating new
+2025-09-28T16:48:35 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 0f599aa2-1151-41d8-b083-6c1028c5c675, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: b729e1ec-65a3-4bfe-ac2b-4d4bdfcc7cbc, function type: sync, timestamp (UTC): 2025-09-28 21:48:35.462049, sync threadpool max workers: 1000
+2025-09-28T16:48:35 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T16:48:41 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-09-28T16:48:41 | INFO | planner_sync_service_v5 | ✅ teams_chats webhook subscription created: b1a6222c-19b0-4a79-8ee6-8356cfdbba8d
+2025-09-28T16:48:41 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:48:42 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T16:48:42 | INFO | planner_sync_service_v5 | teams_channels webhook: no existing subscription found; creating new
+2025-09-28T16:48:42 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 0f599aa2-1151-41d8-b083-6c1028c5c675, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: f13ef64d-8058-459b-bc7f-05f79d6f2ae8, function type: sync, timestamp (UTC): 2025-09-28 21:48:42.602984, sync threadpool max workers: 1000
+2025-09-28T16:48:42 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T16:48:50 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-09-28T16:48:50 | INFO | planner_sync_service_v5 | ✅ teams_channels webhook subscription created: aafc2c66-33e5-4464-8fb6-79693baae77c
+2025-09-28T16:48:50 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/c9b7de43-ef04-4390-b725-a4a438d56884 "HTTP/1.1 200 OK"
+2025-09-28T16:48:50 | INFO | planner_sync_service_v5 | webhook 'groups' in use: id=c9b7de43-ef04-4390-b725-a4a438d56884 resource=/groups expires=2025-09-29T21:44:31.766071Z
+2025-09-28T16:48:51 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/b1a6222c-19b0-4a79-8ee6-8356cfdbba8d "HTTP/1.1 200 OK"
+2025-09-28T16:48:51 | INFO | planner_sync_service_v5 | webhook 'teams_chats' in use: id=b1a6222c-19b0-4a79-8ee6-8356cfdbba8d resource=/chats expires=2025-09-29T21:48:33.199347Z
+2025-09-28T16:48:52 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/aafc2c66-33e5-4464-8fb6-79693baae77c "HTTP/1.1 200 OK"
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | webhook 'teams_channels' in use: id=aafc2c66-33e5-4464-8fb6-79693baae77c resource=/teams/getAllChannels expires=2025-09-29T21:48:33.199347Z
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | 🔄 Performing minimal initial sync...
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | Found 0 recently modified tasks to sync
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | 🔍 Performing immediate Planner poll as part of initial sync...
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | 🔍 Getting tenant-wide plans with application permissions...
+2025-09-28T16:48:52 | WARNING | planner_sync_service_v5 | Failed to get Planner plans via application token: 403
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 |    Aggregated 0 plans using application permissions
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | Retrying plan discovery with delegated token due to limited application permissions
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | 🔍 Getting personal plans...
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 |    Found 1 personal plans
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | 🔍 Getting group memberships...
+2025-09-28T16:48:52 | WARNING | planner_sync_service_v5 | Failed to get group memberships: 400
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | 📋 Total plans found: 1
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | 📋 Polling 1 Planner plans for task changes
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | ✅ Planner polling complete: 0 tasks checked, 0 created, 0 updated
+2025-09-28T16:48:52 | WARNING | planner_sync_service_v5 | Initial sync detected no task changes. Planner may be empty or the agent lacks access; forcing immediate polling loop.
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | ✅ Initial sync completed
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | 📤 Monitoring Annika changes for upload...
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | 📥 Monitoring webhook notifications...
+2025-09-28T16:48:52 | INFO | planner_sync_service_v5 | ⏰ Starting Planner polling loop (every 3600s)
+2025-09-28T16:49:10 | INFO | __main__ | 
+Shutdown signal received...
+2025-09-28T16:49:10 | INFO | __main__ | 
+Cleaning up...
+2025-09-28T16:49:10 | INFO | __main__ | 
+Stopping all services...
+2025-09-28T16:49:10 | INFO | __main__ | Stopping Planner sync service V5...
+2025-09-28T16:49:10 | INFO | planner_sync_service_v5 | 🧹 Cleaning up webhooks...
+2025-09-28T16:49:11 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/c9b7de43-ef04-4390-b725-a4a438d56884 "HTTP/1.1 401 Unauthorized"
+2025-09-28T16:49:11 | WARNING | planner_sync_service_v5 | Failed to cleanup webhook groups: 401
+2025-09-28T16:49:12 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/b1a6222c-19b0-4a79-8ee6-8356cfdbba8d "HTTP/1.1 204 No Content"
+2025-09-28T16:49:12 | INFO | planner_sync_service_v5 | ✅ Cleaned up webhook: teams_chats
+2025-09-28T16:49:13 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/aafc2c66-33e5-4464-8fb6-79693baae77c "HTTP/1.1 204 No Content"
+2025-09-28T16:49:13 | INFO | planner_sync_service_v5 | ✅ Cleaned up webhook: teams_channels
+2025-09-28T16:49:13 | INFO | planner_sync_service_v5 | Webhook-driven sync service stopped
+2025-09-28T16:49:13 | INFO | __main__ | Planner sync service V5 stopped.
+2025-09-28T16:49:13 | INFO | __main__ | Stopping ngrok...
+2025-09-28T16:49:13 | INFO | __main__ | ngrok stopped.
+2025-09-28T16:49:13 | INFO | __main__ | Stopping Azure Function App...
+2025-09-28T16:49:15 | INFO | __main__ | Function App stopped.
+2025-09-28T16:49:17 | INFO | __main__ | All services stopped.
+2025-09-28T16:49:17 | INFO | __main__ | 
+Goodbye!
+2025-09-28T17:15:47 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T17:15:52 | INFO | __main__ | Planner sync service V5 started
+2025-09-28T17:15:52 | INFO | __main__ | All services started successfully
+2025-09-28T17:15:52 | INFO | __main__ | Function App: http://0.0.0.0:7071
+2025-09-28T17:15:52 | INFO | __main__ | Webhook URL: https://agency-swarm.ngrok.app/api/graph_webhook
+2025-09-28T17:15:52 | INFO | __main__ | Planner sync service: Running
+2025-09-28T17:15:52 | INFO | __main__ | Webhooks: Configured
+2025-09-28T17:15:52 | INFO | __main__ | 
+==================================================
+2025-09-28T17:15:52 | INFO | __main__ | All services are running.
+2025-09-28T17:15:52 | INFO | __main__ | Press Ctrl+C to stop all services
+2025-09-28T17:15:52 | INFO | __main__ | ==================================================
+
+2025-09-28T17:15:52 | INFO | planner_sync_service_v5 | 🚀 Starting Webhook-Driven Planner Sync Service V5...
+2025-09-28T17:15:52 | INFO | annika_task_adapter | Initialized with 1 user mappings
+2025-09-28T17:15:52 | INFO | planner_sync_service_v5 | Loading existing state...
+2025-09-28T17:15:52 | INFO | planner_sync_service_v5 | Loaded 0 ID mappings and 0 ETags
+2025-09-28T17:15:52 | INFO | planner_sync_service_v5 | 🔗 Setting up Microsoft Graph webhooks...
+2025-09-28T17:15:52 | INFO | dual_auth_manager | Dual auth config - Tenant: cb629dfe...
+2025-09-28T17:15:52 | INFO | dual_auth_manager | Dual auth config - Client: fd79a94d...
+2025-09-28T17:15:52 | INFO | dual_auth_manager | Dual auth config - Secret: ***
+2025-09-28T17:15:52 | INFO | dual_auth_manager | ✅ Dual auth configuration validated
+2025-09-28T17:15:52 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+No body was attached to the request
+2025-09-28T17:15:53 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'max-age=86400, private'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'Access-Control-Allow-Origin': 'REDACTED'
+    'Access-Control-Allow-Methods': 'REDACTED'
+    'P3P': 'REDACTED'
+    'x-ms-request-id': '6901fe6d-24e2-4b7d-82ef-e29d8297dc00'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Sun, 28 Sep 2025 22:15:52 GMT'
+    'Content-Length': '1753'
+2025-09-28T17:15:53 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
+Request method: 'POST'
+Request headers:
+    'Accept': 'application/json'
+    'x-client-sku': 'REDACTED'
+    'x-client-ver': 'REDACTED'
+    'x-client-os': 'REDACTED'
+    'x-ms-lib-capability': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-client-current-telemetry': 'REDACTED'
+    'x-client-last-telemetry': 'REDACTED'
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+A body is sent with the request
+2025-09-28T17:15:53 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'no-store, no-cache'
+    'Pragma': 'no-cache'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Expires': '-1'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'P3P': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-ms-request-id': 'ef1e8ee8-72bb-4d3f-82d7-9109f6cfb800'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-clitelem': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Sun, 28 Sep 2025 22:15:52 GMT'
+    'Content-Length': '7944'
+2025-09-28T17:15:53 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
+2025-09-28T17:15:53 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
+2025-09-28T17:15:53 | INFO | planner_sync_service_v5 | Planner webhooks disabled by config; skipping /planner/tasks subscriptions
+2025-09-28T17:15:53 | INFO | planner_sync_service_v5 | Planner plan-scoped webhooks disabled by config; skipping per-plan subscriptions
+2025-09-28T17:15:53 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:15:53 | INFO | planner_sync_service_v5 | groups webhook: adopted existing subscription id=c9b7de43-ef04-4390-b725-a4a438d56884 resource=/groups expires=2025-09-29T21:44:31.766071Z
+2025-09-28T17:15:54 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:15:54 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:15:54 | INFO | planner_sync_service_v5 | teams_chats webhook: no existing subscription found; creating new
+2025-09-28T17:15:54 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 95c2059d-30d6-471f-bbe0-855f619adfa7, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 6684cf4f-4c5d-43ca-8c99-1e96c85e8944, function type: sync, timestamp (UTC): 2025-09-28 22:15:54.880612, sync threadpool max workers: 1000
+2025-09-28T17:15:54 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T17:16:00 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-09-28T17:16:00 | INFO | planner_sync_service_v5 | ✅ teams_chats webhook subscription created: fa4b02d3-78f2-4029-b19b-a0761cc17def
+2025-09-28T17:16:01 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:16:01 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:16:01 | INFO | planner_sync_service_v5 | teams_channels webhook: no existing subscription found; creating new
+2025-09-28T17:16:01 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 95c2059d-30d6-471f-bbe0-855f619adfa7, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 79b06ef6-29ae-4e5a-8108-fddcb3823d87, function type: sync, timestamp (UTC): 2025-09-28 22:16:01.817260, sync threadpool max workers: 1000
+2025-09-28T17:16:01 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T17:16:07 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-09-28T17:16:07 | INFO | planner_sync_service_v5 | ✅ teams_channels webhook subscription created: c6e1de29-9dc0-4cda-b0f9-889f2adf2f3a
+2025-09-28T17:16:08 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/c9b7de43-ef04-4390-b725-a4a438d56884 "HTTP/1.1 200 OK"
+2025-09-28T17:16:08 | INFO | planner_sync_service_v5 | webhook 'groups' in use: id=c9b7de43-ef04-4390-b725-a4a438d56884 resource=/groups expires=2025-09-29T21:44:31.766071Z
+2025-09-28T17:16:08 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/fa4b02d3-78f2-4029-b19b-a0761cc17def "HTTP/1.1 200 OK"
+2025-09-28T17:16:08 | INFO | planner_sync_service_v5 | webhook 'teams_chats' in use: id=fa4b02d3-78f2-4029-b19b-a0761cc17def resource=/chats expires=2025-09-29T22:15:53.30245Z
+2025-09-28T17:16:09 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/c6e1de29-9dc0-4cda-b0f9-889f2adf2f3a "HTTP/1.1 200 OK"
+2025-09-28T17:16:09 | INFO | planner_sync_service_v5 | webhook 'teams_channels' in use: id=c6e1de29-9dc0-4cda-b0f9-889f2adf2f3a resource=/teams/getAllChannels expires=2025-09-29T22:15:53.30245Z
+2025-09-28T17:16:09 | INFO | planner_sync_service_v5 | 🔄 Performing minimal initial sync...
+2025-09-28T17:16:09 | INFO | planner_sync_service_v5 | Found 0 recently modified tasks to sync
+2025-09-28T17:16:09 | INFO | planner_sync_service_v5 | 🔍 Performing immediate Planner poll as part of initial sync...
+2025-09-28T17:16:09 | INFO | planner_sync_service_v5 | 🔍 Getting personal plans...
+2025-09-28T17:16:09 | INFO | planner_sync_service_v5 |    Found 1 personal plans
+2025-09-28T17:16:09 | INFO | planner_sync_service_v5 | 🔍 Getting group memberships...
+2025-09-28T17:16:09 | WARNING | planner_sync_service_v5 | Failed to get group memberships: 400
+2025-09-28T17:16:09 | INFO | planner_sync_service_v5 | 📋 Total plans found: 1
+2025-09-28T17:16:09 | INFO | planner_sync_service_v5 | 📋 Polling 1 Planner plans for task changes
+2025-09-28T17:16:19 | INFO | planner_sync_service_v5 | ✅ Planner polling complete: 0 tasks checked, 0 created, 0 updated
+2025-09-28T17:16:19 | WARNING | planner_sync_service_v5 | Initial sync detected no task changes. Planner may be empty or the agent lacks access; forcing immediate polling loop.
+2025-09-28T17:16:19 | INFO | planner_sync_service_v5 | ✅ Initial sync completed
+2025-09-28T17:16:19 | INFO | planner_sync_service_v5 | 📤 Monitoring Annika changes for upload...
+2025-09-28T17:16:19 | INFO | planner_sync_service_v5 | 📥 Monitoring webhook notifications...
+2025-09-28T17:16:19 | INFO | planner_sync_service_v5 | ⏰ Starting Planner polling loop (every 3600s)
+2025-09-28T17:17:19 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-09-28T17:18:19 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-09-28T17:18:20 | INFO | __main__ | 
+Shutdown signal received...
+2025-09-28T17:18:20 | INFO | __main__ | 
+Cleaning up...
+2025-09-28T17:18:20 | INFO | __main__ | 
+Stopping all services...
+2025-09-28T17:18:20 | INFO | __main__ | Stopping Planner sync service V5...
+2025-09-28T17:18:20 | INFO | planner_sync_service_v5 | 🧹 Cleaning up webhooks...
+2025-09-28T17:18:21 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/c9b7de43-ef04-4390-b725-a4a438d56884 "HTTP/1.1 204 No Content"
+2025-09-28T17:18:21 | INFO | planner_sync_service_v5 | ✅ Cleaned up webhook: groups
+2025-09-28T17:18:21 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/fa4b02d3-78f2-4029-b19b-a0761cc17def "HTTP/1.1 404 Not Found"
+2025-09-28T17:18:21 | WARNING | planner_sync_service_v5 | Failed to cleanup webhook teams_chats: 404
+2025-09-28T17:18:22 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/c6e1de29-9dc0-4cda-b0f9-889f2adf2f3a "HTTP/1.1 404 Not Found"
+2025-09-28T17:18:22 | WARNING | planner_sync_service_v5 | Failed to cleanup webhook teams_channels: 404
+2025-09-28T17:18:22 | INFO | planner_sync_service_v5 | Webhook-driven sync service stopped
+2025-09-28T17:18:22 | INFO | __main__ | Planner sync service V5 stopped.
+2025-09-28T17:18:22 | INFO | __main__ | Stopping ngrok...
+2025-09-28T17:18:22 | INFO | __main__ | ngrok stopped.
+2025-09-28T17:18:22 | INFO | __main__ | Stopping Azure Function App...
+2025-09-28T17:18:24 | INFO | __main__ | Function App stopped.
+2025-09-28T17:18:26 | INFO | __main__ | All services stopped.
+2025-09-28T17:18:27 | INFO | __main__ | 
+Goodbye!
+2025-09-28T17:19:48 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T17:19:54 | INFO | __main__ | Planner sync service V5 started
+2025-09-28T17:19:54 | INFO | __main__ | All services started successfully
+2025-09-28T17:19:54 | INFO | __main__ | Function App: http://0.0.0.0:7071
+2025-09-28T17:19:54 | INFO | __main__ | Webhook URL: https://agency-swarm.ngrok.app/api/graph_webhook
+2025-09-28T17:19:54 | INFO | __main__ | Planner sync service: Running
+2025-09-28T17:19:54 | INFO | __main__ | Webhooks: Configured
+2025-09-28T17:19:54 | INFO | __main__ | 
+==================================================
+2025-09-28T17:19:54 | INFO | __main__ | All services are running.
+2025-09-28T17:19:54 | INFO | __main__ | Press Ctrl+C to stop all services
+2025-09-28T17:19:54 | INFO | __main__ | ==================================================
+
+2025-09-28T17:19:54 | INFO | planner_sync_service_v5 | 🚀 Starting Webhook-Driven Planner Sync Service V5...
+2025-09-28T17:19:54 | INFO | annika_task_adapter | Initialized with 1 user mappings
+2025-09-28T17:19:54 | INFO | planner_sync_service_v5 | Loading existing state...
+2025-09-28T17:19:54 | INFO | planner_sync_service_v5 | Loaded 0 ID mappings and 0 ETags
+2025-09-28T17:19:54 | INFO | planner_sync_service_v5 | 🔗 Setting up Microsoft Graph webhooks...
+2025-09-28T17:19:54 | INFO | dual_auth_manager | Dual auth config - Tenant: cb629dfe...
+2025-09-28T17:19:54 | INFO | dual_auth_manager | Dual auth config - Client: fd79a94d...
+2025-09-28T17:19:54 | INFO | dual_auth_manager | Dual auth config - Secret: ***
+2025-09-28T17:19:54 | INFO | dual_auth_manager | ✅ Dual auth configuration validated
+2025-09-28T17:19:54 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+No body was attached to the request
+2025-09-28T17:19:54 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'max-age=86400, private'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'Access-Control-Allow-Origin': 'REDACTED'
+    'Access-Control-Allow-Methods': 'REDACTED'
+    'P3P': 'REDACTED'
+    'x-ms-request-id': 'a698bd8b-c2d8-484a-be3c-93fd9edd2f00'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Sun, 28 Sep 2025 22:19:53 GMT'
+    'Content-Length': '1753'
+2025-09-28T17:19:54 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
+Request method: 'POST'
+Request headers:
+    'Accept': 'application/json'
+    'x-client-sku': 'REDACTED'
+    'x-client-ver': 'REDACTED'
+    'x-client-os': 'REDACTED'
+    'x-ms-lib-capability': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-client-current-telemetry': 'REDACTED'
+    'x-client-last-telemetry': 'REDACTED'
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+A body is sent with the request
+2025-09-28T17:19:54 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'no-store, no-cache'
+    'Pragma': 'no-cache'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Expires': '-1'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'P3P': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-ms-request-id': 'a11abc40-1801-41a1-b355-bd6dda3e2e00'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-clitelem': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Sun, 28 Sep 2025 22:19:53 GMT'
+    'Content-Length': '7944'
+2025-09-28T17:19:54 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
+2025-09-28T17:19:54 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
+2025-09-28T17:19:54 | INFO | planner_sync_service_v5 | Planner webhooks disabled by config; skipping /planner/tasks subscriptions
+2025-09-28T17:19:54 | INFO | planner_sync_service_v5 | Planner plan-scoped webhooks disabled by config; skipping per-plan subscriptions
+2025-09-28T17:19:54 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:19:55 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:19:55 | INFO | planner_sync_service_v5 | groups webhook: no existing subscription found; creating new
+2025-09-28T17:19:56 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 013af921-ab72-4518-adc3-582f224e88c4, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: a2e2632f-5d08-45da-b564-55f586e18f80, function type: sync, timestamp (UTC): 2025-09-28 22:19:56.093983, sync threadpool max workers: 1000
+2025-09-28T17:19:56 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T17:19:57 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-09-28T17:19:57 | INFO | planner_sync_service_v5 | ✅ groups webhook subscription created: 9aa7f3b1-c2f4-498c-9fd3-b600e8a9093f
+2025-09-28T17:19:57 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:19:57 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:19:57 | INFO | planner_sync_service_v5 | teams_chats webhook: no existing subscription found; creating new
+2025-09-28T17:19:58 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 013af921-ab72-4518-adc3-582f224e88c4, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: aac1bbd9-b8e3-4a32-94a2-4ca5ee4ac7bb, function type: sync, timestamp (UTC): 2025-09-28 22:19:58.226558, sync threadpool max workers: 1000
+2025-09-28T17:19:58 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T17:19:58 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 403 Forbidden"
+2025-09-28T17:19:59 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:19:59 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:19:59 | INFO | planner_sync_service_v5 | teams_chats webhook: quota reached; verifying existing subscription matches current notificationUrl before assuming active
+2025-09-28T17:20:00 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:20:00 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:20:00 | INFO | planner_sync_service_v5 | teams_channels webhook: no existing subscription found; creating new
+2025-09-28T17:20:00 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 013af921-ab72-4518-adc3-582f224e88c4, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 46f56c92-742f-4d88-89b7-86d791b63945, function type: sync, timestamp (UTC): 2025-09-28 22:20:00.761860, sync threadpool max workers: 1000
+2025-09-28T17:20:00 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T17:20:01 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 403 Forbidden"
+2025-09-28T17:20:01 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:20:02 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-09-28T17:20:02 | INFO | planner_sync_service_v5 | teams_channels webhook: quota reached; verifying existing subscription matches current notificationUrl before assuming active
+2025-09-28T17:20:02 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/9aa7f3b1-c2f4-498c-9fd3-b600e8a9093f "HTTP/1.1 200 OK"
+2025-09-28T17:20:02 | INFO | planner_sync_service_v5 | webhook 'groups' in use: id=9aa7f3b1-c2f4-498c-9fd3-b600e8a9093f resource=/groups expires=2025-09-29T22:19:54.508102Z
+2025-09-28T17:20:02 | INFO | planner_sync_service_v5 | 🔄 Performing minimal initial sync...
+2025-09-28T17:20:02 | INFO | planner_sync_service_v5 | Found 0 recently modified tasks to sync
+2025-09-28T17:20:02 | INFO | planner_sync_service_v5 | 🔍 Performing immediate Planner poll as part of initial sync...
+2025-09-28T17:20:02 | INFO | planner_sync_service_v5 | 🔍 Getting personal plans...
+2025-09-28T17:20:03 | INFO | planner_sync_service_v5 |    Found 1 personal plans
+2025-09-28T17:20:03 | INFO | planner_sync_service_v5 | 🔍 Getting group memberships...
+2025-09-28T17:20:03 | WARNING | planner_sync_service_v5 | Failed to get group memberships: 400
+2025-09-28T17:20:03 | INFO | planner_sync_service_v5 | 📋 Total plans found: 1
+2025-09-28T17:20:03 | INFO | planner_sync_service_v5 | 📋 Polling 1 Planner plans for task changes
+2025-09-28T17:20:03 | INFO | planner_sync_service_v5 | ✅ Planner polling complete: 0 tasks checked, 0 created, 0 updated
+2025-09-28T17:20:03 | WARNING | planner_sync_service_v5 | Initial sync detected no task changes. Planner may be empty or the agent lacks access; forcing immediate polling loop.
+2025-09-28T17:20:03 | INFO | planner_sync_service_v5 | ✅ Initial sync completed
+2025-09-28T17:20:03 | INFO | planner_sync_service_v5 | 📤 Monitoring Annika changes for upload...
+2025-09-28T17:20:03 | INFO | planner_sync_service_v5 | 📥 Monitoring webhook notifications...
+2025-09-28T17:20:03 | INFO | planner_sync_service_v5 | ⏰ Starting Planner polling loop (every 3600s)
+2025-09-28T17:20:10 | INFO | __main__ | 
+Shutdown signal received...
+2025-09-28T17:20:10 | INFO | __main__ | 
+Cleaning up...
+2025-09-28T17:20:10 | INFO | __main__ | 
+Stopping all services...
+2025-09-28T17:20:10 | INFO | __main__ | Stopping Planner sync service V5...
+2025-09-28T17:20:10 | INFO | planner_sync_service_v5 | 🧹 Cleaning up webhooks...
+2025-09-28T17:20:11 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/9aa7f3b1-c2f4-498c-9fd3-b600e8a9093f "HTTP/1.1 204 No Content"
+2025-09-28T17:20:11 | INFO | planner_sync_service_v5 | ✅ Cleaned up webhook: groups
+2025-09-28T17:20:11 | INFO | planner_sync_service_v5 | Webhook-driven sync service stopped
+2025-09-28T17:20:11 | INFO | __main__ | Planner sync service V5 stopped.
+2025-09-28T17:20:11 | INFO | __main__ | Stopping ngrok...
+2025-09-28T17:20:11 | INFO | __main__ | ngrok stopped.
+2025-09-28T17:20:11 | INFO | __main__ | Stopping Azure Function App...
+2025-09-28T17:20:13 | INFO | __main__ | Function App stopped.
+2025-09-28T17:20:15 | INFO | __main__ | All services stopped.
+2025-09-28T17:20:15 | INFO | __main__ | 
+Goodbye!
