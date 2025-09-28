@@ -184,13 +184,20 @@ def register_endpoints(app):
 
 **Authentication**: All modules use shared auth functions from `http_common.py`
 ```python
-# Delegated token (preferred)
-from agent_auth_manager import get_agent_token
-token = get_agent_token("scope")
+# App-only token (preferred for read operations)
+from dual_auth_manager import get_application_token
+token = get_application_token()
 
-# App-only token (fallback)  
-token = get_access_token()
+# Delegated token (fallback + required for writes)
+from agent_auth_manager import get_agent_token
+delegated = get_agent_token("scope")
 ```
+
+### Planner Sync Token Strategy Update
+
+- Planner read-side sync routines (initial download, polls, and webhook reconciliation) now **default to application tokens** so we can see every plan/task in the tenant. Update `_poll_all_planner_tasks()`, `_get_planner_task()`, `_get_planner_bucket()`, and related helpers to call `get_application_token()` first; fall back to delegated only when an app token is unavailable.
+- Planner write paths (`_create_planner_task`, `_update_planner_task`, `_delete_planner_task`) **must remain delegated** because Planner only accepts writes from a user context.
+- After switching the read helpers, run `diagnostics/compare_planner_visibility.py` to verify delegated vs application visibility and ensure Redis mirrors all Planner plans/tasks.
 
 **Error Handling**: Consistent patterns across all modules
 ```python
