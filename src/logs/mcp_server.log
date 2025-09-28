@@ -6653,3 +6653,32 @@ Stopping all services...
 2025-09-28T17:20:15 | INFO | __main__ | All services stopped.
 2025-09-28T17:20:15 | INFO | __main__ | 
 Goodbye!
+2025-09-28T18:12:10 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-09-28T18:12:11 | ERROR | function_app | Failed to initialize webhook handler: Error 22 connecting to localhost:6379. 22.
+2025-09-28T18:12:11 | ERROR | function_app | Failed to initialize chat subscriptions: Error 22 connecting to localhost:6379. 22.
+2025-09-28T18:12:24 | INFO | __main__ | Planner sync service V5 started
+2025-09-28T18:12:24 | INFO | __main__ | All services started successfully
+2025-09-28T18:12:24 | INFO | __main__ | Function App: http://0.0.0.0:7071
+2025-09-28T18:12:24 | INFO | __main__ | Planner sync service: Running
+2025-09-28T18:12:24 | INFO | __main__ | Webhooks: Configured
+2025-09-28T18:12:24 | INFO | __main__ | 
+==================================================
+2025-09-28T18:12:24 | INFO | __main__ | All services are running.
+2025-09-28T18:12:24 | INFO | __main__ | Press Ctrl+C to stop all services
+2025-09-28T18:12:24 | INFO | __main__ | ==================================================
+
+2025-09-28T18:12:24 | INFO | __main__ | 
+Cleaning up...
+2025-09-28T18:12:24 | INFO | __main__ | 
+Stopping all services...
+2025-09-28T18:12:24 | INFO | __main__ | Stopping Planner sync service V5...
+2025-09-28T18:12:24 | INFO | planner_sync_service_v5 | 🧹 Cleaning up webhooks...
+2025-09-28T18:12:24 | INFO | planner_sync_service_v5 | Webhook-driven sync service stopped
+2025-09-28T18:12:24 | INFO | __main__ | Planner sync service V5 stopped.
+2025-09-28T18:12:24 | INFO | __main__ | Stopping ngrok...
+2025-09-28T18:12:24 | INFO | __main__ | ngrok stopped.
+2025-09-28T18:12:24 | INFO | __main__ | Stopping Azure Function App...
+2025-09-28T18:12:24 | INFO | __main__ | Function App stopped.
+2025-09-28T18:12:27 | INFO | __main__ | All services stopped.
+2025-09-28T18:12:28 | INFO | __main__ | 
+Goodbye!

@@ -3410,12 +3410,19 @@ class WebhookDrivenPlannerSync:
                     page += 1
                     response = self.http.get(next_url, headers=headers, timeout=30)
                     if response.status_code != 200:
-                        logger.warning(
-                            "Failed to get tenant-wide plans (page %s): %s - %s",
-                            page,
-                            response.status_code,
-                            response.text[:256],
-                        )
+                        if response.status_code == 403:
+                            logger.error(
+                                "Application token lacks Planner permissions (need Tasks.Read.All / Group.Read.All) - page %s response: %s",
+                                page,
+                                response.text[:256],
+                            )
+                        else:
+                            logger.warning(
+                                "Failed to get tenant-wide plans (page %s): %s - %s",
+                                page,
+                                response.status_code,
+                                response.text[:256],
+                            )
                         break
                     payload = response.json()
                     chunk = payload.get("value", [])
@@ -3459,7 +3466,7 @@ class WebhookDrivenPlannerSync:
                 group_plan_count = 0
                 processed_groups = 0
                 total_groups = 0
-                member_url = f"{GRAPH_API_ENDPOINT}/me/memberOf?$select=id,displayName,@odata.type"
+                member_url = f"{GRAPH_API_ENDPOINT}/me/memberOf?$select=id,displayName"
                 member_page = 0
                 member_max_pages = 50
                 while member_url and member_page < member_max_pages:
