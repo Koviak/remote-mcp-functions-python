@@ -212,6 +212,7 @@ This stack trace covers the exact functions, keys, channels, and ID maps used wh
 - **ID maps**: `annika:planner:id_map:{annika_id}` (Annika→Planner); `annika:task:mapping:planner:{planner_id}` (Planner→Annika)
 - **Sync telemetry**: `annika:sync:log`, `annika:sync:pending`, `annika:sync:failed`, `annika:sync:health`, `annika:sync:last_upload:{annika_id}`
 - **Agent outputs**: `annika:agent_outputs:{conversation_id}:{task_id}`
+- **Graph metadata caches**: `annika:graph:users:{id}` + `annika:graph:users:index`, `annika:graph:groups:{id}`, `annika:graph:plans:{id}`, `annika:graph:buckets:{id}` (hydrated by GraphMetadataManager using the app token; user objects include `id`, names, contact details, `aboutMe`, and other profile fields used by downstream modules)
 
 
 ## D) Implementation Checklist (non‑breaking)

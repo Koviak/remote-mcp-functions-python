@@ -84,6 +84,7 @@ _housekeeping_loop()
 - Requires Auth Manager for delegated token (preferred) and Dual Auth Manager for app token fallback.
 - Webhook System publishes Graph notifications into `annika:planner:webhook` channel.
 - Graph Metadata module provides plan/bucket caches consumed during fallback create operations.
+- Metadata manager now hydrates user/group/plan/bucket caches via application auth; Planner sync’s refresh loop should remain enabled so those Redis keys stay current for downstream modules.
 
 ### External Dependencies
 - Microsoft Graph Planner APIs (`/planner/tasks`, `/planner/plans`, `$batch`).
@@ -95,7 +96,7 @@ _housekeeping_loop()
 - **Function App `sync_health_check`** surfaces placeholder data; align fields if sync contract evolves.
 
 ## Configuration Requirements
-- **Environment Variables**: `DEFAULT_PLANNER_PLAN_ID`, `GRAPH_WEBHOOK_URL`, `MIN_QUICK_POLL_INTERVAL_SECONDS`, `PLANNER_POLL_INTERVAL_SECONDS`, `BATCH_WRITES_ENABLED`, `CLEANUP_ENABLED`, `CLEANUP_DRY_RUN`.
+- **Environment Variables**: `DEFAULT_PLANNER_PLAN_ID`, `GRAPH_WEBHOOK_URL`, `MIN_QUICK_POLL_INTERVAL_SECONDS`, `PLANNER_POLL_INTERVAL_SECONDS`, `BATCH_WRITES_ENABLED`, `CLEANUP_ENABLED`, `CLEANUP_DRY_RUN`, metadata settings (`METADATA_PREWARM_ON_START`, `METADATA_REFRESH_ENABLED`, `METADATA_REFRESH_INTERVAL_SECONDS`, `METADATA_GROUP_PAGE_SIZE`).
 - **Redis Keys**: `annika:planner:id_map:*`, `annika:planner:etag:*`, `annika:sync:*`, `annika:planner:plan_choice:*`, `annika:planner:inaccessible_plans`, metadata caches.
 - **External Services**: Planner webhooks (Graph subscription), Graph API endpoints, ngrok/dev tunnel for webhook ingress.
 

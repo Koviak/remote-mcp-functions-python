@@ -8,7 +8,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 import redis.asyncio as redis
 import requests
@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 # Redis key patterns
 REDIS_USER_KEY = "annika:graph:users:{user_id}"
+REDIS_USERS_INDEX_KEY = "annika:graph:users:index"
+GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
+
 REDIS_GROUP_KEY = "annika:graph:groups:{group_id}"
 REDIS_PLAN_KEY = "annika:graph:plans:{plan_id}"
 REDIS_TASK_KEY = "annika:graph:tasks:{task_id}"
@@ -109,18 +112,22 @@ class GraphMetadataManager:
         self.last_token_type = "application"
         return self.graph_token
     
-    async def cache_user_metadata(self, user_id: str) -> dict[str, Any]:
+    async def cache_user_metadata(self, user_id: str, token: Optional[str] = None) -> dict[str, Any]:
         """Fetch and cache user metadata from MS Graph"""
-        token = self._get_graph_token()
+        if not token:
+            token = self._get_graph_token()
         if not token:
             return {}
         
         headers = {"Authorization": f"Bearer {token}"}
         
         # Fetch user details
-        url = (f"https://graph.microsoft.com/v1.0/users/{user_id}"
-               "?$select=id,displayName,mail,userPrincipalName,"
-               "jobTitle,department")
+        url = (
+            f"https://graph.microsoft.com/v1.0/users/{user_id}"
+            "?$select=id,displayName,mail,userPrincipalName,"
+            "jobTitle,department,officeLocation,mobilePhone,businessPhones,"
+            "aboutMe,givenName,surname"
+        )
         response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
@@ -360,6 +367,93 @@ class GraphMetadataManager:
                         await self.cache_plan_metadata(resource_id)
         
         logger.info("Metadata refresh completed")
+    
+    async def cache_all_users(self, page_size: int = 200) -> list[dict[str, Any]]:
+        """Retrieve all users from Microsoft Graph and cache them in Redis."""
+        token = self._get_graph_token()
+        if not token:
+            logger.error("Unable to acquire Graph token for cache_all_users")
+            return []
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "ConsistencyLevel": "eventual",
+        }
+        users: list[dict[str, Any]] = []
+        next_url = (
+            f"{GRAPH_API_ENDPOINT}/users?"
+            "$select=id,displayName,mail,userPrincipalName"
+            f"&$top={page_size}"
+        )
+
+        index: list[str] = []
+        page = 0
+        max_pages = 200
+
+        while next_url and page < max_pages:
+            page += 1
+            response = requests.get(next_url, headers=headers, timeout=30)
+            if response.status_code != 200:
+                logger.error(
+                    "Failed to list users (page %s): %s - %s",
+                    page,
+                    response.status_code,
+                    response.text[:256],
+                )
+                break
+
+            payload = response.json()
+            page_users = payload.get("value", [])
+            if not isinstance(page_users, list):
+                break
+
+            for user in page_users:
+                user_id = user.get("id")
+                if not user_id:
+                    continue
+
+                index.append(user_id)
+                detailed: dict[str, Any] = {}
+                try:
+                    detailed = await self.cache_user_metadata(user_id, token=token)
+                except Exception as exc:  # pragma: no cover - defensive path
+                    logger.debug("Failed to hydrate user %s: %s", user_id, exc)
+
+                record = detailed or user
+                users.append(record)
+                if detailed:
+                    continue
+
+                key = REDIS_USER_KEY.format(user_id=user_id)
+                try:
+                    await self.redis_client.setex(
+                        key,
+                        REDIS_METADATA_TTL,
+                        json.dumps(record),
+                    )
+                except Exception as exc:
+                    logger.debug("Failed to cache user %s: %s", user_id, exc)
+
+            next_link = payload.get("@odata.nextLink")
+            if next_link and next_link.startswith("/"):
+                next_url = f"{GRAPH_API_ENDPOINT}{next_link}"
+            else:
+                next_url = next_link
+
+        if next_url and page >= max_pages:
+            logger.warning("User enumeration truncated after %s pages", page)
+
+        try:
+            await self.redis_client.setex(
+                REDIS_USERS_INDEX_KEY,
+                REDIS_METADATA_TTL,
+                json.dumps(index),
+            )
+        except Exception as exc:
+            logger.debug("Failed to write users index: %s", exc)
+
+        logger.info("Cached %s users in Redis", len(users))
+        return users
     
     def get_sync_client(self):
         """Get synchronous Redis client for non-async contexts"""

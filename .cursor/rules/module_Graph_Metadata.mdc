@@ -76,8 +76,14 @@ Planner Sync `_load_plan_cache`
 - No dedicated health endpoint; rely on logging and Redis availability. Consider adding metrics (cache hit rate) if necessary.
 
 ## Configuration Requirements
-- **Environment Variables**: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `GRAPH_METADATA_TTL_*` overrides (if implemented).
+- **Environment Variables**:
+  - `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `GRAPH_METADATA_TTL_*` overrides (if implemented)
+  - `METADATA_PREWARM_ON_START` (default `true`) – run a tenant-wide cache sweep when Planner sync boots
+  - `METADATA_REFRESH_ENABLED` (default `true`) – keep caches warm on a timer loop
+  - `METADATA_REFRESH_INTERVAL_SECONDS` (default `3600`) – cadence for the refresh loop
+  - `METADATA_GROUP_PAGE_SIZE` (default `999`) – paging size for group/plan discovery using the app token
 - **Redis Keys**: `annika:graph:users:{id}`, `annika:graph:groups:{id}`, `annika:graph:plans:{id}`, `annika:graph:buckets:{id}`, `annika:graph:tasks:{id}`.
+  - User objects include Graph profile fields used downstream (`id`, `displayName`, `mail`, `userPrincipalName`, `jobTitle`, `department`, `officeLocation`, `mobilePhone`, `businessPhones`, `aboutMe`, `givenName`, `surname`).
 - **External Services**: Microsoft Graph endpoints accessible with delegated/app tokens.
 
 ## Common Issues & Solutions

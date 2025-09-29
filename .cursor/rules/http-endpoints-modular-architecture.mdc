@@ -195,9 +195,10 @@ delegated = get_agent_token("scope")
 
 ### Planner Sync Token Strategy Update
 
-- Planner read-side sync routines (initial download, polls, and webhook reconciliation) now **default to application tokens** so we can see every plan/task in the tenant. Update `_poll_all_planner_tasks()`, `_get_planner_task()`, `_get_planner_bucket()`, and related helpers to call `get_application_token()` first; fall back to delegated only when an app token is unavailable.
+- Planner read-side sync routines (initial download, polls, and webhook reconciliation) continue to run with the **delegated token** so ETags/timestamps match the Annika agent context; the delegated account currently has membership in all tracked plans.
 - Planner write paths (`_create_planner_task`, `_update_planner_task`, `_delete_planner_task`) **must remain delegated** because Planner only accepts writes from a user context.
-- After switching the read helpers, run `diagnostics/compare_planner_visibility.py` to verify delegated vs application visibility and ensure Redis mirrors all Planner plans/tasks.
+- Application auth is still used behind the scenes for metadata prewarm (`GraphMetadataManager`) so Redis caches `annika:graph:users:*`, `annika:graph:groups:*`, `annika:graph:plans:*`, and `annika:graph:buckets:*` stay populated for tools/prompts. Configure via `METADATA_PREWARM_ON_START`, `METADATA_REFRESH_ENABLED`, `METADATA_REFRESH_INTERVAL_SECONDS`, and `METADATA_GROUP_PAGE_SIZE`.
+- After adjusting either flow, run `diagnostics/task_key_counts.py` to confirm the delegated poll populated `annika:tasks:*` and the metadata caches updated as expected.
 
 **Error Handling**: Consistent patterns across all modules
 ```python

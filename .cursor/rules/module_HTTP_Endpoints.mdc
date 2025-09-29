@@ -79,7 +79,7 @@ endpoints/mail.send_message_http
 ### Metadata Cache Usage – [module_Graph_Metadata.mdc](mdc:.cursor/rules/module_Graph_Metadata.mdc)
 - **Files**: `endpoints/agent_tools.py` (metadata route), `endpoints/planner.py`
 - **Functions**: `get_metadata_http`, `list_plans_http`
-- **Rule Reference**: Use `GraphMetadataManager` to avoid direct Graph hits; respect TTL strategy.
+- **Rule Reference**: Use `GraphMetadataManager` to avoid direct Graph hits; respect TTL strategy. User cache entries now include profile fields (`aboutMe`, names, contact numbers, office location) so endpoints can surface richer data without extra Graph requests.
 
 ## Module Dependencies
 ### Internal Dependencies
