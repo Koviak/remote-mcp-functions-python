@@ -49,6 +49,12 @@ PATTERNS: Tuple[Tuple[str, str], ...] = (
     ("annika:agent_outputs", "annika:agent_outputs:*"),
     ("annika:conscious_state", "annika:conscious_state"),
     ("annika:consciousness:*:components:tasks", "annika:consciousness:*:components:tasks"),
+    ("annika:graph:users", "annika:graph:users:*"),
+    ("annika:graph:groups", "annika:graph:groups:*"),
+    ("annika:graph:plans", "annika:graph:plans:*"),
+    ("annika:graph:buckets", "annika:graph:buckets:*"),
+    ("annika:planner:plan_choice", "annika:planner:plan_choice:*"),
+    ("annika:planner:inaccessible_plans", "annika:planner:inaccessible_plans"),
 )
 
 
