@@ -8,12 +8,14 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 import redis.asyncio as redis
 import requests
 from azure.identity import ClientSecretCredential
 
+from agent_auth_manager import get_agent_token
+from dual_auth_manager import get_application_token
 from mcp_redis_config import get_redis_token_manager
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,7 @@ class GraphMetadataManager:
         self.redis_client = None
         self.graph_token = None
         self.token_expires = None
+        self.last_token_type = "unknown"
         self._init_redis_async()
     
     def _init_redis_async(self):
@@ -54,37 +57,56 @@ class GraphMetadataManager:
         except Exception as e:
             logger.error(f"Failed to initialize async Redis: {e}")
     
-    def _get_graph_token(self) -> str | None:
-        """Get or refresh Microsoft Graph access token"""
-        # First try to get delegated token
-        from agent_auth_manager import get_agent_token
-        token = get_agent_token()
-        
-        if token:
-            return token
-        
-        # Fall back to app-only token
-        if (self.graph_token and self.token_expires and 
+    def _get_graph_token(self) -> Optional[str]:
+        """Get or refresh Microsoft Graph access token. Prefers application auth."""
+        # Prefer application token so metadata has tenant-wide visibility
+        try:
+            token = get_application_token()
+            if token:
+                if self.last_token_type != "application":
+                    logger.debug("Graph metadata using application token")
+                self.last_token_type = "application"
+                return token
+        except Exception as exc:
+            logger.warning(f"Failed to acquire application token for metadata: {exc}")
+
+        # Fall back to delegated token (Annika user)
+        try:
+            token = get_agent_token()
+            if token:
+                if self.last_token_type != "delegated":
+                    logger.debug("Graph metadata using delegated token fallback")
+                self.last_token_type = "delegated"
+                return token
+        except Exception as exc:
+            logger.error(f"Failed to acquire delegated token for metadata: {exc}")
+
+        # Final fallback: direct client credential using env vars
+        if (self.graph_token and self.token_expires and
                 datetime.now() < self.token_expires):
             return self.graph_token
-        
+
         tenant_id = os.environ.get("AZURE_TENANT_ID")
         client_id = os.environ.get("AZURE_CLIENT_ID")
         client_secret = os.environ.get("AZURE_CLIENT_SECRET")
-        
+
         if not all([tenant_id, client_id, client_secret]):
+            logger.error("Missing Azure AD credentials for metadata Graph call")
             return None
-        
+
         credential = ClientSecretCredential(
             tenant_id=tenant_id,  # type: ignore
             client_id=client_id,  # type: ignore
             client_secret=client_secret  # type: ignore
         )
-        
+
         scope = "https://graph.microsoft.com/.default"
         access_token = credential.get_token(scope)
         self.graph_token = access_token.token
         self.token_expires = datetime.now() + timedelta(minutes=50)
+        if self.last_token_type != "application":
+            logger.debug("Graph metadata using direct application token fallback")
+        self.last_token_type = "application"
         return self.graph_token
     
     async def cache_user_metadata(self, user_id: str) -> dict[str, Any]:
