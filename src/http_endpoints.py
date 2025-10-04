@@ -2059,7 +2059,7 @@ def register_http_endpoints(function_app):
     app.route(route="me/chats/messages", methods=["POST"])(
         ep_teams.post_chat_message_http)
     
-    # Files & Sites
+    # Files & Sites (primary /api/me/ namespace)
     app.route(route="me/drives", methods=["GET"])(ep_files.list_drives_http)
     app.route(route="me/drive/root/children", methods=["GET"])(
         ep_files.list_root_items_http)
@@ -2068,6 +2068,22 @@ def register_http_endpoints(function_app):
     app.route(route="sites", methods=["GET"])(ep_files.sites_search_http)
     # SharePoint: support compound siteId and listing drives by site
     app.route(route="sites/{site_id}/drives", methods=["GET"])(ep_files.list_site_drives_http)
+
+    @app.route(route="files/drives", methods=["GET"])
+    def files_drives_route(req: func.HttpRequest) -> func.HttpResponse:
+        return ep_files.list_drives_http(req)
+
+    @app.route(route="files/drive/root/children", methods=["GET"])
+    def files_root_items_route(req: func.HttpRequest) -> func.HttpResponse:
+        return ep_files.list_root_items_http(req)
+
+    @app.route(route="files/drives/{drive_id}/items/{item_id}/content", methods=["GET"])
+    def files_download_route(req: func.HttpRequest) -> func.HttpResponse:
+        return ep_files.download_file_http(req)
+
+    @app.route(route="files/drive/root/{*file_path}", methods=["PUT"])
+    def files_upload_route(req: func.HttpRequest) -> func.HttpResponse:
+        return ep_files.upload_file_http(req)
     
     # Security & Reporting
     app.route(route="reports/usage", methods=["GET"])(ep_sec.usage_summary_http)

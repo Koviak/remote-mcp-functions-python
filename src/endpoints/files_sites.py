@@ -99,6 +99,74 @@ def download_file_http(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(f"Error: {str(e)}", status_code=500)
 
 
+def upload_file_http(req: func.HttpRequest) -> func.HttpResponse:
+    """Upload file content to the agent drive (delegated preferred, app fallback)."""
+    try:
+        route_path = None
+        if getattr(req, 'route_params', None):
+            route_path = req.route_params.get('file_path') or req.route_params.get('*_file_path') or req.route_params.get('star_file_path')
+        query_path = req.params.get('filePath') if req.params else None
+        file_path = route_path or query_path
+        if file_path and file_path.startswith(':'):
+            file_path = file_path[1:]
+        if file_path and file_path.endswith(':/content'):
+            file_path = file_path[:-9]
+        if not file_path:
+            return func.HttpResponse("Missing file path", status_code=400)
+
+        normalized_path = file_path.strip()
+        if normalized_path.startswith('/'):
+            normalized_path = normalized_path[1:]
+        if normalized_path.endswith(':'):
+            normalized_path = normalized_path[:-1]
+        normalized_path = normalized_path.replace('\\', '/')
+        if not normalized_path:
+            return func.HttpResponse("File path resolved empty", status_code=400)
+
+        conflict = None
+        if req.params:
+            conflict = req.params.get('conflictBehavior') or req.params.get('@microsoft.graph.conflictBehavior')
+
+        delegated_token, base = _get_token_and_base_for_me("Files.ReadWrite.All")
+        graph_path = None
+        token = None
+        if delegated_token and base:
+            token = delegated_token
+            graph_path = f"{GRAPH_API_ENDPOINT}{base}/drive/root:/{normalized_path}:/content"
+        else:
+            app_token = get_access_token()
+            user_id = _get_agent_user_id()
+            if app_token and user_id:
+                token = app_token
+                graph_path = f"{GRAPH_API_ENDPOINT}/users/{user_id}/drive/root:/{normalized_path}:/content"
+
+        if not token or not graph_path:
+            return func.HttpResponse("{\"error\":\"auth_unavailable\",\"message\":\"Delegated token missing and app-only fallback not configured\"}", status_code=503, mimetype="application/json")
+
+        headers = {
+            'Authorization': f"Bearer {token}",
+            'Content-Type': req.headers.get('Content-Type', 'application/octet-stream') if getattr(req, 'headers', None) else 'application/octet-stream',
+        }
+        params = {}
+        if conflict:
+            params['@microsoft.graph.conflictBehavior'] = conflict
+
+        body = req.get_body() or b''
+        response = requests.put(
+            graph_path,
+            headers=headers,
+            params=params or None,
+            data=body,
+            timeout=30,
+        )
+
+        content_type = response.headers.get('content-type', '')
+        mimetype = 'application/json' if content_type.startswith('application/json') or content_type.startswith('text/json') else None
+        return func.HttpResponse(response.text, status_code=response.status_code, mimetype=mimetype)
+    except Exception as e:
+        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
+
+
 def sites_search_http(req: func.HttpRequest) -> func.HttpResponse:
     """Search SharePoint sites. Application token used."""
     try:
