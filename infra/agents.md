@@ -1,3 +1,5 @@
+## Upstream Context
+- [Root agents.md](../agents.md) - Remote MCP Functions mission, stack, runtime environment, and global workflow expectations
 # infra subsystem guide
 
 ## Mission
@@ -27,3 +29,4 @@
 ## Maintenance
 - Update this guide when templates change, new parameters are introduced, or deployment commands are adjusted.
 - Capture any recurring deployment issues (policy blocks, quota limits) here with remediation steps so future runs remain deterministic.
+

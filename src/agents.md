@@ -1,3 +1,5 @@
+## Upstream Context
+- [Root agents.md](../agents.md) - Remote MCP Functions mission, stack, runtime environment, and global workflow expectations
 # src subsystem guide
 
 ## Folder mission
@@ -36,3 +38,4 @@
 
 ## Keep this guide current
 - Update this file whenever you introduce a new module, change bootstrap commands, or modify Redis contracts. Cross-check `.cursor/rules/agents-md.mdc` during reviews and note adjustments in your PR summary.
+

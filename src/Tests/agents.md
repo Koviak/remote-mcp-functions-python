@@ -1,3 +1,6 @@
+## Upstream Context
+- [src](../agents.md) - Azure Functions app, Planner sync, auth, and webhook implementation guide
+- [Root agents.md](../../agents.md) - Remote MCP Functions mission, stack, and global workflow expectations
 # Tests module guide
 
 ## Purpose
@@ -23,3 +26,4 @@
 - Update manifests and expected payloads when adding endpoints or changing response formats.
 - Prefer deterministic test data; store any large fixtures inside `.cursor/artifacts/` during runs and clean up afterwards.
 - Keep this guide aligned with new suites, fixtures, or command changes. Follow `.cursor/rules/agents-md.mdc` during reviews and mention adjustments in summaries.
+

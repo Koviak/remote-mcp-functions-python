@@ -1,3 +1,6 @@
+## Upstream Context
+- [src](../agents.md) - Azure Functions app, Planner sync, auth, and webhook implementation guide
+- [Root agents.md](../../agents.md) - Remote MCP Functions mission, stack, and global workflow expectations
 # endpoints module guide
 
 ## Mission
@@ -36,3 +39,4 @@
 ## Maintenance checklist
 - Confirm `register_http_endpoints(app)` imports the module once and avoids circular dependencies.
 - Update this file whenever you add a module, adjust testing commands, or change observability hooks. Follow `.cursor/rules/agents-md.mdc` to keep the guidance actionable.
+
