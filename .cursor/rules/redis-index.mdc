@@ -1,0 +1,304 @@
+---
+description: "MASTER INDEX: Redis Documentation Navigator - Start here to find the right Redis documentation file for your task. Clear hierarchy and navigation guide for all Redis-related rules."
+alwaysApply: false
+---
+# Redis Documentation Master Index
+
+## 🎯 PURPOSE
+This is your **STARTING POINT** for all Redis-related documentation in Annika 2.0. Use this index to quickly find the right documentation file for your task.
+
+---
+
+## 📊 QUICK DECISION TREE
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ START: What do you need to do with Redis?                      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┴─────────────────────┐
+        ▼                                           ▼
+┌──────────────────┐                     ┌──────────────────────┐
+│ Writing Code?    │                     │ Debugging/Manual?    │
+└──────────────────┘                     └──────────────────────┘
+        │                                           │
+        ▼                                           ▼
+┌──────────────────────────────────┐     ┌────────────────────────┐
+│ 1️⃣ redis-master-manager.mdc     │     │ redis-cli.mdc          │
+│    (HOW to connect)              │     │ (Manual CLI commands)  │
+└──────────────────────────────────┘     └────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────┐
+│ 2️⃣ redis-component-keys-map.mdc │
+│    (WHAT keys exist)             │
+└──────────────────────────────────┘
+        │
+        ├──────────────┬───────────────┬────────────────┐
+        ▼              ▼               ▼                ▼
+┌─────────────┐ ┌──────────────┐ ┌─────────────┐ ┌──────────────┐
+│ JSON Ops?   │ │ Planner      │ │ System Two  │ │ Architecture │
+│ redis-json  │ │ Sync?        │ │ Memory?     │ │ Overview?    │
+│ .mdc        │ │ redis-tasks  │ │ redis-      │ │ module-redis │
+│             │ │ -keys-..mdc  │ │ memory-..   │ │ -mgmt.mdc    │
+└─────────────┘ └──────────────┘ └─────────────┘ └──────────────┘
+```
+
+---
+
+## 📚 COMPLETE FILE HIERARCHY
+
+### **TIER 1: FUNDAMENTALS** (Start Here)
+
+#### 1. [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc)
+**READ THIS FIRST** - The SINGLE SOURCE OF TRUTH for Redis connections
+- ✅ Required patterns for all Redis code
+- ❌ Forbidden patterns (direct imports, hardcoded connections)
+- Database strategy (DB 0, 1, 2)
+- Connection patterns and error handling
+- Multi-database optimization
+
+**Use When:**
+- Writing ANY Redis code
+- Setting up Redis connections
+- Troubleshooting connection issues
+- Understanding database strategy
+
+#### 2. [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc)
+**CANONICAL KEY REFERENCE** - Complete inventory of all Redis keys
+- All key patterns (consciousness, tasks, agents, MCP)
+- Data structures and schemas
+- Pub/sub channel patterns
+- Component-specific examples
+- Authoritative storage rules
+
+**Use When:**
+- Finding the correct key for your data
+- Understanding what data exists in Redis
+- Working with pub/sub channels
+- Verifying key patterns
+
+---
+
+### **TIER 2: OPERATIONS & ARCHITECTURE**
+
+#### 3. [redis-json.mdc](mdc:.cursor/rules/redis-json.mdc)
+**PROGRAMMATIC OPERATIONS** - RedisJSON usage guide
+- JSON path syntax
+- CRUD operations for JSON data
+- Field-level updates
+- OpenAI structured output integration
+- Array and object operations
+
+**Use When:**
+- Working with JSON data in Redis
+- Updating specific fields without full rewrites
+- Integrating OpenAI structured outputs
+- Implementing structured data storage
+
+#### 4. [module-redis-management.mdc](mdc:.cursor/rules/module-redis-management.mdc)
+**MODULE ARCHITECTURE** - System design and file inventory
+- Complete file inventory
+- Execution trace mapping
+- Integration patterns
+- Health check functions
+- Configuration requirements
+
+**Use When:**
+- Understanding system architecture
+- Finding implementation files
+- Tracing execution flow
+- Diagnosing performance issues
+
+---
+
+### **TIER 3: DOMAIN-SPECIFIC PATTERNS**
+
+#### 5. [redis-tasks-keys-and-channels-microsoft-mcp.mdc](mdc:.cursor/rules/redis-tasks-keys-and-channels-microsoft-mcp.mdc)
+**MS-MCP INTEGRATION** - Microsoft Planner sync patterns
+- Planner ↔ Annika task sync
+- MS-MCP specific keys and schemas
+- ID mapping patterns
+- Webhook-driven sync
+- Graph API integration
+
+**Use When:**
+- Working with Microsoft 365 integration
+- Debugging Planner sync
+- Implementing webhook handlers
+- Understanding task ID mapping
+
+#### 6. [redis-memory-sys-two.mdc](mdc:.cursor/rules/redis-memory-sys-two.mdc)
+**SYSTEM TWO MEMORY** - Deep reasoning memory patterns
+- Thought/belief/emotion storage
+- Memory validation (20+ required fields)
+- Vector similarity search
+- Performance requirements (< 2s)
+- 3072-dimension embeddings
+
+**Use When:**
+- Working with System Two memory
+- Implementing thought storage
+- Setting up vector search
+- Debugging System Two operations
+
+---
+
+### **TIER 4: DEBUGGING & OPERATIONS**
+
+#### 7. [redis-cli.mdc](mdc:.cursor/rules/redis-cli.mdc)
+**MANUAL DEBUGGING** - WSL Docker CLI commands
+- ⚠️ **DEBUGGING ONLY** - Not for code
+- Manual data inspection
+- CLI command reference
+- RedisJSON CLI operations
+- Health checks and monitoring
+
+**Use When:**
+- Debugging data issues
+- Manual data inspection
+- Verifying key existence
+- One-off data fixes
+- Health checks
+
+---
+
+## 🎓 LEARNING PATH
+
+### For New Developers:
+1. **[redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc)** - Learn connection patterns
+2. **[redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc)** - Understand key structure
+3. **[redis-json.mdc](mdc:.cursor/rules/redis-json.mdc)** - Learn JSON operations
+4. **[redis-cli.mdc](mdc:.cursor/rules/redis-cli.mdc)** - Practice with CLI debugging
+
+### For Specific Tasks:
+
+**Task: Create a new feature using Redis**
+→ [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc) → [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc) → [redis-json.mdc](mdc:.cursor/rules/redis-json.mdc)
+
+**Task: Debug Planner sync issue**
+→ [redis-tasks-keys-and-channels-microsoft-mcp.mdc](mdc:.cursor/rules/redis-tasks-keys-and-channels-microsoft-mcp.mdc) → [redis-cli.mdc](mdc:.cursor/rules/redis-cli.mdc)
+
+**Task: Implement System Two memory**
+→ [redis-memory-sys-two.mdc](mdc:.cursor/rules/redis-memory-sys-two.mdc) → [redis-json.mdc](mdc:.cursor/rules/redis-json.mdc)
+
+**Task: Understand system architecture**
+→ [module-redis-management.mdc](mdc:.cursor/rules/module-redis-management.mdc) → [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc)
+
+---
+
+## ⚡ CRITICAL RULES (Quick Reference)
+
+### Connection Rules (from redis-master-manager.mdc)
+```python
+# ✅ CORRECT
+from Redis_Master_Manager_Client import get_async_redis_client
+client = await get_async_redis_client()
+
+# ❌ FORBIDDEN
+import redis
+client = redis.Redis(host="localhost", port=6379)
+```
+
+### Key Naming (from redis-component-keys-map.mdc)
+```python
+# All keys use annika: prefix in DB 0
+annika:tasks:{task_id}                    # Authoritative task storage
+annika:consciousness:{conv_id}:components:* # Consciousness components
+annika:tasks:updates                      # Task notification channel
+```
+
+### Storage Type Enforcement (Repository Policy)
+```text
+All persisted application data MUST use RedisJSON. Do not store JSON as strings.
+Exceptions: pub/sub payloads, ephemeral counters/locks, vendor-mandated keys documented in redis-component-keys-map.mdc.
+```
+
+### Database Strategy (from redis-master-manager.mdc)
+```
+DB 0: Application data (consciousness, tasks, mem0 vectors)
+DB 1: Rate limiting
+DB 2: Extended cache
+```
+
+---
+
+## 🔍 COMMON QUESTIONS
+
+**Q: Which file do I read first?**
+A: [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc) - Always start with connection patterns
+
+**Q: How do I find the right Redis key?**
+A: [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc) - Complete key reference
+
+**Q: How do I debug Redis data?**
+A: [redis-cli.mdc](mdc:.cursor/rules/redis-cli.mdc) - Manual CLI debugging guide
+
+**Q: How do I work with JSON in Redis?**
+A: [redis-json.mdc](mdc:.cursor/rules/redis-json.mdc) - RedisJSON operations
+
+**Q: Where are specific implementation files?**
+A: [module-redis-management.mdc](mdc:.cursor/rules/module-redis-management.mdc) - Complete file inventory
+
+**Q: How does Planner sync work?**
+A: [redis-tasks-keys-and-channels-microsoft-mcp.mdc](mdc:.cursor/rules/redis-tasks-keys-and-channels-microsoft-mcp.mdc) - MS-MCP patterns
+
+**Q: How does System Two memory work?**
+A: [redis-memory-sys-two.mdc](mdc:.cursor/rules/redis-memory-sys-two.mdc) - Memory patterns
+
+---
+
+## 📊 FILE STATISTICS
+
+| File | Lines | Purpose | Audience |
+|------|-------|---------|----------|
+| redis-master-manager.mdc | 444 | Connection patterns | All developers |
+| redis-component-keys-map.mdc | 1165 | Key reference | All developers |
+| redis-json.mdc | 707 | JSON operations | Feature developers |
+| module-redis-management.mdc | 84 | Architecture | System designers |
+| redis-tasks-keys-and-channels-microsoft-mcp.mdc | 453 | MS-MCP patterns | Integration developers |
+| redis-memory-sys-two.mdc | 646 | System Two memory | Memory system developers |
+| redis-cli.mdc | 392 | CLI debugging | Operations/debugging |
+
+---
+
+## ✅ CONSISTENCY VERIFICATION
+
+All files verified for consistency on **2025-09-30**:
+
+- ✅ **Key patterns consistent** across all files
+- ✅ **Connection patterns aligned** with redis-master-manager.mdc
+- ✅ **Database strategy (DB 0, 1, 2)** documented
+- ✅ **Namespace (annika:)** used consistently
+- ✅ **Cross-links** properly updated
+- ✅ **Authoritative storage** (`annika:tasks:{id}`) agreed upon
+- ✅ **Tier hierarchy** clearly defined
+- ✅ **File naming** follows lowercase-with-hyphens convention
+
+---
+
+## 🔄 MAINTENANCE NOTES
+
+**Last Updated**: 2025-09-30
+**Version**: 1.0
+**Next Review**: When new Redis patterns are added
+
+**Update Checklist**:
+- [ ] Verify cross-links work
+- [ ] Check for new Redis patterns
+- [ ] Validate consistency across files
+- [ ] Update file statistics
+- [ ] Test navigation flow
+- [ ] Review common questions
+
+---
+
+## 📞 QUICK LINKS
+
+- **[Planner Sync Master](mdc:.cursor/rules/planner-sync-master.mdc)** - Overall Planner sync architecture
+- **[System Architecture](mdc:.cursor/rules/system-architecture.mdc)** - Complete Annika 2.0 architecture
+- **[Unified Annika Rules](mdc:.cursor/rules/unified-annika-rules.mdc)** - Master development rules
+
+---
+
+**Remember: When in doubt, start with [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc) for connections and [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc) for keys!**

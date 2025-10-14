@@ -1,11 +1,324 @@
 ---
-description: List of component structures and keys in Redis JSON
-globs: 
+description: "TIER 1 - Canonical Redis Key Patterns: Complete reference for all Redis key patterns, data structures, and pub/sub channels. Use this to understand WHAT keys exist and WHAT they contain. Consult redis-master-manager.mdc first for HOW to connect."
 alwaysApply: false
 ---
-### 4. Component-Specific Data Structures
+name: redis-patterns
+version: 2.2
+date: 2025-09-30
+description: Canonical Redis key patterns, data structures, and pub/sub channels for Annika 2.0 with authoritative storage rules and Planner sync alignment
+tags: [redis, keys, patterns, pubsub, data-structures, components]
 
-#### 4.1 RationalAnalyzer Component
+---
+
+# Annika 2.0 Redis Key Patterns & Component Structures
+
+## 🎯 WHEN TO USE THIS FILE
+- To understand what Redis keys exist in the system
+- To find the correct key pattern for your data
+- To understand pub/sub channel naming
+- To see data structure schemas
+- As a reference when reading/writing Redis data
+
+## 📚 FILE HIERARCHY
+- **Prerequisites**: [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc) - Learn HOW to connect first
+- **This File**: Learn WHAT keys exist and their structures
+- **Next Steps**: 
+  - [redis-json.mdc](mdc:.cursor/rules/redis-json.mdc) - For RedisJSON operations
+  - [redis-tasks-keys-and-channels-microsoft-mcp.mdc](mdc:.cursor/rules/redis-tasks-keys-and-channels-microsoft-mcp.mdc) - For MS-MCP specific keys
+  - [redis-memory-sys-two.mdc](mdc:.cursor/rules/redis-memory-sys-two.mdc) - For System Two memory patterns
+- **Debugging**: [redis-cli.mdc](mdc:.cursor/rules/redis-cli.mdc) - For manual CLI operations
+
+## 📑 DATABASE STRATEGY (from redis-master-manager.mdc)
+```
+DB 0: Critical Application Data (REQUIRED)
+├── Mem0 vector storage (RediSearch requirement - FORCED to DB 0)
+├── Consciousness state (annika:consciousness:*)
+├── Tasks and conversations (annika:tasks:*)
+├── Agent notifications and pub/sub
+└── Core application state
+
+DB 1: Rate Limiting & Performance Cache
+├── SlowAPI rate limiting keys
+└── MCP server rate limits
+
+DB 2: Extended Cache & Testing
+└── Temporary cache data
+```
+
+---
+
+## Overview
+
+This is the **CANONICAL REFERENCE** for all Redis key patterns, data structures, and pub/sub channels used in Annika 2.0. All keys use the `annika:` namespace prefix and are stored in **DB 0** unless otherwise specified.
+
+### Key Principles
+1. **Authoritative Storage**: `annika:tasks:{task_id}` is the single source of truth for tasks
+2. **Mirror Lists**: Global/conversation task lists are UI/context mirrors only
+3. **Namespace**: All keys use `annika:` prefix
+4. **Database**: All application data in DB 0 (rate limiting in DB 1-2)
+
+## Core Consciousness State Patterns
+
+```
+annika:consciousness:{conversation_id}:components:human_data
+annika:consciousness:{conversation_id}:components:system_one_analysis  
+annika:consciousness:{conversation_id}:components:memories
+annika:consciousness:{conversation_id}:components:online_knowledge
+annika:consciousness:{conversation_id}:components:user_message
+annika:consciousness:{conversation_id}:components:meta_state
+annika:consciousness:{conversation_id}:components:meta_reflection
+annika:consciousness:{conversation_id}:components:system_two
+annika:consciousness:{conversation_id}:components:tasks
+annika:consciousness:{conversation_id}:components:rational_analyzer
+annika:consciousness:{conversation_id}:components:emotional_state
+annika:consciousness:{conversation_id}:components:beliefs
+annika:consciousness:{conversation_id}:components:thoughts
+annika:consciousness:{conversation_id}:components:questions
+annika:consciousness:{conversation_id}:components:rational_state
+annika:consciousness:{conversation_id}:components:conclusions
+annika:consciousness:{conversation_id}:components:communication_summary
+annika:consciousness:{conversation_id}:components:conversation_metadata
+annika:consciousness:{conversation_id}:enhanced_prompt
+```
+
+- `meta_reflection` – Latest and historical meta notes from System One/Two reasoning (fields: latest, history, by_source).\n\n## Task Management Patterns
+## Cross‑Links
+- Planner Sync Master: [planner-sync-master.mdc](mdc:.cursor/rules/planner-sync-master.mdc)
+- MCP Redis Tasks/Channels: [redis-tasks-keys-and-channels-microsoft-mcp.mdc](mdc:.cursor/rules/redis-tasks-keys-and-channels-microsoft-mcp.mdc)
+- System Architecture: [system-architecture.mdc](mdc:.cursor/rules/system-architecture.mdc)
+
+```
+annika:tasks:{task_id}                          # Individual task storage (authoritative)
+annika:conscious_state                          # Global task lists (mirror for UI/context; not authoritative)
+annika:consciousness:CV-Global:components:tasks  # Global conversation tasks
+annika:consciousness:{conversation_id}:components:tasks  # Per-conversation tasks
+annika:tasks:updates                            # Pub/sub for task notifications
+annika:monitoring:latest                        # Task monitoring results
+annika:recent_conversations                     # List of recent conversation IDs
+```
+
+## Agent Coordination Patterns
+
+```
+annika:agent_outputs:{conversation_id}:{task_id}  # Agent execution results
+annika:agent_registry                             # Active agents tracking
+annika:agent_status:{agent_id}                   # Individual agent status
+```
+
+## MCP Server & Job Processing Patterns
+
+```
+job_queue                                       # Redis list for job queue
+job_status:{job_id}                            # Job execution status
+job_results:{job_id}                           # Job execution results
+job_progress:{job_id}                          # Sorted set with progress timestamps
+job_complete                                   # Pub/sub for completion notifications
+```
+
+## Memory & Context Patterns
+
+```
+annika:memory:core                             # Core memory/persona
+annika:memory:conversation:{conversation_id}   # Conversation-specific memory
+annika:memory:archive:{memory_id}              # Archived memory entries
+annika:embeddings:{embedding_id}               # Vector embeddings cache
+```
+
+## System Two Integration Patterns
+
+```
+annika:system_two:requests                     # System Two processing requests
+annika:system_two:results:{conversation_id}   # System Two analysis results
+annika:system_two:progress:{session_id}       # Processing progress tracking
+annika:system_two:beliefs                     # Updated belief system
+annika:system_two:conclusions                 # Generated conclusions
+```
+
+## Pub/Sub Channels
+
+### Task Management
+```
+annika:tasks:updates                          # Task creation/updates
+annika:tasks:assignments                      # Task assignment notifications
+annika:tasks:completions                      # Task completion events
+```
+
+### Conversation Updates
+```
+annika:consciousness:{conversation_id}:communication_summary:updated
+annika:consciousness:{conversation_id}:system_one_analysis:updated
+annika:consciousness:{conversation_id}:system_two:updated
+annika:consciousness:{conversation_id}:memories:updated
+annika:consciousness:{conversation_id}:tasks:updated
+```
+
+### Agent Coordination
+```
+annika:agent_outputs:{conversation_id}:{task_id}:updated
+annika:agent_status:updates
+annika:agent_registry:updates
+```
+
+### System Health
+```
+annika:system:health
+annika:system:alerts
+annika:system:metrics
+```
+
+## Redis Keyspace Notifications
+
+### Task Monitoring Pattern
+```
+__keyspace@0__:annika:tasks:*                 # Task creation/deletion
+__keyevent@0__:set                            # SET operations on keys
+__keyevent@0__:del                            # DELETE operations on keys
+```
+
+### Agent Notification Pattern
+```
+__keyspace@0__:annika:agent_outputs:*         # Agent result storage
+__keyspace@0__:annika:consciousness:*         # Consciousness state changes
+```
+
+## Key Naming Conventions
+
+### Conversation IDs
+- **Standard**: `CV-{8-hex-chars}` (e.g., CV-A1B2C3D4)
+- **Global**: `CV-Global` (for system-wide tasks)
+- **Planner**: `CV-PLANNER-{planner_id}` (for Planner-originated tasks)
+
+### Task IDs
+- **Format**: `Task-{conversation_id}-{message_number}-{sequence}`
+- **Example**: `Task-CV-A1B2C3D4-42-1`
+
+### Agent IDs
+- **Format**: `{agent_type}_agent`
+- **Examples**: `researcher_agent`, `document_agent`, `seo_agent`
+
+### Job IDs
+- **Format**: `job_{timestamp}_{random}`
+- **Example**: `job_20250128120000_abc123`
+
+## High-Level Data Structures
+
+### Task Object Schema (annika:tasks:{task_id})
+```json
+{
+  "id": "Task-{conversation_id}-{message_num}-{seq}",
+  "title": "Task title",
+  "description": "Task description", 
+  "status": "pending|in_progress|completed|failed",
+  "priority": "low|medium|high|critical",
+  "agent_type": "researcher|document|seo|pdf|transcribe|firecrawl|planner|system_two",
+  "assigned_to": "agent_id",
+  "created_at": "2025-01-28T12:00:00Z",
+  "due_date": "2025-01-29T12:00:00Z",
+  "completed_at": null,
+  "percent_complete": 0.5,
+  "dependencies": ["task_id_1", "task_id_2"],
+  "subtasks": ["subtask_id_1"], 
+  "parent_task": "parent_task_id",
+  "tags": ["urgent", "research"],
+  "metadata": {
+    "conversation_id": "CV-12345678",
+    "message_number": 42,
+    "user_id": "user123",
+    "enhanced_prompt_context": "...",
+    "system_two_context": "..."
+  }
+}
+```
+
+### Agent Output Structure
+```json
+{
+  "task_id": "Task-CV-12345678-42-1",
+  "agent_id": "researcher_agent", 
+  "output": "Task execution result",
+  "status": "completed|failed|needs_improvement",
+  "execution_time": 15.5,
+  "confidence": 0.85,
+  "complexity_indicators": {
+    "requires_deeper_analysis": true,
+    "confidence_level": 0.75,
+    "follow_up_questions": ["Question 1", "Question 2"],
+    "potential_implications": ["Implication 1"]
+  },
+  "system_two_context": {
+    "reasoning_prompt": "Enhanced prompt used",
+    "decision_points": ["Critical decision 1"],
+    "uncertainties": ["Uncertainty 1"]
+  },
+  "created_at": "2025-01-28T12:00:00Z"
+}
+```
+
+### Consciousness Component Structure
+```json
+{
+  "component_type": "system_one_analysis|system_two|memories|tasks",
+  "content": "Component data",
+  "timestamp": "2025-01-28T12:00:00Z", 
+  "confidence": 0.85,
+  "metadata": {
+    "source": "system_one|system_two|agent|user",
+    "processing_time": 2.5,
+    "version": "1.0"
+  }
+}
+```
+
+## Redis Configuration Requirements
+
+### Database Selection
+- **Default**: Database 0 for all operations
+- **Keyspace Notifications**: Enabled for patterns above
+- **Pub/Sub**: Enabled for real-time coordination
+
+### Memory Optimization
+- **Expiration**: Set TTL for temporary data (job results, progress)
+- **Compression**: Use Redis JSON for complex structures
+- **Cleanup**: Periodic cleanup of old conversation data
+
+### Performance Considerations
+- **Connection Pooling**: Use Redis connection pools
+- **Pipeline**: Batch operations where possible
+- **Indexing**: Consider RediSearch for complex queries
+- **Monitoring**: Track key count and memory usage
+
+## Access Patterns
+
+### Write Operations
+- **Task Creation**: Direct write to `annika:tasks:{task_id}`
+- **State Updates**: Atomic updates to consciousness components
+- **Result Storage**: Agent outputs with metadata
+
+### Read Operations
+- **Context Assembly**: Parallel reads of consciousness components
+- **Task Monitoring**: Subscription to keyspace notifications
+- **Agent Coordination**: Pub/sub for real-time updates
+
+### Cleanup Operations
+- **Conversation Archival**: Move old conversations to archive keys
+- **Job Cleanup**: Remove completed job data after retention period
+- **Memory Management**: Periodic cleanup of unused keys
+
+---
+
+### Compliance Confirmation (September 2025)
+
+- Authoritative per-task storage is `annika:tasks:{id}`; all agents and MS‑MCP rely on this key and the `annika:tasks:updates` channel.
+- Global task lists in `annika:conscious_state` are mirrors for UI/context only; sync logic must not depend on their presence.
+- Per-conversation lists remain at `annika:consciousness:{conversation_id}:components:tasks` (RedisJSON) and are mirrors as well.
+- Pub/Sub channels are unchanged and canonical.
+- Planner sync ID maps are: forward `annika:planner:id_map:{annika_id}` and reverse `annika:task:mapping:planner:{planner_id}`.
+ 
+---
+
+## Component-Specific Data Structures
+
+### RationalAnalyzer Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:rational_analyzer`
 **Saving Function:** `sys_two_module/rational_analyzer.py:save_to_rational_component`
@@ -97,7 +410,7 @@ alwaysApply: false
 }
 ```
 
-#### 4.2 EmotionalState Component
+### EmotionalState Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:emotional_state`
 **Saving Function:** `sys_two_module/emotional_processor.py:save_to_emotions_component`
@@ -107,7 +420,7 @@ alwaysApply: false
 "Primary emotion: Neutral (80% intensity)\nSecondary emotions: \nEmotional valence: positive (0.90)\nEmotional arousal: energized (0.70)\nEmotional dominance: some control (50%)\nEmotional complexity: 20%\nEmotional stability: 100%\nEmotion ID: E-CVdebd0105d345-02-01\nTrigger: \nTimestamp: 2025-04-01T23:52:20.598042+00:00\nLast update: 2025-04-01T23:52:20.598042+00:00"
 ```
 
-#### 4.3 BeliefSystem Component
+### BeliefSystem Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:beliefs`
 **Saving Function:** `sys_two_module/belief_system.py:save_to_beliefs_component`
@@ -155,7 +468,7 @@ alwaysApply: false
 }
 ```
 
-#### 4.4 ThoughtProcessor Component
+### ThoughtProcessor Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:thoughts`
 **Saving Function:** `sys_two_module/thought_processor.py:save_to_thoughts_component`
@@ -187,7 +500,7 @@ alwaysApply: false
 }
 ```
 
-#### 4.5 QuestionGenerator Component
+### QuestionGenerator Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:questions`
 **Saving Function:** `sys_two_module/question_generator.py:save_to_questions_component`
@@ -230,7 +543,7 @@ alwaysApply: false
 }
 ```
 
-#### 4.6 RationalState Component
+### RationalState Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:rational_state`
 **Saving Function:** `sys_two_module/rational_analyzer.py:save_to_rational_component` (Note: Saves `rational_analyzer` data, this key might be legacy or aggregate)
@@ -241,7 +554,7 @@ alwaysApply: false
 }
 ```
 
-#### 4.7 Conclusion Component
+### Conclusion Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:conclusions`
 **Saving Function:** `sys_two_module/conclusion_generator.py:save_to_conclusions_component`
@@ -282,7 +595,7 @@ alwaysApply: false
 }
 ```
 
-#### 4.8 SystemTwo Component
+### SystemTwo Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:system_two`
 **Saving Function:** `Annika_AGI_Utils/conscious_state.py:update_conscious_state` (Called by various System Two modules like `rational_analyzer`, `emotional_processor`, `conclusion_generator` to save *formatted summaries*)
@@ -463,7 +776,7 @@ alwaysApply: false
 }
 ```
 
-#### 4.10 Conversation Metadata Component (Current Conversation ID)
+### Conversation Metadata Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:conversation_metadata`
 **Saving Function:** `Annika_AGI_Utils/conversation_ID.py:save_conversation_id_as_json` (Initial save defined in rule `conversation-id.mdc`, updates likely here)
@@ -482,7 +795,7 @@ alwaysApply: false
 }
 ```
 
-#### 4.9 Memories Component
+### Memories Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:memories`
 **Saving Function:** Managed by `mem0` SDK via `MemoryClient.add()` (or `m.add()` if using local Mem0 instance) as per `mem0ai.mdc` rule.
@@ -538,9 +851,9 @@ alwaysApply: false
 }
 ```
 
-#### 4.10 Tasks Component
+### Tasks Component
 
-**Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:tasks` (for active_conversation tasks) & `annika:conscious_state` (for global task lists)
+**Redis Key Pattern:** `annika:conscious_state` (for active_conversation tasks) & `annika:conscious_state` (for global task lists)
 **Saving Function:** `Annika_AGI_Utils/task_list_manager.py:save_conscious_state`
 **Data Origin:** Internal state of `TaskListManager` class (updated via `add_task`, `update_task`, `complete_task`, etc.)
 
@@ -688,7 +1001,7 @@ The global task lists in `annika:conscious_state` contain multiple task list typ
 }
 ```
 
-#### 4.11 Communication Summary Component
+### Communication Summary Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:communication_summary`
 **Saving Function:** `Annika_AGI_Utils/conscious_state.py:populate_communication_summary`
@@ -698,7 +1011,7 @@ The global task lists in `annika:conscious_state` contain multiple task list typ
 {"last_messages":[{"timestamp":"2025-04-01T23:49:16.986502+00:00","user_message":"How do we measure the chance of the existence of extraterrestrial life?","assistant_response":"Joshua, when it comes to measuring the chance of extraterrestrial life, we dive into a fascinating blend of scientific frameworks and speculative inquiry. Here's how the experts approach it:\n\n1. **Drake Equation**: This classic formula estimates the number of active, communicative extraterrestrial civilizations in the Milky Way. It factors in star formation rates, the fraction of those stars with planets, the number of planets that could potentially support life, and more. It's a starting point for understanding the cosmic context.\n\n2. **Biosignatures**: Detecting life involves looking for specific chemical markers. Gases like oxygen, methane, and methyl halides in an exoplanet's atmosphere could indicate biological processes. The James Webb Space Telescope (JWST) is a key player here, using infrared spectroscopy to analyze these atmospheres.\n\n3. **Venus Life Equation (VLE)**: Tailored for harsh environments like Venus, the VLE assesses the probability of life by considering origination, robustness, and continuity under extreme conditions.\n\n4. **Exoplanet Habitability**: The habitable zone—where liquid water could exist—is crucial. Missions like JWST and the upcoming European Extremely Large Telescope (ELT) aim to find planets in these zones and detect potential biosignatures.\n\n5. **Confidence of Life Detection (CoLD) Framework**: This methodical framework involves verifying discoveries through steps like ruling out contamination and securing follow-up observations.\n\nEach of these methods brings us closer to understanding our place in the universe, but they also highlight the challenges and limitations of detecting life beyond Earth. It's an exciting field that combines rigorous science with a touch of wonder."}],"voice_summaries":[],"last_updated":"2025-04-01T23:49:16.986502+00:00"}
 ```
 
-#### 4.12 Meta State Component
+### Meta State Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:meta_state`
 **Saving Function:** Unknown/Missing (The `sys_one_util.py:process_meta_state` function saves `Meta_State.md` content here, not the structured metrics).
@@ -708,7 +1021,7 @@ The global task lists in `annika:conscious_state` contain multiple task list typ
 {"content":"## Mission\nOur agency exists to provide intelligent, context-aware assistance through the collaboration of specialized agents, each contributing their unique capabilities while maintaining a cohesive user experience.\n\n## Core Cognitive Architecture\n\nOur system implements a dual-process cognitive architecture, combining fast intuitive thinking (System One) with deep analytical reasoning (System Two).\n\n### System One (Intuitive Processing)\n- **Quick, Intuitive Responses**\n  - Pattern recognition and immediate insights\n  - Emotional and contextual awareness\n  - Real-time situation assessment\n- **Context Generation**\n  - Creates rich contextual understanding\n  - Processes emotional and social dynamics\n  - Maintains awareness of user preferences and history\n\n### System Two (Analytical Processing)\n- **Deep, Analytical Thinking**\n  - Structured reasoning through ChainOfPromptsTool\n  - Multi-step analytical processing\n  - Complex problem decomposition\n- **Context Utilization**\n  - Relies on System One context from Annika\n  - Builds upon intuitive insights"}
 ```
 
-#### 4.13 Online Knowledge Component
+### Online Knowledge Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:online_knowledge`
 **Saving Function:** `Annika_AGI_Utils/sys_one_util.py:process_online_search`
@@ -718,7 +1031,7 @@ The global task lists in `annika:conscious_state` contain multiple task list typ
 {"perplexity_search":"### Concise Factual Summary:\nTo measure the chance of the existence of extraterrestrial life, scientists use various methods and frameworks. Here are the key points:\n\n1. **Venus Life Equation (VLE)**: NASA's VLE is a specific framework designed to assess the probability of life on Venus, considering factors like origination, robustness, and continuity of potential life forms under Venus's unique environmental conditions[1].\n2. **Bayesian Approach**: While the Bayesian approach can provide probabilities based on evidence, it is limited by the need for prior probabilities and the challenge of accounting for unconceived alternatives, making it less effective for extraterrestrial life detection[2].\n3. **Confidence of Life Detection (CoLD) Framework**: This framework recommends seven steps to verify a discovery, including ruling out contamination and getting follow-up observations, but it still faces the challenge of exploring all possible non-biological sources of signals[2].\n4. **Biosignatures**: The search for biosignatures, such as specific gases like oxygen, methane, or methyl halides, is crucial. The James Webb Space Telescope (JWST) uses infrared spectroscopy to analyze exoplanetary atmospheres and detect these gases, which could indicate microbial life on ocean worlds[3][5].\n5. **Exoplanet Habitability**: The habitable zone around stars is another key factor. Exoplanets within this zone could support liquid water and potentially life. Missions like JWST and future telescopes like the European Extremely Large Telescope (ELT) aim to detect these biosignatures[3][4].\n\n### Suggested Approach:\nAnnika might respond by explaining that the existence of extraterrestrial life is measured through a combination of these methods:\n\n- **Highlighting the VLE**: Emphasize how the VLE provides a structured approach to evaluating life on Venus, considering its unique conditions.\n- **Discussing Biosignatures**: Explain that the detection of specific gases like oxygen, methane, or methyl hal Mention the role of advanced telescopes like JWST and ELT in analyzing exoplanetary atmospheres and detecting biosignatures.\n- **Addressing Challenges**: Acknowledge the challenges in detecting life, such as the need for robust evidence and thorough exploration of non-biological sources of signals.\n\nThis approach would provide a comprehensive overview of the current scientific methods and frameworks used to measure the chance of extraterrestrial life.","last_updated":"2025-04-01T23:49:05.635069+00:00"}
 ```
 
-#### 4.14 System One Analysis Component
+### System One Analysis Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:system_one_analysis`
 **Saving Function:** `Annika_AGI_Utils/sys_one_util.py:process_system_one`
@@ -728,7 +1041,7 @@ The global task lists in `annika:conscious_state` contain multiple task list typ
 {"analysis":"1. Contextual Perception\n   [Current time/date: 2025-04-01T17:49:00.000000-07:00]\n   Current time is 05:49 PM on Tuesday, April 01, 2025. The message is situated in a technical and exploratory context where the user is asking about calculating the probability of extraterrestrial life existence. Given recent discussions about AI, life extension, and advanced AGI system components, the inquiry aligns with a pattern of high-level, scientific and speculative questions in the user's dialogue history.\n\n2. Emotional Processing\n   The tone of the message is neutral and inquisitive, with a scientific curiosity underlying the inquiry. There is no evident urgency or stress; it seems to be a thoughtful question seeking quantitative clarity on a subject of broad interest.\n\n3. Pattern Recognition\n   Recurring themes in the user's history include scientific inquiry, advanced technology, and speculative research areas. The question adheres to this pattern by focusing on a probabilistic assessment related to extraterrestrial life, linking to previous high-level research interests.\n\n4. Social Dynamics\n   The communication style is direct and technical, consistent with the user's usual minimal-fluff approach. The conversation is primarily between the user and the system, reflecting a well-established collaborative dynamic where both technical details and precision are valued.\n\n5. Bias Detection\n   No overt biases are detected in the language used. The inquiry is framed in a methodical and empirical manner. However, the question assumes that scientific measurement of such probabilistic events is feasible, which itself could reflect a bias towards quantitative scientific frameworks.\n\n6. Immediate Knowledge\n   Relevant background includes studies in astrobiology, the Drake equation, and statistical methods for estimating life probabilities in the universe. The question is within the scope of these fields, implying that established scientific models like the Drake equation might be referenced as part of the measurement approach.\n\n7. Memory Activation\n   Past interactions have included inquiries into life extension and advanced AI research, highlighting the user's interest in speculative science and technology. The user's history with AGI system components suggests a strong foundation in technical analysis and quantitative modeling.\n\n8. Intuitive Response\n   The initial impression is that the user is drawing parallels between the precise calculations in other technological fields and the estimation of extraterrestrial life probabilities. There is an indication that the response could benefit from highlighting both established scientific methods and their limitations in addressing such a vast, complex topic.","last_updated":"2025-04-01T23:49:05.674955+00:00"}
 ```
 
-#### 4.15 User Message Component
+### User Message Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:user_message`
 **Saving Function:** `Annika_AGI_Utils/sys_one_util.py:process_user_message`
@@ -738,7 +1051,7 @@ The global task lists in `annika:conscious_state` contain multiple task list typ
 {"content":"How do we measure the chance of the existence of extraterrestrial life?","message_id":"CVdebd0105d345-2","timestamp":"2025-04-01T23:48:58.520527+00:00","last_updated":"2025-04-01T23:48:58.520527+00:00"}
 ```
 
-#### 4.16 Human Data Component (Does not exist)
+### Human Data Component
 
 **Redis Key Pattern:** `annika:consciousness:{conversation_id}:components:human_data`
 **Saving Function:** `Annika_AGI_Utils/sys_one_util.py:process_core_memory`
@@ -782,12 +1095,103 @@ The global task lists in `annika:conscious_state` contain multiple task list typ
 }
 ```
 
-### 5. Global State Keys
+## Global State Keys
 
-#### 5.1 Global Conscious State (Task Lists)
+### Global Conscious State (Task Lists)
 
 **Redis Key:** `annika:conscious_state`
 **Saving Function:** `Annika_AGI_Utils/task_list_manager.py:save_conscious_state`
 **Data Origin:** Aggregated task lists (excluding `active_conversation`) managed by `TaskListManager`.
 
 **Description:** This key holds a global JSON object containing various task lists such as `user_tasks`, `research_tasks`, `system_two_tasks`, etc. The `active_conversation` tasks are stored separately under the `annika:consciousness:{conversation_id}:components:tasks` key.
+
+## Microsoft MCP/Graph/Planner/Teams Integration Keys (External, Monitored)
+
+> **Note:** The following Redis keys are primarily updated by the MS-MCP server and related Microsoft integration services. Annika agents can access and monitor these keys for real-time state, sync, and event information, but should not write to them directly. See [Agent_Tools/Redis-MS-MCP.md](mdc:Agent_Tools/Redis-MS-MCP.md) for full details.
+
+### Token Management
+- **Agent Tokens:** `annika:tokens:agent:{scope}`
+  - Stores delegated access tokens for agent authentication (JSON, expires with token)
+- **User-Specific Tokens:** `annika:tokens:user:{user_id}:{scope}`
+  - Stores user-specific delegated access tokens (JSON, expires with token)
+- **Active Token Tracking:** `annika:tokens:active`
+  - Set of all active token keys for monitoring
+
+### Microsoft Graph Metadata Caching
+- **Users:** `annika:graph:users:{user_id}`
+- **Groups:** `annika:graph:groups:{group_id}`
+- **Plans:** `annika:graph:plans:{plan_id}`
+- **Tasks:** `annika:graph:tasks:{task_id}`
+- **Buckets:** `annika:graph:buckets:{bucket_id}`
+  - All above: Cache MS Graph metadata (JSON, 24h TTL except tasks)
+
+### Planner Sync Service
+- **ID Mapping:** `annika:planner:id_map:{annika_id}`
+  - Maps Annika task IDs to MS Planner task IDs (JSON, persistent)
+- **ETags:** `annika:planner:etag:{planner_id}`
+  - Stores ETags for concurrency control (STRING, persistent)
+- **Cached Tasks:** `annika:planner:tasks:{task_id}`
+  - Cached Planner task data for sync (JSON, 1h TTL)
+- **Sync Log:** `annika:sync:log`
+  - Log of sync operations (LIST, JSON, 500 entries)
+- **Pending Operations:** `annika:sync:pending`
+- **Failed Operations:** `annika:sync:failed`
+- **Webhook Status:** `annika:sync:webhook_status`
+- **Last Upload Timestamp:** `annika:sync:last_upload:{annika_id}`
+- **Sync Health:** `annika:sync:health`
+
+### Webhook System
+- **Webhook Log:** `annika:webhook:log`
+- **Webhook Notifications:** `annika:webhooks:notifications`
+
+### Microsoft Teams Integration
+- **Chat Messages History:** `annika:teams:chat_messages:history`
+- **Channel Messages History:** `annika:teams:channel_messages:history`
+- **Chats History:** `annika:teams:chats:history`
+- **Channels History:** `annika:teams:channels:history`
+- **Chat Subscriptions:** `annika:chat_subscriptions:{subscription_id}`
+
+### Pub/Sub Channels for Real-time Monitoring
+- **Planner Webhooks:** `annika:planner:webhook`
+- **Teams Chat Messages:** `annika:teams:chat_messages`
+- **Teams Channel Messages:** `annika:teams:channel_messages`
+- **Teams Chats:** `annika:teams:chats`
+- **Teams Channels:** `annika:teams:channels`
+- **Task Updates:** `annika:tasks:updates`
+- **Metadata Updates:** `annika:pubsub:metadata`
+- **Task Events:** `annika:pubsub:tasks`
+
+### Configuration Storage
+- **Default Plan ID:** `annika:config:default_plan_id`
+
+### Task Storage
+- **Task Data:** `annika:tasks:{task_id}`
+  - Stores individual task data for agent access (JSON, persistent)
+
+---
+
+For full data formats and usage, see [Agent_Tools/Redis-MS-MCP.md](mdc:Agent_Tools/Redis-MS-MCP.md). These keys are essential for monitoring the state and health of Microsoft integration services, token validity, sync status, and Teams/Planner event streams.
+
+## Global Task List Keys (Canonical)
+
+- **Canonical Global Task List Key:**
+  - `annika:conscious_state` (JSON object containing all global task lists)
+  - **Description:** This is the only global key used for all task lists in the current system. All new and current code (including the Task Manager MCP tools) must use this key for global task storage and retrieval.
+
+- **Per-Conversation Task List Key:**
+  - `annika:consciousness:{conversation_id}:components:tasks` (per-conversation task lists)
+  - **Description:** Used for storing and retrieving tasks specific to a conversation. This is the canonical pattern for all per-conversation task logic.
+
+- **Deprecated/Legacy Key:**
+  - `annika:consciousness:Global:components:tasks` (legacy global tasks)
+  - **Status:** 🚫 **Deprecated** — No active code in the codebase reads from, writes to, or subscribes to this key. All references are in documentation, config, or legacy/archived code. It is safe to remove this key from your system.
+
+#### Audit & Compliance Status
+- The entire `Agent_Tools/task_manager` suite is 100% compliant with this canonical key usage.
+- All global task logic uses only `annika:conscious_state`.
+- All per-conversation task logic uses only `annika:consciousness:{conversation_id}:components:tasks`.
+- No code in the task manager or elsewhere depends on the old global key.
+- See [redis_key_map.md](mdc:redis_key_map.md) for the full audit and compliance details.
+
+---
+

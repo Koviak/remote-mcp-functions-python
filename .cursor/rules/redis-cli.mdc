@@ -1,7 +1,32 @@
 ---
+description: "TIER 4 - Debugging Tool: Redis CLI commands for manual debugging and data inspection via WSL Docker. Use this ONLY for debugging and manual operations, NOT for programmatic access. For code, use redis-master-manager.mdc instead."
 alwaysApply: false
 ---
 # Redis-CLI in Docker - Reference Guide (WSL Version)
+
+## 🎯 WHEN TO USE THIS FILE
+- **Debugging only** - Inspecting Redis data manually
+- **Troubleshooting** - Verifying key existence and values
+- **Data inspection** - Looking at actual stored data
+- **Manual operations** - One-off data fixes or cleanup
+- **Health checks** - Verifying Redis is running correctly
+
+## ⚠️ WHEN NOT TO USE THIS FILE
+- ❌ **Writing code** - Use [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc) instead
+- ❌ **Programmatic access** - Use Python Redis clients, not CLI commands
+- ❌ **Production operations** - Use proper APIs and tools
+- ❌ **Automated scripts** - Use Redis client libraries
+
+## 📚 FILE HIERARCHY
+- **Prerequisites**: 
+  - [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc) - Understand connection strategy
+  - [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc) - Know what keys to inspect
+- **This File**: Manual CLI debugging commands
+- **Related**: 
+  - [redis-json.mdc](mdc:.cursor/rules/redis-json.mdc) - RedisJSON programmatic operations
+  - [module-redis-management.mdc](mdc:.cursor/rules/module-redis-management.mdc) - Module architecture
+
+---
 
 ## Basic Connection
 
@@ -376,3 +401,16 @@ wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET a
 # Get in-progress tasks across all lists (one example of combining data)
 wsl -d Ubuntu docker exec -it annika_20-redis-1 redis-cli -a password JSON.GET annika:conscious_state '$.task_lists.*.tasks[?(@.status=="in_progress")]'
 ```
+
+### Compliance Confirmation (June 2025)
+
+- All Task Manager tools, monitor, and context manager are now **100% compliant** with canonical Redis key usage, subscriptions, and publishing patterns.
+- **Global task lists:** Only `annika:conscious_state` is used.
+- **Per-conversation tasks:** Only `annika:consciousness:{conversation_id}:components:tasks` is used.
+- **Conversation history:** Always read from canonical Redis keys, with robust .json file fallback.
+- **Pub/Sub:** All monitored components publish to and subscribe to the correct channels.
+- **No legacy or deprecated keys** are used anywhere in active code.
+- **All context and pub/sub logic is robust and matches documentation.**
+- See [redis_key_map.md](mdc:redis_key_map.md) and [redis-component-keys-map.mdc](mdc:redis-component-keys-map.mdc) for the full audit and compliance details.
+
+---

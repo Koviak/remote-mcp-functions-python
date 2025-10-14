@@ -3,7 +3,7 @@
 ## Mission and Current Focus
 - Remote MCP server bridging Annika 2.x with Microsoft 365 via Azure Functions, Graph, and Redis. See `.cursor/rules/ms-mcp-system-architecture.mdc` for the architecture contract.
 - Active integration work tracks the Planner <-> Annika sync fixes described in `.cursor/rules/planner-annika-sync-fixes-and-trace.mdc`. Keep webhook-driven V5 sync healthy and aligned with the ID map and timestamp requirements in that rule.
-- Uphold Redis-first design: every feature must prefer caches and queues described in `.cursor/rules/redis-component-keys-map.mdc` before talking to Graph directly.
+- Uphold Redis-first design: every feature must prefer caches and queues described in `.cursor/rules/redis-component-keys-map.mdc` before talking to Graph directly. Storage policy: Persisted data MUST use RedisJSON only (no string SET/GET). Exceptions: pub/sub payloads and ephemeral counters/locks.
 
 ## Stack and Runtime
 - Python 3.11 per `pyproject.toml`. Azure Functions host drives HTTP and MCP triggers (`function_app.py`). Startup automation relies on Azure Functions Core Tools and ngrok (`src/tools/func.exe`, `src/tools/ngrok.exe`).
@@ -40,11 +40,56 @@
 - Health endpoints exposed under `/api/health/ready`, `/api/sync/health`, `/api/chat_subscriptions/health`; contracts defined in `.cursor/rules/module_Function_App.mdc`.
 - Redis keys for sync and tokens are enumerated in `.cursor/rules/redis-component-keys-map.mdc`. Always validate expected TTLs after changes.
 
+## RedisJSON Conversion Initiative
+**Current Status:** Planning Phase  
+**Priority:** High - Aligns with Annika 2.0 architecture principle: "RedisJSON for everything we can"
+
+### Documentation
+- **[IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)** - Executive summary and overview (15 min read)
+- **[REDISJSON_QUICK_REFERENCE.md](./REDISJSON_QUICK_REFERENCE.md)** - Quick patterns for developers (30 min read)
+- **[REDISJSON_CONVERSION_PLAN.md](./REDISJSON_CONVERSION_PLAN.md)** - Complete implementation plan (2 hour read)
+
+### Key Principle
+ALL task storage MUST use RedisJSON operations (`JSON.SET`, `JSON.GET`) instead of plain string operations (`SET`, `GET`). This ensures:
+1. Direct compatibility with OpenAI structured outputs
+2. Atomic field-level updates without full document rewrites
+3. JSONPath query capabilities for filtering and searching
+4. Type safety and validation at storage time
+
+### Quick Pattern Reference
+```python
+# ❌ FORBIDDEN - Plain string storage
+await redis.set(f"annika:tasks:{id}", json.dumps(task))
+raw = await redis.get(f"annika:tasks:{id}")
+
+# ✅ REQUIRED - RedisJSON storage
+await redis.execute_command("JSON.SET", f"annika:tasks:{id}", "$", json.dumps(task))
+task_json = await redis.execute_command("JSON.GET", f"annika:tasks:{id}", "$")
+task = json.loads(task_json)[0] if task_json else None
+```
+
+### Files Requiring Conversion (Priority Order)
+1. **CRITICAL**: `src/annika_task_adapter.py` (Lines 292-295, 229-310)
+2. **CRITICAL**: `src/http_endpoints.py` (Task CRUD operations)
+3. **CRITICAL**: `src/planner_sync_service_v5.py` (All task reads/writes)
+4. **HIGH**: `src/endpoints/planner.py`, `src/endpoints/tasks_buckets.py`, `src/endpoints/agent_tools.py`
+
+### Implementation Timeline
+- **Week 1**: Preparation (tests, backups, monitoring)
+- **Week 2**: Core adapter changes
+- **Week 3**: HTTP endpoints
+- **Week 4**: Sync service
+- **Week 5**: Data migration
+- **Week 6**: Optimization
+
+See [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) for complete timeline and success metrics.
+
 ## Escalation and Caveats
 - Token or scope failures that require tenant admin action must be escalated with evidence and a link to `.cursor/rules/active-scopes.mdc`. Never self-edit scopes without approval.
 - Planner sync regressions (missing ID maps, stale timestamps) block the Annika <> Planner contract. Follow the troubleshooting checklist in `.cursor/rules/planner-annika-sync-fixes-and-trace.mdc` and flag upstream if Redis data diverges.
 - ngrok or Function host binaries missing: record the failure and update `src/tools/` or environment overrides; log in this file during review.
 - Webhook 400/401 responses or subscription churn often signal configuration drift. Coordinate with the Webhook and Chat Subscription module owners per `.cursor/rules/module_Webhook_System.mdc` and `.cursor/rules/module_Chat_Subscriptions.mdc`.
+- **CRITICAL**: If you find JSON blobs stored via string `SET`/`GET`, this is a HIGH PRIORITY issue. Immediately migrate to RedisJSON per [REDISJSON_QUICK_REFERENCE.md](./REDISJSON_QUICK_REFERENCE.md) and document in the conversion plan. No exceptions unless explicitly whitelisted in `.cursor/rules/redis-component-keys-map.mdc` (pub/sub payloads and ephemeral counters/locks only).
 
 ## Automation Hygiene
 - When you add helper scripts (PowerShell, Python, bash), log invocation syntax, required env vars, and artifact destinations here plus the closest directory-level guide.

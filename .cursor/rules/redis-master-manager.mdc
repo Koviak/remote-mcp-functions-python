@@ -1,0 +1,462 @@
+---
+description: "TIER 1 - START HERE: Redis Master Manager Client - the SINGLE SOURCE OF TRUTH for all Redis connections. Use this first before any Redis operations. Covers connection patterns, configuration, error handling, and database strategy."
+alwaysApply: false
+---
+# Redis Master Manager Client Usage Rules
+
+## 🎯 WHEN TO USE THIS FILE
+- **ALWAYS** - Before writing any Redis code
+- When you need to connect to Redis
+- When troubleshooting connection issues
+- When setting up new Redis operations
+- To understand database strategy (DB 0, 1, 2)
+
+## 📚 RELATED FILES (Consult After This One)
+- **Next**: [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc) - For key patterns
+- **Then**: [redis-json.mdc](mdc:.cursor/rules/redis-json.mdc) - For RedisJSON operations
+- **Debug**: [redis-cli.mdc](mdc:.cursor/rules/redis-cli.mdc) - For manual debugging
+
+---
+
+## Purpose of Redis Master Manager Client
+
+The [Redis_Master_Manager_Client.py](mdc:Redis_Master_Manager_Client.py) is the **SINGLE SOURCE OF TRUTH** for all Redis connections in Annika 2.0. It provides:
+
+### 🎯 **Core Benefits**
+- **Centralized Configuration**: All Redis settings come from `.env` file only
+- **No Fallbacks**: Eliminates localhost and hardcoded connection confusion
+- **Error Handling**: Built-in retry logic and connection management
+- **Health Monitoring**: Integrated health checks and connection pooling
+- **Consistency**: One Redis configuration across entire system
+- **Maintainability**: Easy updates via environment variables only
+
+### 🏗️ **Architecture Integration**
+The Redis Master Manager integrates with all Annika 2.0 components:
+- **Core AGI**: [Annika_AGI_Utils/redis_connection.py](mdc:Annika_AGI_Utils/redis_connection.py) - Compatibility layer
+- **Conscious State**: [Annika_AGI_Utils/conscious_state.py](mdc:Annika_AGI_Utils/conscious_state.py) - State management
+- **Task Manager**: [Agent_Tools/task_manager/redis_manager.py](mdc:Agent_Tools/task_manager/redis_manager.py) - Task operations
+- **User Interface**: [User_Interface/services/redis_service.py](mdc:User_Interface/services/redis_service.py) - UI Redis operations
+- **System Two**: [sys_two_module/Redis_Memory/redis_config.py](mdc:sys_two_module/Redis_Memory/redis_config.py) - Memory operations
+
+## ✅ REQUIRED PATTERNS - Use These Always
+
+MANDATORY: All persisted application data MUST be stored as RedisJSON. Do not use string values (SET/GET) for application state. Allowed exceptions:
+- Pub/Sub payloads and channel names
+- Ephemeral counters/locks/semaphores
+- Vendor-mandated keys explicitly documented in `redis-component-keys-map.mdc`
+
+Always use `set_json_async`/`get_json_async` or equivalent helpers. Migrate any wrong-type keys to RedisJSON during maintenance.
+
+### **Pattern 1: Direct Redis Master Manager Import (Recommended)**
+```python
+# CORRECT - Primary pattern for new code
+from Redis_Master_Manager_Client import (
+    get_redis_client,
+    get_async_redis_client,
+    get_redis_config,
+    get_redis_url,
+    redis_pubsub_manager
+)
+
+# Sync operations
+client = get_redis_client()
+result = client.get(key)
+
+# Async operations  
+client = await get_async_redis_client()
+result = await client.get(key)
+
+# Pub/Sub operations
+async with redis_pubsub_manager("channel_name") as pubsub:
+    async for message in pubsub.listen():
+        # Process message
+```
+
+### **Pattern 2: Via Compatibility Layer (For Existing Code)**
+```python
+# CORRECT - Use for existing code that imports redis_connection
+from Annika_AGI_Utils.redis_connection import (
+    get_redis_client,
+    safe_redis_operation,
+    publish_message
+)
+
+# Safe operations with retry logic
+result = await safe_redis_operation(lambda c: c.get(key))
+result = await safe_redis_operation(lambda c: c.set(key, value))
+result = await safe_redis_operation(lambda c: c.incr(key))
+
+# Publishing messages
+await publish_message("channel", "message")
+```
+
+### **Pattern 3: JSON Operations**
+```python
+# CORRECT - JSON operations via master manager
+from Redis_Master_Manager_Client import set_json_async, get_json_async
+
+client = await get_async_redis_client()
+await set_json_async(client, key, {"data": "value"})
+data = await get_json_async(client, key)
+```
+
+## ❌ FORBIDDEN PATTERNS - Never Use These
+
+### **Direct Redis Imports (ELIMINATED)**
+```python
+# ❌ NEVER - Direct Redis imports are forbidden
+import redis
+import redis.asyncio as aioredis
+
+# ❌ NEVER - Direct client creation
+client = redis.Redis(host="localhost", port=6379)
+client = redis.Redis(host="annika_20-redis-1", port=6379)
+client = aioredis.from_url("redis://...")
+```
+
+### **Environment Variable Fallbacks (ELIMINATED)**
+```python
+# ❌ NEVER - Environment variable fallbacks
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")  # No fallbacks!
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")  # No fallbacks!
+```
+
+### **Hardcoded Connections (ELIMINATED)**
+```python
+# ❌ NEVER - Hardcoded Redis connections
+redis.Redis(host="annika_20-redis-1", port=6379, password="password")
+redis.from_url("redis://:password@annika_20-redis-1:6379/0")
+```
+
+## 🔧 Configuration Management
+
+### **Environment Variables (.env file ONLY)**
+```bash
+# REQUIRED - These must be set in .env file
+REDIS_HOST=annika_20-redis-1
+REDIS_PORT=6379
+REDIS_PASSWORD=password
+
+# The Redis Master Manager reads ONLY from .env - no fallbacks!
+```
+
+### **Getting Configuration Programmatically**
+```python
+# CORRECT - Get Redis config via master manager
+from Redis_Master_Manager_Client import get_redis_config, get_redis_url
+
+config = get_redis_config()  # Returns dict with host, port, password, etc.
+redis_url = get_redis_url()  # Returns properly formatted Redis URL
+```
+
+## 🚨 Error Handling Patterns
+
+### **Safe Operations with Retry Logic**
+```python
+# CORRECT - Use safe_redis_operation for automatic retry
+from Annika_AGI_Utils.redis_connection import safe_redis_operation
+
+# Lambda pattern (preferred for new code)
+result = await safe_redis_operation(lambda c: c.get(key))
+result = await safe_redis_operation(lambda c: c.set(key, value, ex=3600))
+result = await safe_redis_operation(lambda c: c.publish(channel, message))
+
+# Multiple operations in sequence
+user_data = await safe_redis_operation(lambda c: c.get(f"user:{user_id}"))
+count = await safe_redis_operation(lambda c: c.incr(f"counter:{user_id}"))
+```
+
+### **Health Checks**
+```python
+# CORRECT - Check Redis health via master manager
+from Redis_Master_Manager_Client import check_redis_health, check_async_redis_health
+
+# Sync health check
+health = check_redis_health()
+if health["status"] == "healthy":
+    print(f"✅ Redis OK: {health['redis_version']}")
+
+# Async health check
+health = await check_async_redis_health()
+```
+
+## 📝 Migration Guidelines
+
+### **When Working with Existing Code**
+1. **Never modify working imports** - Use the compatibility layer in [Annika_AGI_Utils/redis_connection.py](mdc:Annika_AGI_Utils/redis_connection.py)
+2. **Replace only failing patterns** - Focus on direct Redis imports and hardcoded connections
+3. **Test incrementally** - Ensure each change works before proceeding
+4. **Use lambda patterns** - For `safe_redis_operation` calls: `lambda c: c.operation()`
+
+### **For New Code**
+1. **Always import from Redis_Master_Manager_Client** directly
+2. **Never use fallback patterns** - Configuration comes from .env only  
+3. **Use async clients** - Prefer `get_async_redis_client()` for new async code
+4. **Include error handling** - Use try/catch or `safe_redis_operation`
+
+## 🔍 Common Use Cases
+
+### **Task Management Operations**
+```python
+# CORRECT - Task Manager pattern
+from Redis_Master_Manager_Client import get_async_redis_client
+
+client = await get_async_redis_client()
+task_data = await client.get(f"annika:tasks:{task_id}")
+await client.set(f"annika:tasks:{task_id}", json.dumps(task_data))
+```
+
+### **Pub/Sub Monitoring**
+```python
+# CORRECT - Pub/Sub monitoring pattern
+from Redis_Master_Manager_Client import redis_pubsub_manager
+
+async with redis_pubsub_manager("annika:tasks:*") as pubsub:
+    async for message in pubsub.listen():
+        if message["type"] == "message":
+            # Process task notification
+            await handle_task_notification(message["data"])
+```
+
+### **JSON Storage**
+```python
+# CORRECT - JSON storage pattern
+from Redis_Master_Manager_Client import get_async_redis_client, set_json_async, get_json_async
+
+client = await get_async_redis_client()
+conversation_data = {
+    "id": conversation_id,
+    "created_at": datetime.now().isoformat(),
+    "active": True
+}
+
+await set_json_async(client, f"annika:consciousness:{conversation_id}", conversation_data)
+retrieved_data = await get_json_async(client, f"annika:consciousness:{conversation_id}")
+```
+
+## 🗄️ Database Optimization Strategy
+
+### **Annika 2.0 Multi-Database Architecture**
+
+Annika 2.0 uses a strategic multi-database approach optimized for performance and maintainability:
+
+```
+DB 0: Critical Application Data (REQUIRED)
+├── Mem0 vector storage (RediSearch requirement - FORCED to DB 0)
+├── Consciousness state (annika:consciousness:*)
+├── Tasks and conversations (annika:tasks:*)
+├── Agent notifications and pub/sub
+├── System Two memory operations
+└── Core application state
+
+DB 1: Rate Limiting & Performance Cache
+├── SlowAPI rate limiting keys
+├── MCP server rate limits
+└── WebSocket throttling data
+
+DB 2: Extended Cache & Testing
+├── Additional rate limiting overflow
+├── Temporary cache data
+└── Test isolation (when needed)
+```
+
+### **✅ Advantages of Current Strategy**
+
+#### **1. Critical RediSearch Compatibility**
+```python
+# Mem0 MUST use DB 0 - non-negotiable RediSearch requirement
+config = {
+    "vector_store": {
+        "provider": "redis", 
+        "config": {
+            "redis_url": f"redis://:{password}@{host}:{port}/0"  # MUST be DB 0
+        }
+    }
+}
+```
+
+#### **2. Performance Isolation**
+```python
+# Rate limiting operations don't interfere with real-time data
+rate_client = redis.Redis(db=1)  # Rate limits
+app_client = redis.Redis(db=0)   # Critical application data
+```
+
+#### **3. Independent Maintenance**
+```bash
+# Clear rate limits without affecting application data
+redis-cli -a password SELECT 1
+redis-cli -a password FLUSHDB
+
+# Backup only critical application data
+redis-cli -a password --db 0 --rdb backup_critical_data.rdb
+```
+
+### **⚠️ Key Limitations & Gotchas**
+
+#### **🔴 Redis Cluster Incompatibility**
+```python
+# Multi-database strategy breaks with Redis Cluster
+if redis_cluster_mode:
+    # ALL databases collapse to cluster space
+    # Database separation strategy becomes invalid
+    # Future scaling requires complete re-architecture
+```
+
+#### **🔴 No Cross-Database Transactions**
+```python
+# IMPOSSIBLE - Cannot do atomic operations across databases
+with redis.pipeline() as pipe:
+    pipe.set("app_key", "value")     # DB 0
+    pipe.select(1)                   # Switch to DB 1 - BREAKS ATOMICITY
+    pipe.set("rate_key", "value")    # DB 1
+    pipe.execute()                   # FAILS - Transaction invalid
+```
+
+#### **🔴 Shared Memory Pool**
+```python
+# Memory is NOT isolated between databases
+total_memory = db0_memory + db1_memory + db2_memory
+# Memory limits and eviction policies apply to ENTIRE Redis instance
+```
+
+### **🎯 Optimization Recommendations**
+
+#### **Current Strategy: OPTIMAL for Annika 2.0** ✅
+```python
+# Keep current approach because:
+# 1. RediSearch forces DB 0 anyway (Mem0 requirement)
+# 2. Rate limiting isolation provides real performance benefits
+# 3. Easy to migrate to single DB if cluster needed
+# 4. Critical data safely separated from cache operations
+```
+
+#### **Alternative: Single Database with Namespacing** 
+```python
+# Future consideration for cluster-ready architecture
+DB 0: ALL DATA with smart prefixes
+├── app:consciousness:*      (application data)
+├── app:tasks:*             (tasks - persistent)
+├── cache:rate_limit:*      (rate limits - can be evicted)
+├── cache:websocket:*       (websocket cache - can be evicted)
+└── mem0:*                  (Mem0 vectors - permanent)
+
+# Benefits: Cluster-ready, atomic cross-data transactions
+# Trade-offs: Less isolation, more complex key management
+```
+
+### **🔧 Database Configuration Patterns**
+
+#### **DB 0: Critical Application Data**
+```python
+# CORRECT - All persistent application data
+from Redis_Master_Manager_Client import get_async_redis_client
+
+client = await get_async_redis_client()  # Always connects to DB 0
+await client.set(f"annika:consciousness:{conv_id}", data)
+await client.set(f"annika:tasks:{task_id}", task_data)
+```
+
+#### **DB 1-2: Ephemeral Cache Data**
+```python
+# CORRECT - Rate limiting and cache operations
+import redis
+from Redis_Master_Manager_Client import get_redis_config
+
+config = get_redis_config()
+rate_client = redis.Redis(
+    host=config["host"], 
+    port=config["port"], 
+    password=config["password"],
+    db=1  # Use DB 1 for rate limiting
+)
+```
+
+### **⚡ Performance Optimization Guidelines**
+
+#### **1. Database-Specific Operations**
+```python
+# BEST PRACTICE - Use appropriate database for data type
+# DB 0: Persistent application state (no eviction)
+# DB 1-2: Cache data (LRU eviction allowed)
+
+# Configure different eviction policies per use case
+maxmemory-policy noeviction     # DB 0 - never evict critical data
+maxmemory-policy allkeys-lru    # DB 1 - evict rate limiting data
+```
+
+#### **2. Monitoring Multiple Databases**
+```python
+# CORRECT - Health check across all databases
+async def check_all_databases():
+    for db_num in [0, 1, 2]:
+        client = redis.Redis(db=db_num, **get_redis_config())
+        keys = len(client.keys("*"))
+        memory = client.memory_usage("*") if keys > 0 else 0
+        logger.info(f"DB {db_num}: {keys} keys, {memory} bytes")
+```
+
+#### **3. Backup Strategy**
+```bash
+# BEST PRACTICE - Database-specific backup strategy
+# Critical data (DB 0) - Daily full backup
+redis-cli --db 0 --rdb /backup/annika_critical_$(date +%Y%m%d).rdb
+
+# Cache data (DB 1-2) - No backup needed (can be rebuilt)
+# Rate limiting data is ephemeral and regenerates automatically
+```
+
+### **🚀 Migration Considerations**
+
+#### **When to Consider Single Database**
+- **Redis Cluster needed** for horizontal scaling
+- **Cross-database transactions required** for data consistency
+- **Simplified operations** more important than isolation
+- **Memory efficiency** critical (eliminate database overhead)
+
+#### **Migration Path**
+```python
+# Future migration strategy (if needed)
+# 1. Prefix all keys with database purpose
+DB0_PREFIX = "app:"     # annika:consciousness -> app:consciousness
+DB1_PREFIX = "cache:"   # rate limiting -> cache:rate_limit
+DB2_PREFIX = "temp:"    # temporary -> temp:websocket
+
+# 2. Migrate data with proper prefixes
+# 3. Update all Redis operations to use prefixed keys
+# 4. Switch to single database configuration
+```
+
+## 🎯 Key Files Reference
+
+- **[Redis_Master_Manager_Client.py](mdc:Redis_Master_Manager_Client.py)** - Primary Redis client (use this for new code)
+- **[Annika_AGI_Utils/redis_connection.py](mdc:Annika_AGI_Utils/redis_connection.py)** - Compatibility layer with safe operations
+- **[Annika_AGI_Utils/conscious_state.py](mdc:Annika_AGI_Utils/conscious_state.py)** - Example of proper migration patterns
+- **[Agent_Tools/task_manager/redis_manager.py](mdc:Agent_Tools/task_manager/redis_manager.py)** - Task Manager Redis patterns
+- **[User_Interface/services/redis_service.py](mdc:User_Interface/services/redis_service.py)** - UI Redis integration patterns
+
+## ✅ Validation Checklist
+
+Before committing Redis code, ensure:
+- [ ] No direct `import redis` or `import redis.asyncio`
+- [ ] No hardcoded hostnames or connection strings
+- [ ] No environment variable fallbacks (only .env file)
+- [ ] All operations use Redis Master Manager or compatibility layer
+- [ ] Error handling implemented (try/catch or safe_redis_operation)
+- [ ] Configuration obtained via `get_redis_config()` if needed
+
+## 🏆 Success Metrics
+
+Following these rules ensures:
+- **Zero Redis connection errors** across the entire system
+- **Consistent configuration** from single source (.env file)
+- **Robust error handling** with automatic retries
+- **Easy maintenance** via centralized configuration
+- **Scalable architecture** supporting multiple Redis clients
+- **Perfect compatibility** with existing Annika 2.0 components
+
+**Remember: Redis Master Manager Client is the SINGLE SOURCE OF TRUTH for all Redis operations in Annika 2.0!**
+
+
+
+ 

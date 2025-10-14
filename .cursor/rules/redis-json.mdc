@@ -1,12 +1,36 @@
 ---
-description: redisJSON
-globs: 
+description: "TIER 2 - RedisJSON Operations: Programmatic guide for RedisJSON operations including storing, retrieving, updating, and searching JSON data. Use after understanding connection patterns (redis-master-manager.mdc) and key patterns (redis-component-keys-map.mdc)."
 alwaysApply: false
 ---
+# RedisJSON Documentation and Implementation Guide
 
- JSON
+## 🎯 WHEN TO USE THIS FILE
+- When working with JSON data in Redis
+- When you need to update specific fields without rewriting entire objects
+- When implementing structured data storage
+- For JSON path syntax and operations
+- When using OpenAI structured outputs with Redis
 
-JSON support for Redis
+## 📚 FILE HIERARCHY
+- **Prerequisites**: 
+  1. [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc) - Learn HOW to connect
+  2. [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc) - Learn WHAT keys exist
+- **This File**: Learn RedisJSON-specific operations
+- **Related**: [redis-cli.mdc](mdc:.cursor/rules/redis-cli.mdc) - For manual RedisJSON CLI commands
+
+## 🔗 KEY INTEGRATION POINTS
+- **OpenAI Structured Outputs** → RedisJSON (compatible, no conversion needed)
+- **Consciousness State**: Uses RedisJSON for all component storage
+- **Task Storage**: Uses RedisJSON for complex task structures
+- **Unified Task Schema**: Compatible with RedisJSON storage
+
+> Enforcement: This repository REQUIRES RedisJSON for all persisted application data. Avoid plain `SET`/`GET` for JSON blobs. Strings are restricted to pub/sub payloads and ephemeral counters/locks.
+
+> **Related Rules**: See [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc) for key patterns, [redis-cli.mdc](mdc:.cursor/rules/redis-cli.mdc) for CLI operations, [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc) for client setup
+
+---
+
+## RedisJSON Support for Redis
 
 Discord Github
 

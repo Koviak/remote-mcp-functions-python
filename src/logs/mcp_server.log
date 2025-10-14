@@ -1,649 +1,4 @@
- Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T04:57:54 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T04:58:54 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T04:59:54 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:00:54 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:01:54 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:02:54 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:03:54 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:04:54 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:05:54 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:06:54 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:07:43 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
-Request method: 'GET'
-Request headers:
-    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
-No body was attached to the request
-2025-10-02T05:07:43 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
-Response headers:
-    'Cache-Control': 'max-age=86400, private'
-    'Content-Type': 'application/json; charset=utf-8'
-    'Strict-Transport-Security': 'REDACTED'
-    'X-Content-Type-Options': 'REDACTED'
-    'Access-Control-Allow-Origin': 'REDACTED'
-    'Access-Control-Allow-Methods': 'REDACTED'
-    'P3P': 'REDACTED'
-    'x-ms-request-id': '8234e0e8-ec99-40d4-9869-d01f150c6000'
-    'x-ms-ests-server': 'REDACTED'
-    'x-ms-srs': 'REDACTED'
-    'Content-Security-Policy-Report-Only': 'REDACTED'
-    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
-    'Reporting-Endpoints': 'REDACTED'
-    'X-XSS-Protection': 'REDACTED'
-    'Set-Cookie': 'REDACTED'
-    'Date': 'Thu, 02 Oct 2025 10:07:43 GMT'
-    'Content-Length': '1753'
-2025-10-02T05:07:43 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
-Request method: 'POST'
-Request headers:
-    'Accept': 'application/json'
-    'x-client-sku': 'REDACTED'
-    'x-client-ver': 'REDACTED'
-    'x-client-os': 'REDACTED'
-    'x-ms-lib-capability': 'REDACTED'
-    'client-request-id': 'REDACTED'
-    'x-client-current-telemetry': 'REDACTED'
-    'x-client-last-telemetry': 'REDACTED'
-    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
-A body is sent with the request
-2025-10-02T05:07:43 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
-Response headers:
-    'Cache-Control': 'no-store, no-cache'
-    'Pragma': 'no-cache'
-    'Content-Type': 'application/json; charset=utf-8'
-    'Expires': '-1'
-    'Strict-Transport-Security': 'REDACTED'
-    'X-Content-Type-Options': 'REDACTED'
-    'P3P': 'REDACTED'
-    'client-request-id': 'REDACTED'
-    'x-ms-request-id': '349e05a5-2368-4b4e-864c-8db456976000'
-    'x-ms-ests-server': 'REDACTED'
-    'x-ms-clitelem': 'REDACTED'
-    'x-ms-srs': 'REDACTED'
-    'Content-Security-Policy-Report-Only': 'REDACTED'
-    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
-    'Reporting-Endpoints': 'REDACTED'
-    'X-XSS-Protection': 'REDACTED'
-    'Set-Cookie': 'REDACTED'
-    'Date': 'Thu, 02 Oct 2025 10:07:43 GMT'
-    'Content-Length': '7943'
-2025-10-02T05:07:43 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
-2025-10-02T05:07:43 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
-2025-10-02T05:07:44 | INFO | planner_sync_service_v5 | 🔍 Starting hourly Planner poll for task changes...
-2025-10-02T05:07:44 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
-2025-10-02T05:07:45 | WARNING | planner_sync_service_v5 | Failed to get personal plans: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-02T10:07:45","request-id":"1d757f19-b830-4505-8cdb-192a8ff6ab15","client-request-id":"1d757f19-b830-4505-8cdb-192a8ff6ab15
-2025-10-02T05:07:45 | INFO | planner_sync_service_v5 |    Found 0 personal plans
-2025-10-02T05:07:45 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
-2025-10-02T05:07:45 | WARNING | planner_sync_service_v5 | Failed to get group memberships: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-02T10:07:45","request-id":"5f1a9a06-34c0-4381-bf41-d18b97a8340d","client-request-id":"5f1a9a06-34c0-4381-bf41-d18b97a8340d
-2025-10-02T05:07:45 | INFO | planner_sync_service_v5 |    No group memberships returned
-2025-10-02T05:07:45 | INFO | planner_sync_service_v5 | ?? Total plans found: 0
-2025-10-02T05:07:45 | WARNING | planner_sync_service_v5 | Application token returned no plans; retrying with delegated fallback
-2025-10-02T05:07:45 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
-2025-10-02T05:07:45 | INFO | planner_sync_service_v5 |    Found 1 personal plans
-2025-10-02T05:07:45 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
-2025-10-02T05:07:47 | INFO | planner_sync_service_v5 |    Found 22 plans across 5 groups
-2025-10-02T05:07:47 | INFO | planner_sync_service_v5 | ?? Total plans found: 23
-2025-10-02T05:07:47 | INFO | planner_sync_service_v5 | 📋 Polling 23 Planner plans for task changes
-2025-10-02T05:07:55 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:08:06 | INFO | graph_metadata_manager | Cached 38 users in Redis
-2025-10-02T05:08:06 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 38 users
-2025-10-02T05:08:56 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:09:02 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 16 groups, 30 plans, 61 buckets (page 1)
-2025-10-02T05:09:03 | INFO | planner_sync_service_v5 | ✅ Planner polling complete: 240 tasks checked, 0 created, 0 updated
-2025-10-02T05:09:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:10:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:11:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:12:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:13:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:14:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:15:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:16:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:17:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:18:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:19:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:20:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:21:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:22:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:23:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:24:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:25:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:26:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:27:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:28:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:29:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:30:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:31:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:32:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:33:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:34:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:35:08 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: d3b23e18-3245-4c93-8a1f-3deacf3401ee, function type: sync, timestamp (UTC): 2025-10-02 10:35:08.487728, sync threadpool max workers: 1000
-2025-10-02T05:35:08 | INFO | webhook_handler | 🔔 Lifecycle event 'reauthorizationRequired' for subscription 4d962ccc-9099-40e3-ac3e-ddcfc47bee77
-2025-10-02T05:35:08 | ERROR | webhook_handler | Error logging webhook notification: Event loop is closed
-2025-10-02T05:35:08 | INFO | endpoints.agent_webhook | Successfully processed webhook notification: None for Subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77
-2025-10-02T05:35:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:36:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:37:19 | INFO | token_refresh_service | Token for scope 'Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile' expiring in 710 seconds, refreshing...
-2025-10-02T05:37:19 | INFO | token_refresh_service | Successfully refreshed token for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
-2025-10-02T05:37:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:38:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:39:30 | INFO | planner_sync_service_v5 | 🔄 Renewing webhook subscriptions...
-2025-10-02T05:39:31 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 7804ff3b-557b-41f8-ae58-3cc20a4c837a, function type: sync, timestamp (UTC): 2025-10-02 10:39:31.493190, sync threadpool max workers: 1000
-2025-10-02T05:39:31 | INFO | endpoints.agent_webhook | Graph webhook validation request received
-2025-10-02T05:39:31 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/505cd2c9-0ae4-49d0-b348-a56f181db606 "HTTP/1.1 200 OK"
-2025-10-02T05:39:31 | INFO | planner_sync_service_v5 | ✅ Renewed webhook: groups
-2025-10-02T05:39:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:40:07 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 3c5a2191-0239-4b36-af8a-d48b7392dbe4, function type: sync, timestamp (UTC): 2025-10-02 10:40:07.381094, sync threadpool max workers: 1000
-2025-10-02T05:40:07 | INFO | endpoints.agent_webhook | Graph webhook validation request received
-2025-10-02T05:40:12 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77 "HTTP/1.1 200 OK"
-2025-10-02T05:40:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:41:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:42:19 | INFO | token_refresh_service | Token for scope 'Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile' expiring in 410 seconds, refreshing...
-2025-10-02T05:42:19 | INFO | token_refresh_service | Successfully refreshed token for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
-2025-10-02T05:42:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:43:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:44:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:45:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:46:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:47:19 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 623 seconds, refreshing...
-2025-10-02T05:47:20 | INFO | root | Successfully acquired user token via ROPC
-2025-10-02T05:47:20 | INFO | mcp_redis_config | Token stored successfully for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
-2025-10-02T05:47:20 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
-2025-10-02T05:47:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:48:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:49:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:50:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:51:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:52:20 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 322 seconds, refreshing...
-2025-10-02T05:52:20 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
-2025-10-02T05:52:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:53:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:54:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:55:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:56:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:57:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:58:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T05:59:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:00:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:01:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:02:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:03:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:04:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:05:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:06:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:07:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:08:57 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:09:02 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
-Request method: 'GET'
-Request headers:
-    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
-No body was attached to the request
-2025-10-02T06:09:02 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
-Response headers:
-    'Cache-Control': 'max-age=86400, private'
-    'Content-Type': 'application/json; charset=utf-8'
-    'Strict-Transport-Security': 'REDACTED'
-    'X-Content-Type-Options': 'REDACTED'
-    'Access-Control-Allow-Origin': 'REDACTED'
-    'Access-Control-Allow-Methods': 'REDACTED'
-    'P3P': 'REDACTED'
-    'x-ms-request-id': '1f01a8ab-ed6b-4216-b00b-8195545f0000'
-    'x-ms-ests-server': 'REDACTED'
-    'x-ms-srs': 'REDACTED'
-    'Content-Security-Policy-Report-Only': 'REDACTED'
-    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
-    'Reporting-Endpoints': 'REDACTED'
-    'X-XSS-Protection': 'REDACTED'
-    'Set-Cookie': 'REDACTED'
-    'Date': 'Thu, 02 Oct 2025 11:09:02 GMT'
-    'Content-Length': '1753'
-2025-10-02T06:09:02 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
-Request method: 'POST'
-Request headers:
-    'Accept': 'application/json'
-    'x-client-sku': 'REDACTED'
-    'x-client-ver': 'REDACTED'
-    'x-client-os': 'REDACTED'
-    'x-ms-lib-capability': 'REDACTED'
-    'client-request-id': 'REDACTED'
-    'x-client-current-telemetry': 'REDACTED'
-    'x-client-last-telemetry': 'REDACTED'
-    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
-A body is sent with the request
-2025-10-02T06:09:02 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
-Response headers:
-    'Cache-Control': 'no-store, no-cache'
-    'Pragma': 'no-cache'
-    'Content-Type': 'application/json; charset=utf-8'
-    'Expires': '-1'
-    'Strict-Transport-Security': 'REDACTED'
-    'X-Content-Type-Options': 'REDACTED'
-    'P3P': 'REDACTED'
-    'client-request-id': 'REDACTED'
-    'x-ms-request-id': '5abb25b2-a47c-487a-94da-8dd5b58a5b00'
-    'x-ms-ests-server': 'REDACTED'
-    'x-ms-clitelem': 'REDACTED'
-    'x-ms-srs': 'REDACTED'
-    'Content-Security-Policy-Report-Only': 'REDACTED'
-    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
-    'Reporting-Endpoints': 'REDACTED'
-    'X-XSS-Protection': 'REDACTED'
-    'Set-Cookie': 'REDACTED'
-    'Date': 'Thu, 02 Oct 2025 11:09:02 GMT'
-    'Content-Length': '7943'
-2025-10-02T06:09:02 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
-2025-10-02T06:09:02 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
-2025-10-02T06:09:03 | INFO | planner_sync_service_v5 | 🔍 Starting hourly Planner poll for task changes...
-2025-10-02T06:09:03 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
-2025-10-02T06:09:03 | WARNING | planner_sync_service_v5 | Failed to get personal plans: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-02T11:09:04","request-id":"7c6d554c-cf90-4cf5-8174-edcc28e529da","client-request-id":"7c6d554c-cf90-4cf5-8174-edcc28e529da
-2025-10-02T06:09:03 | INFO | planner_sync_service_v5 |    Found 0 personal plans
-2025-10-02T06:09:03 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
-2025-10-02T06:09:04 | WARNING | planner_sync_service_v5 | Failed to get group memberships: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-02T11:09:04","request-id":"ca9b9d46-15d9-4ed8-ac46-7d52d872d022","client-request-id":"ca9b9d46-15d9-4ed8-ac46-7d52d872d022
-2025-10-02T06:09:04 | INFO | planner_sync_service_v5 |    No group memberships returned
-2025-10-02T06:09:04 | INFO | planner_sync_service_v5 | ?? Total plans found: 0
-2025-10-02T06:09:04 | WARNING | planner_sync_service_v5 | Application token returned no plans; retrying with delegated fallback
-2025-10-02T06:09:04 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
-2025-10-02T06:09:04 | INFO | planner_sync_service_v5 |    Found 1 personal plans
-2025-10-02T06:09:04 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
-2025-10-02T06:09:06 | INFO | planner_sync_service_v5 |    Found 22 plans across 5 groups
-2025-10-02T06:09:06 | INFO | planner_sync_service_v5 | ?? Total plans found: 23
-2025-10-02T06:09:06 | INFO | planner_sync_service_v5 | 📋 Polling 23 Planner plans for task changes
-2025-10-02T06:09:26 | INFO | graph_metadata_manager | Cached 38 users in Redis
-2025-10-02T06:09:26 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 38 users
-2025-10-02T06:09:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:10:24 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 16 groups, 30 plans, 61 buckets (page 1)
-2025-10-02T06:10:25 | INFO | planner_sync_service_v5 | ✅ Planner polling complete: 240 tasks checked, 0 created, 0 updated
-2025-10-02T06:10:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:11:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:12:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:13:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:14:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:15:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:16:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:17:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:18:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:19:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:20:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:21:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:22:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:23:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:24:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:25:28 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 74f8e4a0-04f7-4035-a504-40899feaca9e, function type: sync, timestamp (UTC): 2025-10-02 11:25:28.162177, sync threadpool max workers: 1000
-2025-10-02T06:25:28 | INFO | webhook_handler | 🔔 Lifecycle event 'reauthorizationRequired' for subscription 4d962ccc-9099-40e3-ac3e-ddcfc47bee77
-2025-10-02T06:25:28 | INFO | endpoints.agent_webhook | Successfully processed webhook notification: None for Subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77
-2025-10-02T06:25:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:26:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:27:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:28:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:29:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:30:13 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 673fb45a-b8f0-4250-9eb0-be91e09b68f3, function type: sync, timestamp (UTC): 2025-10-02 11:30:13.998546, sync threadpool max workers: 1000
-2025-10-02T06:30:13 | INFO | endpoints.agent_webhook | Graph webhook validation request received
-2025-10-02T06:30:19 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77 "HTTP/1.1 200 OK"
-2025-10-02T06:30:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:31:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:32:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:33:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:34:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:35:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:36:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:37:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:38:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:39:31 | INFO | planner_sync_service_v5 | 🔄 Renewing webhook subscriptions...
-2025-10-02T06:39:32 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: fb027492-6afe-41c9-853e-a160edf6423a, function type: sync, timestamp (UTC): 2025-10-02 11:39:32.456247, sync threadpool max workers: 1000
-2025-10-02T06:39:32 | INFO | endpoints.agent_webhook | Graph webhook validation request received
-2025-10-02T06:39:32 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/505cd2c9-0ae4-49d0-b348-a56f181db606 "HTTP/1.1 200 OK"
-2025-10-02T06:39:32 | INFO | planner_sync_service_v5 | ✅ Renewed webhook: groups
-2025-10-02T06:39:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:40:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:41:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:42:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:43:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:44:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:45:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:46:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:47:20 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 701 seconds, refreshing...
-2025-10-02T06:47:20 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
-2025-10-02T06:47:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:48:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:49:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:50:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:51:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:52:20 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 401 seconds, refreshing...
-2025-10-02T06:52:20 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
-2025-10-02T06:52:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:53:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:54:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:55:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:56:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:57:20 | INFO | token_refresh_service | Token for scope 'Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile' expiring in 656 seconds, refreshing...
-2025-10-02T06:57:20 | INFO | token_refresh_service | Successfully refreshed token for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
-2025-10-02T06:57:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:58:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T06:59:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:00:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:01:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:02:20 | INFO | token_refresh_service | Token for scope 'Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile' expiring in 356 seconds, refreshing...
-2025-10-02T07:02:20 | INFO | token_refresh_service | Successfully refreshed token for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
-2025-10-02T07:02:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:03:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:04:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:05:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:06:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:07:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:08:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:09:58 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:10:20 | INFO | root | Successfully acquired user token via ROPC
-2025-10-02T07:10:20 | INFO | mcp_redis_config | Token stored successfully for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
-2025-10-02T07:10:24 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
-Request method: 'GET'
-Request headers:
-    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
-No body was attached to the request
-2025-10-02T07:10:25 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
-Response headers:
-    'Cache-Control': 'max-age=86400, private'
-    'Content-Type': 'application/json; charset=utf-8'
-    'Strict-Transport-Security': 'REDACTED'
-    'X-Content-Type-Options': 'REDACTED'
-    'Access-Control-Allow-Origin': 'REDACTED'
-    'Access-Control-Allow-Methods': 'REDACTED'
-    'P3P': 'REDACTED'
-    'x-ms-request-id': '18369914-a599-4a53-b04b-64b3c6183800'
-    'x-ms-ests-server': 'REDACTED'
-    'x-ms-srs': 'REDACTED'
-    'Content-Security-Policy-Report-Only': 'REDACTED'
-    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
-    'Reporting-Endpoints': 'REDACTED'
-    'X-XSS-Protection': 'REDACTED'
-    'Set-Cookie': 'REDACTED'
-    'Date': 'Thu, 02 Oct 2025 12:10:25 GMT'
-    'Content-Length': '1753'
-2025-10-02T07:10:25 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
-Request method: 'POST'
-Request headers:
-    'Accept': 'application/json'
-    'x-client-sku': 'REDACTED'
-    'x-client-ver': 'REDACTED'
-    'x-client-os': 'REDACTED'
-    'x-ms-lib-capability': 'REDACTED'
-    'client-request-id': 'REDACTED'
-    'x-client-current-telemetry': 'REDACTED'
-    'x-client-last-telemetry': 'REDACTED'
-    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
-A body is sent with the request
-2025-10-02T07:10:25 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
-Response headers:
-    'Cache-Control': 'no-store, no-cache'
-    'Pragma': 'no-cache'
-    'Content-Type': 'application/json; charset=utf-8'
-    'Expires': '-1'
-    'Strict-Transport-Security': 'REDACTED'
-    'X-Content-Type-Options': 'REDACTED'
-    'P3P': 'REDACTED'
-    'client-request-id': 'REDACTED'
-    'x-ms-request-id': '76951335-9c92-4016-88a5-473d678d0300'
-    'x-ms-ests-server': 'REDACTED'
-    'x-ms-clitelem': 'REDACTED'
-    'x-ms-srs': 'REDACTED'
-    'Content-Security-Policy-Report-Only': 'REDACTED'
-    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
-    'Reporting-Endpoints': 'REDACTED'
-    'X-XSS-Protection': 'REDACTED'
-    'Set-Cookie': 'REDACTED'
-    'Date': 'Thu, 02 Oct 2025 12:10:25 GMT'
-    'Content-Length': '7944'
-2025-10-02T07:10:25 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
-2025-10-02T07:10:25 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
-2025-10-02T07:10:26 | INFO | planner_sync_service_v5 | 🔍 Starting hourly Planner poll for task changes...
-2025-10-02T07:10:26 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
-2025-10-02T07:10:26 | WARNING | planner_sync_service_v5 | Failed to get personal plans: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-02T12:10:27","request-id":"ef5c0329-b206-461f-927e-4194710b01a1","client-request-id":"ef5c0329-b206-461f-927e-4194710b01a1
-2025-10-02T07:10:26 | INFO | planner_sync_service_v5 |    Found 0 personal plans
-2025-10-02T07:10:26 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
-2025-10-02T07:10:26 | WARNING | planner_sync_service_v5 | Failed to get group memberships: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-02T12:10:27","request-id":"d6afe9da-78e5-4b15-9954-6488ea69ad9b","client-request-id":"d6afe9da-78e5-4b15-9954-6488ea69ad9b
-2025-10-02T07:10:26 | INFO | planner_sync_service_v5 |    No group memberships returned
-2025-10-02T07:10:26 | INFO | planner_sync_service_v5 | ?? Total plans found: 0
-2025-10-02T07:10:26 | WARNING | planner_sync_service_v5 | Application token returned no plans; retrying with delegated fallback
-2025-10-02T07:10:26 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
-2025-10-02T07:10:26 | INFO | planner_sync_service_v5 |    Found 1 personal plans
-2025-10-02T07:10:26 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
-2025-10-02T07:10:29 | INFO | planner_sync_service_v5 |    Found 22 plans across 5 groups
-2025-10-02T07:10:29 | INFO | planner_sync_service_v5 | ?? Total plans found: 23
-2025-10-02T07:10:29 | INFO | planner_sync_service_v5 | 📋 Polling 23 Planner plans for task changes
-2025-10-02T07:10:48 | INFO | graph_metadata_manager | Cached 38 users in Redis
-2025-10-02T07:10:48 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 38 users
-2025-10-02T07:10:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:11:44 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 16 groups, 30 plans, 61 buckets (page 1)
-2025-10-02T07:11:45 | INFO | planner_sync_service_v5 | ✅ Planner polling complete: 240 tasks checked, 0 created, 0 updated
-2025-10-02T07:11:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:12:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:13:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:14:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:15:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:16:13 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: b54edc57-127e-4edb-bd0c-14811375c480, function type: sync, timestamp (UTC): 2025-10-02 12:16:13.645965, sync threadpool max workers: 1000
-2025-10-02T07:16:13 | INFO | webhook_handler | 🔔 Lifecycle event 'reauthorizationRequired' for subscription 4d962ccc-9099-40e3-ac3e-ddcfc47bee77
-2025-10-02T07:16:13 | ERROR | webhook_handler | Error logging webhook notification: Event loop is closed
-2025-10-02T07:16:13 | INFO | endpoints.agent_webhook | Successfully processed webhook notification: None for Subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77
-2025-10-02T07:16:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:17:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:18:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:19:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:20:20 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 4bae1b08-f36f-42df-8231-21ea721163c5, function type: sync, timestamp (UTC): 2025-10-02 12:20:20.897699, sync threadpool max workers: 1000
-2025-10-02T07:20:20 | INFO | endpoints.agent_webhook | Graph webhook validation request received
-2025-10-02T07:20:27 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77 "HTTP/1.1 200 OK"
-2025-10-02T07:20:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:21:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:22:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:23:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:24:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:25:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:26:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:27:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:28:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:29:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:30:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:31:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:32:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:33:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:34:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:35:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:36:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:37:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:38:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:39:32 | INFO | planner_sync_service_v5 | 🔄 Renewing webhook subscriptions...
-2025-10-02T07:39:33 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 15bc9a73-7360-4726-ba07-253a743a2274, function type: sync, timestamp (UTC): 2025-10-02 12:39:33.867317, sync threadpool max workers: 1000
-2025-10-02T07:39:33 | INFO | endpoints.agent_webhook | Graph webhook validation request received
-2025-10-02T07:39:34 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/505cd2c9-0ae4-49d0-b348-a56f181db606 "HTTP/1.1 200 OK"
-2025-10-02T07:39:34 | INFO | planner_sync_service_v5 | ✅ Renewed webhook: groups
-2025-10-02T07:39:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:40:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:41:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:42:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:43:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:44:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:45:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:46:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:47:20 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 784 seconds, refreshing...
-2025-10-02T07:47:20 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
-2025-10-02T07:47:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:48:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:49:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:50:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:51:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:52:20 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 484 seconds, refreshing...
-2025-10-02T07:52:20 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
-2025-10-02T07:52:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:53:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:54:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:55:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:56:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:57:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:58:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T07:59:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:00:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:01:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:02:20 | INFO | token_refresh_service | Token for scope 'Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile' expiring in 697 seconds, refreshing...
-2025-10-02T08:02:20 | INFO | token_refresh_service | Successfully refreshed token for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
-2025-10-02T08:02:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:03:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:04:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:05:52 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 5bd59a72-6f87-4f6b-bf4f-e54d012e0c21, function type: sync, timestamp (UTC): 2025-10-02 13:05:52.541042, sync threadpool max workers: 1000
-2025-10-02T08:05:52 | INFO | webhook_handler | 🔔 Lifecycle event 'reauthorizationRequired' for subscription 4d962ccc-9099-40e3-ac3e-ddcfc47bee77
-2025-10-02T08:05:52 | INFO | endpoints.agent_webhook | Successfully processed webhook notification: None for Subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77
-2025-10-02T08:05:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:06:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:07:20 | INFO | token_refresh_service | Token for scope 'Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile' expiring in 397 seconds, refreshing...
-2025-10-02T08:07:20 | INFO | token_refresh_service | Successfully refreshed token for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
-2025-10-02T08:07:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:08:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:09:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:10:28 | INFO | root | Successfully acquired user token via ROPC
-2025-10-02T08:10:28 | INFO | mcp_redis_config | Token stored successfully for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
-2025-10-02T08:10:29 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 2bb53545-23bf-40f0-8511-749f89436a80, function type: sync, timestamp (UTC): 2025-10-02 13:10:29.242264, sync threadpool max workers: 1000
-2025-10-02T08:10:29 | INFO | endpoints.agent_webhook | Graph webhook validation request received
-2025-10-02T08:10:35 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77 "HTTP/1.1 200 OK"
-2025-10-02T08:10:59 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:11:44 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
-Request method: 'GET'
-Request headers:
-    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
-No body was attached to the request
-2025-10-02T08:11:44 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
-Response headers:
-    'Cache-Control': 'max-age=86400, private'
-    'Content-Type': 'application/json; charset=utf-8'
-    'Strict-Transport-Security': 'REDACTED'
-    'X-Content-Type-Options': 'REDACTED'
-    'Access-Control-Allow-Origin': 'REDACTED'
-    'Access-Control-Allow-Methods': 'REDACTED'
-    'P3P': 'REDACTED'
-    'x-ms-request-id': '884eca7e-6fef-4649-bf3c-3e7123270400'
-    'x-ms-ests-server': 'REDACTED'
-    'x-ms-srs': 'REDACTED'
-    'Content-Security-Policy-Report-Only': 'REDACTED'
-    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
-    'Reporting-Endpoints': 'REDACTED'
-    'X-XSS-Protection': 'REDACTED'
-    'Set-Cookie': 'REDACTED'
-    'Date': 'Thu, 02 Oct 2025 13:11:45 GMT'
-    'Content-Length': '1753'
-2025-10-02T08:11:44 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
-Request method: 'POST'
-Request headers:
-    'Accept': 'application/json'
-    'x-client-sku': 'REDACTED'
-    'x-client-ver': 'REDACTED'
-    'x-client-os': 'REDACTED'
-    'x-ms-lib-capability': 'REDACTED'
-    'client-request-id': 'REDACTED'
-    'x-client-current-telemetry': 'REDACTED'
-    'x-client-last-telemetry': 'REDACTED'
-    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
-A body is sent with the request
-2025-10-02T08:11:45 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
-Response headers:
-    'Cache-Control': 'no-store, no-cache'
-    'Pragma': 'no-cache'
-    'Content-Type': 'application/json; charset=utf-8'
-    'Expires': '-1'
-    'Strict-Transport-Security': 'REDACTED'
-    'X-Content-Type-Options': 'REDACTED'
-    'P3P': 'REDACTED'
-    'client-request-id': 'REDACTED'
-    'x-ms-request-id': 'd9a067c3-aa06-46df-b11e-12510eb52d00'
-    'x-ms-ests-server': 'REDACTED'
-    'x-ms-clitelem': 'REDACTED'
-    'x-ms-srs': 'REDACTED'
-    'Content-Security-Policy-Report-Only': 'REDACTED'
-    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
-    'Reporting-Endpoints': 'REDACTED'
-    'X-XSS-Protection': 'REDACTED'
-    'Set-Cookie': 'REDACTED'
-    'Date': 'Thu, 02 Oct 2025 13:11:45 GMT'
-    'Content-Length': '7944'
-2025-10-02T08:11:45 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
-2025-10-02T08:11:45 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
-2025-10-02T08:11:46 | INFO | planner_sync_service_v5 | 🔍 Starting hourly Planner poll for task changes...
-2025-10-02T08:11:46 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
-2025-10-02T08:11:46 | WARNING | planner_sync_service_v5 | Failed to get personal plans: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-02T13:11:46","request-id":"69c3c287-7d05-4c50-b4d6-66da71d84b37","client-request-id":"69c3c287-7d05-4c50-b4d6-66da71d84b37
-2025-10-02T08:11:46 | INFO | planner_sync_service_v5 |    Found 0 personal plans
-2025-10-02T08:11:46 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
-2025-10-02T08:11:46 | WARNING | planner_sync_service_v5 | Failed to get group memberships: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-02T13:11:47","request-id":"b1fa706a-0d43-4206-bba0-e1b8430881fe","client-request-id":"b1fa706a-0d43-4206-bba0-e1b8430881fe
-2025-10-02T08:11:46 | INFO | planner_sync_service_v5 |    No group memberships returned
-2025-10-02T08:11:46 | INFO | planner_sync_service_v5 | ?? Total plans found: 0
-2025-10-02T08:11:46 | WARNING | planner_sync_service_v5 | Application token returned no plans; retrying with delegated fallback
-2025-10-02T08:11:46 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
-2025-10-02T08:11:46 | INFO | planner_sync_service_v5 |    Found 1 personal plans
-2025-10-02T08:11:46 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
-2025-10-02T08:11:48 | INFO | planner_sync_service_v5 |    Found 22 plans across 5 groups
-2025-10-02T08:11:48 | INFO | planner_sync_service_v5 | ?? Total plans found: 23
-2025-10-02T08:11:48 | INFO | planner_sync_service_v5 | 📋 Polling 23 Planner plans for task changes
-2025-10-02T08:12:00 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:12:07 | INFO | graph_metadata_manager | Cached 38 users in Redis
-2025-10-02T08:12:07 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 38 users
-2025-10-02T08:13:00 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:13:05 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 16 groups, 30 plans, 61 buckets (page 1)
-2025-10-02T08:13:06 | INFO | planner_sync_service_v5 | ✅ Planner polling complete: 240 tasks checked, 0 created, 0 updated
-2025-10-02T08:14:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:15:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:16:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:17:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:18:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:19:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:20:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:21:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:22:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:23:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:24:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:25:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:26:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:27:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:28:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:29:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:30:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:31:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:32:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:33:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:34:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:35:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:36:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:37:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:38:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:39:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:39:34 | INFO | planner_sync_service_v5 | 🔄 Renewing webhook subscriptions...
-2025-10-02T08:39:34 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 74ded84c-c3d1-471e-b0f6-88b4089baee3, function type: sync, timestamp (UTC): 2025-10-02 13:39:34.750641, sync threadpool max workers: 1000
-2025-10-02T08:39:34 | INFO | endpoints.agent_webhook | Graph webhook validation request received
-2025-10-02T08:39:35 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/505cd2c9-0ae4-49d0-b348-a56f181db606 "HTTP/1.1 200 OK"
-2025-10-02T08:39:35 | INFO | planner_sync_service_v5 | ✅ Renewed webhook: groups
-2025-10-02T08:40:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:41:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:42:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:43:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:44:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:45:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:46:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:47:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:47:20 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 864 seconds, refreshing...
-2025-10-02T08:47:20 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
-2025-10-02T08:48:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:49:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:50:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:51:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:52:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:52:20 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 564 seconds, refreshing...
-2025-10-02T08:52:20 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
-2025-10-02T08:53:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:54:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:55:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:55:56 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 493e14ec-fe9b-42b5-87de-5f7981b497f3, function type: sync, timestamp (UTC): 2025-10-02 13:55:56.063158, sync threadpool max workers: 1000
-2025-10-02T08:55:56 | INFO | webhook_handler | 🔔 Lifecycle event 'reauthorizationRequired' for subscription 4d962ccc-9099-40e3-ac3e-ddcfc47bee77
-2025-10-02T08:55:56 | ERROR | webhook_handler | Error logging webhook notification: Event loop is closed
-2025-10-02T08:55:56 | INFO | endpoints.agent_webhook | Successfully processed webhook notification: None for Subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77
-2025-10-02T08:56:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:57:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:58:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T08:59:01 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T09:00:02 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
-2025-10-02T09:00:35 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 455a5721-85ec-404e-8d29-09ce72f7792f, function type: sync, timestamp (UTC): 2025-10-02 14:00:35.996417, sync threadpool max workers: 1000
-2025-10-02T09:00:35 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+ | INFO | endpoints.agent_webhook | Graph webhook validation request received
 2025-10-02T09:00:41 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77 "HTTP/1.1 200 OK"
 2025-10-02T09:01:02 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
 2025-10-02T09:02:02 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=1
@@ -6075,3 +5430,566 @@ Response headers:
 2025-10-03T19:15:45 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: af19348d-ef3f-43e5-9658-e5a65b47d185, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 55a53cf9-99c2-43f4-aba0-4278a687b739, function type: sync, timestamp (UTC): 2025-10-04 00:15:45.674211, sync threadpool max workers: 1000
 2025-10-03T19:15:45 | INFO | endpoints.agent_webhook | Graph webhook validation request received
 2025-10-03T19:15:51 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/4d962ccc-9099-40e3-ac3e-ddcfc47bee77 "HTTP/1.1 200 OK"
+2025-10-07T15:37:43 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T15:37:44 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 5e6d1f3f-45d5-415c-acf5-f5674c4f3976, function type: sync, timestamp (UTC): 2025-10-07 20:37:44.311295, sync threadpool max workers: 1000
+2025-10-07T15:37:44 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T15:37:56 | INFO | __main__ | Planner sync service V5 started
+2025-10-07T15:37:56 | INFO | __main__ | All services started successfully
+2025-10-07T15:37:56 | INFO | __main__ | Function App: http://0.0.0.0:7071
+2025-10-07T15:37:56 | INFO | __main__ | Webhook URL: https://agency-swarm.ngrok.app/api/graph_webhook
+2025-10-07T15:37:56 | INFO | __main__ | Planner sync service: Running
+2025-10-07T15:37:56 | INFO | __main__ | Webhooks: Configured
+2025-10-07T15:37:56 | INFO | __main__ | 
+==================================================
+2025-10-07T15:37:56 | INFO | __main__ | All services are running.
+2025-10-07T15:37:56 | INFO | __main__ | Press Ctrl+C to stop all services
+2025-10-07T15:37:56 | INFO | __main__ | ==================================================
+
+2025-10-07T15:37:56 | INFO | planner_sync_service_v5 | 🚀 Starting Webhook-Driven Planner Sync Service V5...
+2025-10-07T15:37:56 | INFO | annika_task_adapter | Initialized with 1 user mappings
+2025-10-07T15:37:56 | INFO | planner_sync_service_v5 | Loading existing state...
+2025-10-07T15:37:56 | INFO | planner_sync_service_v5 | Loaded 240 ID mappings and 240 ETags
+2025-10-07T15:37:56 | INFO | planner_sync_service_v5 | 🔗 Setting up Microsoft Graph webhooks...
+2025-10-07T15:37:56 | INFO | dual_auth_manager | Dual auth config - Tenant: cb629dfe...
+2025-10-07T15:37:56 | INFO | dual_auth_manager | Dual auth config - Client: fd79a94d...
+2025-10-07T15:37:56 | INFO | dual_auth_manager | Dual auth config - Secret: ***
+2025-10-07T15:37:56 | INFO | dual_auth_manager | ✅ Dual auth configuration validated
+2025-10-07T15:37:56 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+No body was attached to the request
+2025-10-07T15:37:57 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'max-age=86400, private'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'Access-Control-Allow-Origin': 'REDACTED'
+    'Access-Control-Allow-Methods': 'REDACTED'
+    'P3P': 'REDACTED'
+    'x-ms-request-id': '9bf3d268-796c-443f-aefb-32f4b4640900'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Tue, 07 Oct 2025 20:37:56 GMT'
+    'Content-Length': '1753'
+2025-10-07T15:37:57 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
+Request method: 'POST'
+Request headers:
+    'Accept': 'application/json'
+    'x-client-sku': 'REDACTED'
+    'x-client-ver': 'REDACTED'
+    'x-client-os': 'REDACTED'
+    'x-ms-lib-capability': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-client-current-telemetry': 'REDACTED'
+    'x-client-last-telemetry': 'REDACTED'
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+A body is sent with the request
+2025-10-07T15:37:57 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'no-store, no-cache'
+    'Pragma': 'no-cache'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Expires': '-1'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'P3P': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-ms-request-id': '123b0666-e8c6-4e6f-a637-3e0c065ad200'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-clitelem': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Tue, 07 Oct 2025 20:37:56 GMT'
+    'Content-Length': '8053'
+2025-10-07T15:37:57 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
+2025-10-07T15:37:57 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
+2025-10-07T15:37:57 | INFO | planner_sync_service_v5 | Planner webhooks disabled by config; skipping /planner/tasks subscriptions
+2025-10-07T15:37:57 | INFO | planner_sync_service_v5 | Planner plan-scoped webhooks disabled by config; skipping per-plan subscriptions
+2025-10-07T15:37:57 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-10-07T15:37:58 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-10-07T15:37:58 | INFO | planner_sync_service_v5 | groups webhook: no existing subscription found; creating new
+2025-10-07T15:37:58 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 93067641-f9e5-435f-9796-34e9bc9477c4, function type: sync, timestamp (UTC): 2025-10-07 20:37:58.976854, sync threadpool max workers: 1000
+2025-10-07T15:37:58 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T15:38:00 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-10-07T15:38:00 | INFO | planner_sync_service_v5 | ✅ groups webhook subscription created: 9da86f47-c08a-4d0c-936b-8d26cbbec9ce
+2025-10-07T15:38:00 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-10-07T15:38:01 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-10-07T15:38:01 | INFO | planner_sync_service_v5 | teams_chats webhook: no existing subscription found; creating new
+2025-10-07T15:38:02 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 9cc10afc-5229-4c01-9aec-4336077d3ed9, function type: sync, timestamp (UTC): 2025-10-07 20:38:02.336349, sync threadpool max workers: 1000
+2025-10-07T15:38:02 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T15:38:08 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-10-07T15:38:08 | INFO | planner_sync_service_v5 | ✅ teams_chats webhook subscription created: 016f91c2-9b5d-4eda-988d-b9b97deb9c67
+2025-10-07T15:38:09 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-10-07T15:38:09 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 200 OK"
+2025-10-07T15:38:09 | INFO | planner_sync_service_v5 | teams_channels webhook: no existing subscription found; creating new
+2025-10-07T15:38:10 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: bfdd959f-e2b4-4537-9070-03af828a3253, function type: sync, timestamp (UTC): 2025-10-07 20:38:10.044487, sync threadpool max workers: 1000
+2025-10-07T15:38:10 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T15:38:16 | INFO | httpx | HTTP Request: POST https://graph.microsoft.com/v1.0/subscriptions "HTTP/1.1 201 Created"
+2025-10-07T15:38:16 | INFO | planner_sync_service_v5 | ✅ teams_channels webhook subscription created: 898fc575-cc24-44b3-b2b4-f9449117cc62
+2025-10-07T15:38:16 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/9da86f47-c08a-4d0c-936b-8d26cbbec9ce "HTTP/1.1 200 OK"
+2025-10-07T15:38:16 | INFO | planner_sync_service_v5 | webhook 'groups' in use: id=9da86f47-c08a-4d0c-936b-8d26cbbec9ce resource=/groups expires=2025-10-08T20:37:57.355262Z
+2025-10-07T15:38:17 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/016f91c2-9b5d-4eda-988d-b9b97deb9c67 "HTTP/1.1 200 OK"
+2025-10-07T15:38:17 | INFO | planner_sync_service_v5 | webhook 'teams_chats' in use: id=016f91c2-9b5d-4eda-988d-b9b97deb9c67 resource=/chats expires=2025-10-08T20:37:57.355262Z
+2025-10-07T15:38:18 | INFO | httpx | HTTP Request: GET https://graph.microsoft.com/v1.0/subscriptions/898fc575-cc24-44b3-b2b4-f9449117cc62 "HTTP/1.1 200 OK"
+2025-10-07T15:38:18 | INFO | planner_sync_service_v5 | webhook 'teams_channels' in use: id=898fc575-cc24-44b3-b2b4-f9449117cc62 resource=/teams/getAllChannels expires=2025-10-08T20:37:57.355262Z
+2025-10-07T15:38:45 | INFO | graph_metadata_manager | Cached 38 users in Redis
+2025-10-07T15:38:45 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 38 users
+2025-10-07T15:40:08 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 15 groups, 27 plans, 61 buckets (page 1)
+2025-10-07T15:40:08 | INFO | planner_sync_service_v5 | 🔄 Performing minimal initial sync...
+2025-10-07T15:40:08 | INFO | planner_sync_service_v5 | Found 252 recently modified tasks to sync
+2025-10-07T15:40:09 | INFO | planner_sync_service_v5 | 🔍 Performing immediate Planner poll as part of initial sync...
+2025-10-07T15:40:09 | INFO | planner_sync_service_v5 | Using application token for Planner reads
+2025-10-07T15:40:09 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
+2025-10-07T15:40:09 | WARNING | planner_sync_service_v5 | Failed to get personal plans: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-07T20:40:09","request-id":"4b67e6a0-79f8-4a67-b505-76efa474416d","client-request-id":"4b67e6a0-79f8-4a67-b505-76efa474416d
+2025-10-07T15:40:09 | INFO | planner_sync_service_v5 |    Found 0 personal plans
+2025-10-07T15:40:09 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
+2025-10-07T15:40:09 | WARNING | planner_sync_service_v5 | Failed to get group memberships: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-07T20:40:09","request-id":"684525d1-0f01-4582-b756-a933a14e7012","client-request-id":"684525d1-0f01-4582-b756-a933a14e7012
+2025-10-07T15:40:09 | INFO | planner_sync_service_v5 |    No group memberships returned
+2025-10-07T15:40:09 | INFO | planner_sync_service_v5 | ?? Total plans found: 0
+2025-10-07T15:40:09 | WARNING | planner_sync_service_v5 | Application token returned no plans; retrying with delegated fallback
+2025-10-07T15:40:09 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
+2025-10-07T15:40:09 | INFO | planner_sync_service_v5 |    Found 1 personal plans
+2025-10-07T15:40:09 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
+2025-10-07T15:40:11 | INFO | planner_sync_service_v5 | 📤 Processing upload batch of 10 tasks
+2025-10-07T15:40:21 | ERROR | planner_sync_service_v5 | Error creating Planner task: HTTPSConnectionPool(host='graph.microsoft.com', port=443): Read timed out. (read timeout=10)
+2025-10-07T15:40:21 | INFO | planner_sync_service_v5 |    Found 22 plans across 5 groups
+2025-10-07T15:40:21 | INFO | planner_sync_service_v5 | ?? Total plans found: 23
+2025-10-07T15:40:21 | INFO | planner_sync_service_v5 | 📋 Polling 23 Planner plans for task changes
+2025-10-07T15:40:21 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id KPq4cedxekWOVx9O8BEpymUAFQ3o
+2025-10-07T15:40:22 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id 0R2cTWN2lk601qPlrwqGJmUAFx4w
+2025-10-07T15:40:22 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id KlzOIWuickypGCdy3wceL2UAPFfA
+2025-10-07T15:40:23 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id GXdqAFFx10-TZLWLG73mnGUAFpfg
+2025-10-07T15:40:23 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id y8If92Xb3kiAtAVxJxucNWUAPhz2
+2025-10-07T15:40:24 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id l0aS_x-cSUKyMVVTRzJjIGUAJG8E
+2025-10-07T15:40:24 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id omtTW8pCFkGpoM9xYhixaGUAOsY-
+2025-10-07T15:40:24 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id vxzBSFtmeU-gJInizMNJs2UADzrG
+2025-10-07T15:40:25 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id QeKAUPhAb0mY6wClJWwmxWUAJCZb
+2025-10-07T15:40:29 | INFO | planner_sync_service_v5 | ✅ Planner polling complete: 240 tasks checked, 0 created, 0 updated
+2025-10-07T15:40:29 | INFO | planner_sync_service_v5 | ✅ Initial sync completed
+2025-10-07T15:40:29 | INFO | planner_sync_service_v5 | 📤 Monitoring Annika changes for upload...
+2025-10-07T15:40:29 | INFO | planner_sync_service_v5 | 📥 Monitoring webhook notifications...
+2025-10-07T15:40:29 | INFO | planner_sync_service_v5 | ⏰ Starting Planner polling loop (every 3600s)
+2025-10-07T15:40:34 | INFO | planner_sync_service_v5 | 📤 Processing upload batch of 2 tasks
+2025-10-07T15:40:34 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id _OGX09o-5UW9iBV7R4CFN2UAGAzv
+2025-10-07T15:40:34 | INFO | planner_sync_service_v5 | 🔁 Planner create short-circuited to update for existing external_id CKaKv-I37Ey8SJP_JiOgvmUAGfFN
+2025-10-07T15:41:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:42:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:43:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:44:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:45:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:46:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:47:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:48:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:49:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:50:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:51:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:52:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:53:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:54:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:55:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:56:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:57:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:58:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T15:59:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:00:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:01:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:02:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:03:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:04:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:05:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:06:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:07:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:08:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:09:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:10:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:11:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:12:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:13:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:14:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:15:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:16:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:17:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:17:42 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 615 seconds, refreshing...
+2025-10-07T16:17:42 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
+2025-10-07T16:18:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:19:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:20:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:21:29 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:22:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:22:42 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 315 seconds, refreshing...
+2025-10-07T16:22:42 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
+2025-10-07T16:23:27 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: a513a27e-0561-4afe-bfca-be7e25d51346, function type: sync, timestamp (UTC): 2025-10-07 21:23:27.787169, sync threadpool max workers: 1000
+2025-10-07T16:23:27 | INFO | webhook_handler | 🔔 Lifecycle event 'reauthorizationRequired' for subscription 036dc7c5-5a80-4e6a-9cdd-687fdbfe57fa
+2025-10-07T16:23:27 | ERROR | webhook_handler | Error logging webhook notification: Event loop is closed
+2025-10-07T16:23:27 | INFO | endpoints.agent_webhook | Successfully processed webhook notification: None for Subscriptions/036dc7c5-5a80-4e6a-9cdd-687fdbfe57fa
+2025-10-07T16:23:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:24:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:25:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:26:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:27:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:27:51 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 3ef7063c-317a-437b-a2b3-0375d493c470, function type: sync, timestamp (UTC): 2025-10-07 21:27:51.739145, sync threadpool max workers: 1000
+2025-10-07T16:27:51 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T16:27:58 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/036dc7c5-5a80-4e6a-9cdd-687fdbfe57fa "HTTP/1.1 200 OK"
+2025-10-07T16:28:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:29:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:30:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:31:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:32:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:32:42 | INFO | token_refresh_service | Token for scope 'Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile' expiring in 701 seconds, refreshing...
+2025-10-07T16:32:42 | INFO | token_refresh_service | Successfully refreshed token for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
+2025-10-07T16:33:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:34:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:35:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:36:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:37:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:37:42 | INFO | token_refresh_service | Token for scope 'Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile' expiring in 401 seconds, refreshing...
+2025-10-07T16:37:42 | INFO | token_refresh_service | Successfully refreshed token for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
+2025-10-07T16:38:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:39:30 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:40:29 | INFO | planner_sync_service_v5 | 🔄 Renewing webhook subscriptions...
+2025-10-07T16:40:30 | INFO | root | Successfully acquired user token via ROPC
+2025-10-07T16:40:30 | INFO | mcp_redis_config | Token stored successfully for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
+2025-10-07T16:40:30 | INFO | planner_sync_service_v5 | 🔍 Starting hourly Planner poll for task changes...
+2025-10-07T16:40:30 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+No body was attached to the request
+2025-10-07T16:40:30 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'max-age=86400, private'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'Access-Control-Allow-Origin': 'REDACTED'
+    'Access-Control-Allow-Methods': 'REDACTED'
+    'P3P': 'REDACTED'
+    'x-ms-request-id': '2f2d6a1f-b22c-4c84-8f77-99511c510900'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Tue, 07 Oct 2025 21:40:30 GMT'
+    'Content-Length': '1753'
+2025-10-07T16:40:30 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
+Request method: 'POST'
+Request headers:
+    'Accept': 'application/json'
+    'x-client-sku': 'REDACTED'
+    'x-client-ver': 'REDACTED'
+    'x-client-os': 'REDACTED'
+    'x-ms-lib-capability': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-client-current-telemetry': 'REDACTED'
+    'x-client-last-telemetry': 'REDACTED'
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+A body is sent with the request
+2025-10-07T16:40:31 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'no-store, no-cache'
+    'Pragma': 'no-cache'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Expires': '-1'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'P3P': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-ms-request-id': '643199bb-840c-4cbe-9f82-1d862289a200'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-clitelem': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Tue, 07 Oct 2025 21:40:30 GMT'
+    'Content-Length': '8052'
+2025-10-07T16:40:31 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
+2025-10-07T16:40:31 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
+2025-10-07T16:40:31 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
+2025-10-07T16:40:31 | WARNING | planner_sync_service_v5 | Failed to get personal plans: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-07T21:40:31","request-id":"9ab5a02c-94c0-4152-888f-ec4529e35aff","client-request-id":"9ab5a02c-94c0-4152-888f-ec4529e35aff
+2025-10-07T16:40:31 | INFO | planner_sync_service_v5 |    Found 0 personal plans
+2025-10-07T16:40:31 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
+2025-10-07T16:40:31 | WARNING | planner_sync_service_v5 | Failed to get group memberships: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-07T21:40:31","request-id":"e310fbe7-b2d1-4205-9632-2005ea1b2ddc","client-request-id":"e310fbe7-b2d1-4205-9632-2005ea1b2ddc
+2025-10-07T16:40:31 | INFO | planner_sync_service_v5 |    No group memberships returned
+2025-10-07T16:40:31 | INFO | planner_sync_service_v5 | ?? Total plans found: 0
+2025-10-07T16:40:31 | WARNING | planner_sync_service_v5 | Application token returned no plans; retrying with delegated fallback
+2025-10-07T16:40:31 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
+2025-10-07T16:40:31 | INFO | planner_sync_service_v5 |    Found 1 personal plans
+2025-10-07T16:40:31 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
+2025-10-07T16:40:34 | INFO | planner_sync_service_v5 |    Found 22 plans across 5 groups
+2025-10-07T16:40:34 | INFO | planner_sync_service_v5 | ?? Total plans found: 23
+2025-10-07T16:40:34 | INFO | planner_sync_service_v5 | 📋 Polling 23 Planner plans for task changes
+2025-10-07T16:40:36 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:40:37 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 04d35eb9-05cf-4298-9954-a19fbf8a740a, function type: sync, timestamp (UTC): 2025-10-07 21:40:37.549770, sync threadpool max workers: 1000
+2025-10-07T16:40:37 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T16:40:38 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/9da86f47-c08a-4d0c-936b-8d26cbbec9ce "HTTP/1.1 200 OK"
+2025-10-07T16:40:38 | INFO | planner_sync_service_v5 | ✅ Renewed webhook: groups
+2025-10-07T16:40:41 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: a4e79b9d-1e9b-4ef5-aa7d-7d94b1f3f340, function type: sync, timestamp (UTC): 2025-10-07 21:40:41.593937, sync threadpool max workers: 1000
+2025-10-07T16:40:41 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T16:40:47 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/016f91c2-9b5d-4eda-988d-b9b97deb9c67 "HTTP/1.1 200 OK"
+2025-10-07T16:40:47 | INFO | planner_sync_service_v5 | ✅ Renewed webhook: teams_chats
+2025-10-07T16:40:50 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 15548dc1-00f2-4c4d-9fe5-ca418acca529, function type: sync, timestamp (UTC): 2025-10-07 21:40:50.912747, sync threadpool max workers: 1000
+2025-10-07T16:40:50 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T16:40:57 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/898fc575-cc24-44b3-b2b4-f9449117cc62 "HTTP/1.1 200 OK"
+2025-10-07T16:40:57 | INFO | planner_sync_service_v5 | ✅ Renewed webhook: teams_channels
+2025-10-07T16:40:58 | INFO | graph_metadata_manager | Cached 38 users in Redis
+2025-10-07T16:40:58 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 38 users
+2025-10-07T16:41:37 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:42:10 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 16 groups, 30 plans, 61 buckets (page 1)
+2025-10-07T16:42:11 | INFO | planner_sync_service_v5 | ✅ Planner polling complete: 240 tasks checked, 0 created, 0 updated
+2025-10-07T16:42:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:43:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:44:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:45:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:46:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:47:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:48:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:49:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:50:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:51:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:52:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:53:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:54:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:55:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:56:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:57:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:58:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T16:59:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:00:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:01:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:02:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:03:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:04:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:05:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:06:38 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:07:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:08:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:09:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:10:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:11:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:12:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:13:17 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 36fed80a-1105-4100-955e-790149fc98b5, function type: sync, timestamp (UTC): 2025-10-07 22:13:17.510556, sync threadpool max workers: 1000
+2025-10-07T17:13:17 | INFO | webhook_handler | 🔔 Lifecycle event 'reauthorizationRequired' for subscription 036dc7c5-5a80-4e6a-9cdd-687fdbfe57fa
+2025-10-07T17:13:17 | INFO | endpoints.agent_webhook | Successfully processed webhook notification: None for Subscriptions/036dc7c5-5a80-4e6a-9cdd-687fdbfe57fa
+2025-10-07T17:13:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:14:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:15:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:16:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:17:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:17:42 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 769 seconds, refreshing...
+2025-10-07T17:17:42 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
+2025-10-07T17:17:59 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 6770e32b-0128-4996-9489-f717702e387d, function type: sync, timestamp (UTC): 2025-10-07 22:17:59.260223, sync threadpool max workers: 1000
+2025-10-07T17:17:59 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T17:18:05 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/036dc7c5-5a80-4e6a-9cdd-687fdbfe57fa "HTTP/1.1 200 OK"
+2025-10-07T17:18:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:19:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:20:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:21:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:22:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:22:42 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 469 seconds, refreshing...
+2025-10-07T17:22:42 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
+2025-10-07T17:23:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:24:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:25:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:26:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:27:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:28:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:29:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:30:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:31:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:32:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:33:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:34:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:35:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:36:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:37:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:38:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:39:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:40:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:40:57 | INFO | planner_sync_service_v5 | 🔄 Renewing webhook subscriptions...
+2025-10-07T17:40:58 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 75c4c257-0869-4c3c-9cb2-1161d846a7cf, function type: sync, timestamp (UTC): 2025-10-07 22:40:58.920280, sync threadpool max workers: 1000
+2025-10-07T17:40:58 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T17:41:00 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/9da86f47-c08a-4d0c-936b-8d26cbbec9ce "HTTP/1.1 200 OK"
+2025-10-07T17:41:00 | INFO | planner_sync_service_v5 | ✅ Renewed webhook: groups
+2025-10-07T17:41:00 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/v2.0/.well-known/openid-configuration'
+Request method: 'GET'
+Request headers:
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+No body was attached to the request
+2025-10-07T17:41:00 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'max-age=86400, private'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'Access-Control-Allow-Origin': 'REDACTED'
+    'Access-Control-Allow-Methods': 'REDACTED'
+    'P3P': 'REDACTED'
+    'x-ms-request-id': '0e5ca6ae-6fe6-4f3e-ab91-cac2604dbd00'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Tue, 07 Oct 2025 22:41:00 GMT'
+    'Content-Length': '1753'
+2025-10-07T17:41:00 | INFO | azure.core.pipeline.policies.http_logging_policy | Request URL: 'https://login.microsoftonline.com/cb629dfe-9f7b-497f-b0d2-502dd53d8227/oauth2/v2.0/token'
+Request method: 'POST'
+Request headers:
+    'Accept': 'application/json'
+    'x-client-sku': 'REDACTED'
+    'x-client-ver': 'REDACTED'
+    'x-client-os': 'REDACTED'
+    'x-ms-lib-capability': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-client-current-telemetry': 'REDACTED'
+    'x-client-last-telemetry': 'REDACTED'
+    'User-Agent': 'azsdk-python-identity/1.25.0 Python/3.11.13 (Windows-10-10.0.26220-SP0)'
+A body is sent with the request
+2025-10-07T17:41:00 | INFO | azure.core.pipeline.policies.http_logging_policy | Response status: 200
+Response headers:
+    'Cache-Control': 'no-store, no-cache'
+    'Pragma': 'no-cache'
+    'Content-Type': 'application/json; charset=utf-8'
+    'Expires': '-1'
+    'Strict-Transport-Security': 'REDACTED'
+    'X-Content-Type-Options': 'REDACTED'
+    'P3P': 'REDACTED'
+    'client-request-id': 'REDACTED'
+    'x-ms-request-id': '85cea6a2-c118-45ca-a8b9-61bd7f2b0d00'
+    'x-ms-ests-server': 'REDACTED'
+    'x-ms-clitelem': 'REDACTED'
+    'x-ms-srs': 'REDACTED'
+    'Content-Security-Policy-Report-Only': 'REDACTED'
+    'Cross-Origin-Opener-Policy-Report-Only': 'REDACTED'
+    'Reporting-Endpoints': 'REDACTED'
+    'X-XSS-Protection': 'REDACTED'
+    'Set-Cookie': 'REDACTED'
+    'Date': 'Tue, 07 Oct 2025 22:41:00 GMT'
+    'Content-Length': '8052'
+2025-10-07T17:41:00 | INFO | azure.identity._internal.get_token_mixin | ClientSecretCredential.get_token succeeded
+2025-10-07T17:41:00 | INFO | mcp_redis_config | Token stored successfully for scope: application:https://graph.microsoft.com/.default
+2025-10-07T17:41:02 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: bdc8bb0a-6f96-4bcf-b9ab-f6b1ef072859, function type: sync, timestamp (UTC): 2025-10-07 22:41:02.057347, sync threadpool max workers: 1000
+2025-10-07T17:41:02 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T17:41:08 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/016f91c2-9b5d-4eda-988d-b9b97deb9c67 "HTTP/1.1 200 OK"
+2025-10-07T17:41:08 | INFO | planner_sync_service_v5 | ✅ Renewed webhook: teams_chats
+2025-10-07T17:41:09 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: 699449db-4f10-4f01-90c8-a5b8352af289, function type: sync, timestamp (UTC): 2025-10-07 22:41:09.886716, sync threadpool max workers: 1000
+2025-10-07T17:41:09 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T17:41:15 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/898fc575-cc24-44b3-b2b4-f9449117cc62 "HTTP/1.1 200 OK"
+2025-10-07T17:41:15 | INFO | planner_sync_service_v5 | ✅ Renewed webhook: teams_channels
+2025-10-07T17:41:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:42:11 | INFO | planner_sync_service_v5 | 🔍 Starting hourly Planner poll for task changes...
+2025-10-07T17:42:11 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
+2025-10-07T17:42:12 | WARNING | planner_sync_service_v5 | Failed to get personal plans: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-07T22:42:12","request-id":"21640edd-4150-408c-941a-b6f82f529d73","client-request-id":"21640edd-4150-408c-941a-b6f82f529d73
+2025-10-07T17:42:12 | INFO | planner_sync_service_v5 |    Found 0 personal plans
+2025-10-07T17:42:12 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
+2025-10-07T17:42:12 | WARNING | planner_sync_service_v5 | Failed to get group memberships: 400 - {"error":{"code":"BadRequest","message":"/me request is only valid with delegated authentication flow.","innerError":{"date":"2025-10-07T22:42:12","request-id":"2f61a668-e4d8-435e-9987-1658523232a9","client-request-id":"2f61a668-e4d8-435e-9987-1658523232a9
+2025-10-07T17:42:12 | INFO | planner_sync_service_v5 |    No group memberships returned
+2025-10-07T17:42:12 | INFO | planner_sync_service_v5 | ?? Total plans found: 0
+2025-10-07T17:42:12 | WARNING | planner_sync_service_v5 | Application token returned no plans; retrying with delegated fallback
+2025-10-07T17:42:12 | INFO | planner_sync_service_v5 | ?? Getting personal plans...
+2025-10-07T17:42:12 | INFO | planner_sync_service_v5 |    Found 1 personal plans
+2025-10-07T17:42:12 | INFO | planner_sync_service_v5 | ?? Getting group memberships...
+2025-10-07T17:42:14 | INFO | planner_sync_service_v5 |    Found 22 plans across 5 groups
+2025-10-07T17:42:14 | INFO | planner_sync_service_v5 | ?? Total plans found: 23
+2025-10-07T17:42:14 | INFO | planner_sync_service_v5 | 📋 Polling 23 Planner plans for task changes
+2025-10-07T17:42:36 | INFO | graph_metadata_manager | Cached 38 users in Redis
+2025-10-07T17:42:36 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 38 users
+2025-10-07T17:42:39 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:43:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:43:51 | INFO | planner_sync_service_v5 | Metadata prewarm: cached 16 groups, 30 plans, 61 buckets (page 1)
+2025-10-07T17:43:52 | INFO | planner_sync_service_v5 | ✅ Planner polling complete: 240 tasks checked, 0 created, 0 updated
+2025-10-07T17:44:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:45:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:46:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:47:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:47:42 | INFO | token_refresh_service | Token for scope 'Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile' expiring in 709 seconds, refreshing...
+2025-10-07T17:47:42 | INFO | token_refresh_service | Successfully refreshed token for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
+2025-10-07T17:48:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:49:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:50:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:51:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:52:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:52:42 | INFO | token_refresh_service | Token for scope 'Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile' expiring in 409 seconds, refreshing...
+2025-10-07T17:52:42 | INFO | token_refresh_service | Successfully refreshed token for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
+2025-10-07T17:53:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:54:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:55:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:56:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:57:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:58:05 | INFO | root | Successfully acquired user token via ROPC
+2025-10-07T17:58:05 | INFO | mcp_redis_config | Token stored successfully for scope: Bookings.Manage.All Bookings.ReadWrite.All Calendars.ReadWrite.Shared ChannelMessage.ReadWrite ChannelMessage.Send Chat.Create Chat.ManageDeletion.All ChatMember.ReadWrite ChatMessage.Read ChatMessage.Send Community.ReadWrite.All EWS.AccessAsUser.All FileStorageContainer.Selected Files.ReadWrite.All Files.ReadWrite.AppFolder Files.ReadWrite.Selected Files.SelectedOperations.Selected Goals-Export.ReadWrite.All Group.ReadWrite.All GroupMember.ReadWrite.All IMAP.AccessAsUser.All Mail-Advanced.ReadWrite.Shared Mail.ReadWrite Mail.ReadWrite.Shared Mail.Send Mail.Send.Shared MailboxFolder.ReadWrite MailboxItem.ImportExport MailboxItem.Read MailboxSettings.ReadWrite ManagedTenants.ReadWrite.All Notes.Create Notes.ReadWrite.All POP.AccessAsUser.All People.Read.All PeopleSettings.ReadWrite.All Place.ReadWrite.All PlaceDevice.ReadWrite.All SMTP.Send SecurityActions.ReadWrite.All SecurityAlert.ReadWrite.All SecurityAnalyzedMessage.ReadWrite.All SecurityEvents.ReadWrite.All Sites.FullControl.All Sites.Manage.All Sites.ReadWrite.All Sites.Selected Subscription.Read.All Tasks.ReadWrite Tasks.ReadWrite.Shared Team.Create TeamMember.ReadWrite.All TeamMember.ReadWriteNonOwnerRole.All TeamSettings.Read.All TeamSettings.ReadWrite.All TeamTemplates.Read TeamsActivity.Read TeamsActivity.Send TeamsAppInstallation.ReadWriteAndConsentForChat TeamsAppInstallation.ReadWriteAndConsentForTeam TeamsAppInstallation.ReadWriteAndConsentForUser TeamsAppInstallation.ReadWriteForChat TeamsAppInstallation.ReadWriteForTeam TeamsAppInstallation.ReadWriteForUser TeamsAppInstallation.ReadWriteSelfForChat TeamsAppInstallation.ReadWriteSelfForTeam TeamsAppInstallation.ReadWriteSelfForUser TeamsTab.Create TeamsTab.Read.All TeamsTab.ReadWrite.All TeamsTab.ReadWriteForChat TeamsTab.ReadWriteForTeam TeamsTab.ReadWriteForUser TeamsUserConfiguration.Read.All Teamwork.Read.All TeamworkAppSettings.ReadWrite.All TeamworkDevice.ReadWrite.All TeamworkTag.ReadWrite TeamworkUserInteraction.Read.All TermStore.ReadWrite.All ThreatAssessment.ReadWrite.All User.Read User.ReadBasic.All User.ReadWrite.All UserTeamwork.Read UserTimelineActivity.Write.CreatedByApp VirtualAppointment.ReadWrite VirtualAppointmentNotification.Send VirtualEvent.ReadWrite email offline_access openid profile
+2025-10-07T17:58:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T17:59:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:00:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:01:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:02:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:03:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:04:19 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: fc3de0a4-eb9e-4c1c-acee-6e988d4cb895, function type: sync, timestamp (UTC): 2025-10-07 23:04:19.960841, sync threadpool max workers: 1000
+2025-10-07T18:04:19 | INFO | webhook_handler | 🔔 Lifecycle event 'reauthorizationRequired' for subscription 036dc7c5-5a80-4e6a-9cdd-687fdbfe57fa
+2025-10-07T18:04:19 | ERROR | webhook_handler | Error logging webhook notification: Event loop is closed
+2025-10-07T18:04:19 | INFO | endpoints.agent_webhook | Successfully processed webhook notification: None for Subscriptions/036dc7c5-5a80-4e6a-9cdd-687fdbfe57fa
+2025-10-07T18:04:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:05:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:06:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:07:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:08:06 | INFO | azure_functions_worker | Received FunctionInvocationRequest, request ID: 54653a0b-c1f1-44ee-a435-fb0e0a9e688d, function ID: a9cad05f-00be-512b-b317-e8939ff77875, function name: graph_webhook_http, invocation ID: a09bce4c-6755-4ffd-8f20-5e493556dcca, function type: sync, timestamp (UTC): 2025-10-07 23:08:06.550907, sync threadpool max workers: 1000
+2025-10-07T18:08:06 | INFO | endpoints.agent_webhook | Graph webhook validation request received
+2025-10-07T18:08:12 | INFO | httpx | HTTP Request: PATCH https://graph.microsoft.com/v1.0/subscriptions/036dc7c5-5a80-4e6a-9cdd-687fdbfe57fa "HTTP/1.1 200 OK"
+2025-10-07T18:08:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:09:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:10:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:11:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:12:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:13:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:14:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:15:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:16:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:17:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:17:42 | INFO | token_refresh_service | Token for scope 'application:https://graph.microsoft.com/.default' expiring in 798 seconds, refreshing...
+2025-10-07T18:17:42 | INFO | token_refresh_service | Successfully refreshed token for scope: application:https://graph.microsoft.com/.default
+2025-10-07T18:18:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:19:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:20:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:21:40 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=240 pending=0 failed=0 rate=ok webhooks=3
+2025-10-07T18:21:53 | INFO | __main__ | 
+Shutdown signal received...
+2025-10-07T18:21:53 | INFO | __main__ | 
+Cleaning up...
+2025-10-07T18:21:53 | INFO | __main__ | 
+Stopping all services...
+2025-10-07T18:21:53 | INFO | __main__ | Stopping Planner sync service V5...
+2025-10-07T18:21:53 | INFO | planner_sync_service_v5 | 🧹 Cleaning up webhooks...
+2025-10-07T18:21:54 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/9da86f47-c08a-4d0c-936b-8d26cbbec9ce "HTTP/1.1 204 No Content"
+2025-10-07T18:21:54 | INFO | planner_sync_service_v5 | ✅ Cleaned up webhook: groups
+2025-10-07T18:21:55 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/016f91c2-9b5d-4eda-988d-b9b97deb9c67 "HTTP/1.1 404 Not Found"
+2025-10-07T18:21:55 | WARNING | planner_sync_service_v5 | Failed to cleanup webhook teams_chats: 404
+2025-10-07T18:21:57 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/898fc575-cc24-44b3-b2b4-f9449117cc62 "HTTP/1.1 404 Not Found"
+2025-10-07T18:21:57 | WARNING | planner_sync_service_v5 | Failed to cleanup webhook teams_channels: 404
+2025-10-07T18:21:57 | INFO | planner_sync_service_v5 | Webhook-driven sync service stopped
+2025-10-07T18:21:57 | INFO | __main__ | Planner sync service V5 stopped.
+2025-10-07T18:21:57 | INFO | __main__ | Stopping ngrok...
+2025-10-07T18:21:57 | INFO | __main__ | ngrok stopped.
+2025-10-07T18:21:57 | INFO | __main__ | Stopping Azure Function App...
+2025-10-07T18:21:59 | INFO | __main__ | Function App stopped.
+2025-10-07T18:22:04 | INFO | __main__ | All services stopped.
+2025-10-07T18:22:05 | INFO | __main__ | 
+Goodbye!

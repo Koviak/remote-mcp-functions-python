@@ -1,7 +1,35 @@
 ---
+description: "TIER 3 - Domain Specific: System Two Redis memory patterns. Specialized memory validation, storage patterns, and performance requirements for System Two deep reasoning. Use when working with System Two memory operations."
 alwaysApply: false
 ---
 # Memory System Rules and Guidelines (Redis)
+
+## 🎯 WHEN TO USE THIS FILE
+- Working with System Two memory storage
+- Implementing thought/belief/emotion storage
+- Understanding System Two Redis patterns
+- Validating memory structures for System Two
+- Debugging System Two memory operations
+- Setting up vector similarity search
+
+## 📚 FILE HIERARCHY
+- **Prerequisites**: 
+  1. [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc) - Connection patterns
+  2. [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc) - General key patterns
+  3. [redis-json.mdc](mdc:.cursor/rules/redis-json.mdc) - RedisJSON operations
+- **This File**: System Two specific memory patterns
+- **Related**: 
+  - [module-system-two.mdc](mdc:.cursor/rules/module-system-two.mdc) - System Two architecture
+  - [sys-two-schema.mdc](mdc:.cursor/rules/sys-two-schema.mdc) - System Two schema
+
+## 🔗 KEY CHARACTERISTICS
+- **Embedding Model**: text-embedding-3-large (3072 dimensions)
+- **Storage Format**: RedisJSON hash format with standardized fields
+- **Performance Target**: < 2 second response time
+- **Connection Pool**: Max 50 connections
+- **Validation**: Strict schema enforcement with 20+ required fields
+
+---
 
 ## Redis Configuration
 

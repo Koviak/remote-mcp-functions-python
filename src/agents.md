@@ -5,6 +5,8 @@
 ## Folder mission
 - Hosts the Azure Functions app and background services that make the remote MCP bridge run. Follow `.cursor/rules/ms-mcp-system-architecture.mdc` for the overarching design.
 - Implements authentication, Planner sync, webhook ingestion, and HTTP surface area for Microsoft Graph. All behaviour here must respect the Redis-first contracts defined in `.cursor/rules/redis-component-keys-map.mdc` and `.cursor/rules/redis-tasks-keys-and-channels.mdc`.
+ - Implements authentication, Planner sync, webhook ingestion, and HTTP surface area for Microsoft Graph. All behaviour here must respect the Redis-first contracts defined in `.cursor/rules/redis-component-keys-map.mdc` and `.cursor/rules/redis-tasks-keys-and-channels.mdc`.
+ - Storage enforcement: Persisted state MUST use RedisJSON only. Strings are permitted solely for pub/sub payloads and ephemeral counters/locks.
 
 ## Entry points and modules
 - `function_app.py` bootstraps the Azure Functions host, MCP triggers, and background threads. See `.cursor/rules/module_Function_App.mdc` for lifecycle and health-route requirements.

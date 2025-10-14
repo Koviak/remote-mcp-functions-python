@@ -1,13 +1,37 @@
 ---
-description: Redis task keys, JSON structures, and pub/sub channels used across this repo, with exact patterns and code references for quick navigation
+description: "TIER 3 - Domain Specific: Microsoft MCP Server Redis patterns for Planner sync. Specialized keys, schemas, and channels for MS-MCP task synchronization. Use this when working with Microsoft 365 integration and Planner sync."
 alwaysApply: false
 ---
+## 🎯 WHEN TO USE THIS FILE
+- Working with Microsoft 365 Planner integration
+- Implementing or debugging Planner ↔ Annika task sync
+- Understanding MS-MCP specific Redis keys and schemas
+- Setting up webhook handlers for Planner notifications
+- Debugging task ID mapping between systems
+
+## 📚 FILE HIERARCHY
+- **Prerequisites**: 
+  1. [redis-master-manager.mdc](mdc:.cursor/rules/redis-master-manager.mdc) - Connection patterns
+  2. [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc) - General key patterns
+- **This File**: MS-MCP specific patterns and schemas
+- **Related**: 
+  - [planner-sync-master.mdc](mdc:.cursor/rules/planner-sync-master.mdc) - Planner sync architecture
+  - [planner-annika-sync-fixes-and-trace.mdc](mdc:.cursor/rules/planner-annika-sync-fixes-and-trace.mdc) - Sync fixes
+
+## 🔗 KEY PRINCIPLES
+- **Authoritative Storage**: `annika:tasks:{id}` is single source of truth
+- **ID Mapping**: Forward/reverse maps determine create vs. update
+- **Webhook-Driven**: Real-time sync via Graph webhooks
+- **Schema Flexibility**: Supports both agent and adapter field naming
+
+---
+
 ## Redis task-related keys and channels
 
-Use these canonical keys and channels when storing, caching, or syncing tasks. Links reference the exact implementation sites.
+Use these canonical keys and channels when storing, caching, or syncing tasks with Microsoft Planner. Links reference the exact implementation sites.
 
 ### Primary task storage (agents)
-- `annika:tasks:{id}` — primary agent task storage (no expiry)
+- `annika:tasks:{id}` — primary agent task storage (authoritative; no expiry)
   - Creation: see `create_agent_task_http` in [src/http_endpoints.py](mdc:src/http_endpoints.py)
     - Writes task JSON: `redis_client.set(f"annika:tasks:{task['id']}", json.dumps(task))`
   - Docs references: [src/Documentation/Planner_Agent_Task_Creation_Guide.md](mdc:src/Documentation/Planner_Agent_Task_Creation_Guide.md), [src/Documentation/Redis_First_Architecture_Summary.md](mdc:src/Documentation/Redis_First_Architecture_Summary.md)
@@ -91,7 +115,7 @@ Use these canonical keys and channels when storing, caching, or syncing tasks. L
 Same as the Microsoft Graph task cache schema above (planId/title/etc.), often a direct snapshot from Graph responses.
 
 ### Task lists (JSON documents)
-- `annika:conscious_state` — global state JSON containing `task_lists`
+- `annika:conscious_state` — global state JSON containing `task_lists` (mirror; do not gate sync logic)
   - JSON path: `$.task_lists.*.tasks[*]`
   - Read example: [src/annika_task_adapter.py](mdc:src/annika_task_adapter.py)
 
@@ -141,7 +165,7 @@ Same as the Microsoft Graph task cache schema above (planId/title/etc.), often a
 ```
 
 ### Pub/Sub channels related to tasks
-- `annika:tasks:updates` — publishes task create/update notifications
+- `annika:tasks:updates` — publishes task create/update notifications (MS‑MCP fast‑path: parse `task_id`, fetch that task only)
   - Published in: [src/http_endpoints.py](mdc:src/http_endpoints.py)
   - Consumed/subscribed in: [src/planner_sync_service_v4.py](mdc:src/planner_sync_service_v4.py), [src/planner_sync_service_v5.py](mdc:src/planner_sync_service_v5.py)
 
@@ -185,9 +209,13 @@ The metadata HTTP handler maps `type` → Redis key pattern:
 See mapping in: [src/http_endpoints.py](mdc:src/http_endpoints.py)
 
 ### Notes
-- Tasks stored under `annika:tasks:{id}` are the authoritative, agent-facing store (no TTL).
+## Cross‑Links
+- Planner Sync Master: [planner-sync-master.mdc](mdc:.cursor/rules/planner-sync-master.mdc)
+- Redis Keys (canonical): [redis-component-keys-map.mdc](mdc:.cursor/rules/redis-component-keys-map.mdc)
+- System Architecture: [system-architecture.mdc](mdc:.cursor/rules/system-architecture.mdc)
+- `annika:tasks:{id}` is authoritative; Annika→Planner create vs update is determined solely by ID maps, not list contents.
 - Planner/Graph task metadata (`annika:graph:tasks:{task_id}`) is a cache for fast reads and can be refreshed by sync/metadata services.
-- Use RedisJSON when storing structured documents (e.g., `annika:conscious_state`, conversation task components), and string values for simple task objects unless/until JSON operations are needed.
+- Use RedisJSON for mirrors (e.g., `annika:conscious_state`, per‑conversation lists); store per‑task objects as string JSON unless JSON ops are required.
 
 ## Additional Redis entries and schemas
 
