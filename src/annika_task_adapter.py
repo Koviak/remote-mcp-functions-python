@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,51 @@ class AnnikaTaskAdapter:
         self.redis = redis_client
         # Log current mappings on init
         logger.info(f"Initialized with {len(USER_ID_MAP)} user mappings")
-        
+
+    @staticmethod
+    def _parse_json_result(raw: Any) -> Any:
+        """Normalize RedisJSON responses into native Python objects."""
+        if raw is None:
+            return None
+        if isinstance(raw, (dict, list)):
+            return raw
+        try:
+            data = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            logger.debug("Failed to decode RedisJSON payload", exc_info=True)
+            return None
+        if isinstance(data, list) and len(data) == 1:
+            return data[0]
+        return data
+
+    @staticmethod
+    def _serialize_json_value(value: Any) -> str:
+        """Serialize a value for RedisJSON operations."""
+        return json.dumps(value)
+
+    async def _redis_json_get(self, key: str, path: str = "$") -> Any:
+        """Retrieve a value from RedisJSON storage."""
+        try:
+            raw = await self.redis.execute_command("JSON.GET", key, path)
+        except Exception as exc:
+            logger.debug("RedisJSON GET failed for %s: %s", key, exc)
+            return None
+        return self._parse_json_result(raw)
+
+    async def _redis_json_set(
+        self, key: str, value: Any, path: str = "$", expire: Optional[int] = None
+    ) -> None:
+        """Store a value using RedisJSON and optionally apply a TTL."""
+        payload = self._serialize_json_value(value)
+        await self.redis.execute_command("JSON.SET", key, path, payload)
+        if expire is not None:
+            await self.redis.expire(key, expire)
+
+    async def _redis_json_update(self, key: str, path: str, value: Any) -> None:
+        """Perform a partial update on a RedisJSON document."""
+        payload = self._serialize_json_value(value)
+        await self.redis.execute_command("JSON.SET", key, path, payload)
+
     async def planner_to_annika(
         self, planner_task: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -226,13 +270,9 @@ class AnnikaTaskAdapter:
         
         try:
             # Get global conscious state
-            state_json = await self.redis.execute_command(
-                "JSON.GET", "annika:conscious_state", "$"
-            )
-            
-            if state_json:
-                state = json.loads(state_json)[0]
-                
+            state = await self._redis_json_get("annika:conscious_state")
+
+            if isinstance(state, dict):
                 # Extract tasks from each list
                 task_lists = state.get("task_lists", {})
                 for list_type, list_data in task_lists.items():
@@ -259,12 +299,8 @@ class AnnikaTaskAdapter:
                 conv_id = parts[2] if len(parts) > 2 else "unknown"
                 
                 try:
-                    conv_json = await self.redis.execute_command(
-                        "JSON.GET", key, "$"
-                    )
-                    
-                    if conv_json:
-                        data = json.loads(conv_json)[0]
+                    data = await self._redis_json_get(key)
+                    if isinstance(data, dict):
                         for task in data.get("active_conversation", {}).get(
                             "tasks", []
                         ):
@@ -289,11 +325,12 @@ class AnnikaTaskAdapter:
                     )
                     for task_key in keys:
                         try:
-                            raw = await self.redis.get(task_key)
-                            if not raw:
-                                continue
-                            task = json.loads(raw)
+                            task = await self._redis_json_get(task_key)
                             if not isinstance(task, dict):
+                                logger.debug(
+                                    "Skipping non-object RedisJSON payload for %s",
+                                    task_key,
+                                )
                                 continue
                             tid = task.get("id")
                             if not tid:

@@ -1,8 +1,46 @@
+import asyncio
 import json
 import logging
 import os
-import asyncio
+
 import azure.functions as func
+
+
+logger = logging.getLogger(__name__)
+
+
+def _parse_json_result(raw):
+    """Normalize RedisJSON responses into Python primitives."""
+    if raw is None:
+        return None
+    if isinstance(raw, (dict, list)):
+        return raw
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        logger.debug("Failed to decode RedisJSON payload", exc_info=True)
+        return None
+    if isinstance(data, list) and len(data) == 1:
+        return data[0]
+    return data
+
+
+def _redis_json_set_sync(client, key, value, path="$", expire=None):
+    """Store a value in RedisJSON with optional TTL."""
+    payload = json.dumps(value)
+    client.execute_command("JSON.SET", key, path, payload)
+    if expire is not None:
+        client.expire(key, expire)
+
+
+def _redis_json_get_sync(client, key, path="$"):
+    """Retrieve a RedisJSON value and normalize the response."""
+    try:
+        raw = client.execute_command("JSON.GET", key, path)
+    except Exception as exc:
+        logger.debug("RedisJSON GET failed for %s: %s", key, exc)
+        return None
+    return _parse_json_result(raw)
 
 
 def hello_http(req: func.HttpRequest) -> func.HttpResponse:
@@ -14,7 +52,6 @@ def hello_http(req: func.HttpRequest) -> func.HttpResponse:
 
 def graph_webhook_http(req: func.HttpRequest) -> func.HttpResponse:
     """Handle Microsoft Graph webhook notifications."""
-    logger = logging.getLogger(__name__)
     try:
         from logging_setup import setup_logging
         setup_logging(add_console=True)
@@ -135,8 +172,11 @@ def sync_planner_task(resource: str, resource_data, redis_manager):
         if response.status_code == 200:
             task = response.json()
             redis_client = redis_manager._client
-            redis_client.setex(
-                f"annika:planner:tasks:{task_id}", 3600, json.dumps(task)
+            _redis_json_set_sync(
+                redis_client,
+                f"annika:planner:tasks:{task_id}",
+                task,
+                expire=3600,
             )
             redis_client.publish(
                 "annika:tasks:updates",

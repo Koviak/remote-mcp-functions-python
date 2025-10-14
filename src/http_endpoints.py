@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import azure.functions as func
 import requests
@@ -21,6 +21,43 @@ logger = logging.getLogger(__name__)
 
 # Global metadata manager instance
 metadata_manager = None
+
+
+def _parse_json_result(raw: Any) -> Any:
+    """Normalize RedisJSON responses into native Python types."""
+    if raw is None:
+        return None
+    if isinstance(raw, (dict, list)):
+        return raw
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        logger.debug("Failed to decode RedisJSON payload", exc_info=True)
+        return None
+    if isinstance(data, list) and len(data) == 1:
+        return data[0]
+    return data
+
+
+def _redis_json_set_sync(
+    client, key: str, value: Any, path: str = "$", expire: Optional[int] = None
+) -> None:
+    """Store a JSON document using RedisJSON with optional TTL."""
+    payload = json.dumps(value)
+    client.execute_command("JSON.SET", key, path, payload)
+    if expire is not None:
+        client.expire(key, expire)
+
+
+def _redis_json_get_sync(client, key: str, path: str = "$") -> Any:
+    """Retrieve and parse a RedisJSON value."""
+    try:
+        raw = client.execute_command("JSON.GET", key, path)
+    except Exception as exc:
+        logger.debug("RedisJSON GET failed for %s: %s", key, exc)
+        return None
+    return _parse_json_result(raw)
+
 
 def get_metadata_manager():
     """Get or create the metadata manager instance"""
@@ -4504,10 +4541,11 @@ def sync_planner_task(resource: str, resource_data: Dict, redis_manager):
             task = response.json()
             # Store in Redis
             redis_client = redis_manager._client
-            redis_client.setex(
+            _redis_json_set_sync(
+                redis_client,
                 f"annika:planner:tasks:{task_id}",
-                3600,
-                json.dumps(task)
+                task,
+                expire=3600,
             )
             
             # Publish standardized task update
@@ -4553,11 +4591,11 @@ def get_metadata_http(req: func.HttpRequest) -> func.HttpResponse:
             )
         
         key = key_patterns[resource_type]
-        data = redis_client.get(key)
-        
-        if data:
+        data = _redis_json_get_sync(redis_client, key)
+
+        if data is not None:
             return func.HttpResponse(
-                data,
+                json.dumps(data),
                 status_code=200,
                 mimetype="application/json"
             )
@@ -4618,9 +4656,10 @@ def create_agent_task_http(req: func.HttpRequest) -> func.HttpResponse:
         redis_client = redis_manager._client
         
         # Store task in Redis (no expiry)
-        redis_client.set(
+        _redis_json_set_sync(
+            redis_client,
             f"annika:tasks:{task['id']}",
-            json.dumps(task)
+            task,
         )
         
         # Also publish notification

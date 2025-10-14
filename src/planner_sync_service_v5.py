@@ -198,9 +198,53 @@ class WebhookDrivenPlannerSync:
         self.running = False
         # Quick-poll scheduling to tighten feedback after local edits
         self.quick_poll_task = None
+        self.initialize_runtime_state()
+
+    @staticmethod
+    def _parse_json_result(raw: Any) -> Any:
+        """Normalize RedisJSON responses into Python primitives."""
+        if raw is None:
+            return None
+        if isinstance(raw, (dict, list)):
+            return raw
+        try:
+            data = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            logger.debug("Failed to decode RedisJSON payload", exc_info=True)
+            return None
+        if isinstance(data, list) and len(data) == 1:
+            return data[0]
+        return data
+
+    async def _redis_json_get(self, key: str, path: str = "$") -> Any:
+        """Retrieve and parse a RedisJSON document."""
+        if not self.redis_client:
+            return None
+        try:
+            raw = await self.redis_client.execute_command("JSON.GET", key, path)
+        except Exception as exc:
+            logger.debug("RedisJSON GET failed for %s: %s", key, exc)
+            return None
+        return self._parse_json_result(raw)
+
+    async def _redis_json_set(
+        self, key: str, value: Any, path: str = "$", expire: Optional[int] = None
+    ) -> None:
+        """Store a document in RedisJSON with optional TTL."""
+        if not self.redis_client:
+            return
+        payload = json.dumps(value)
+        await self.redis_client.execute_command("JSON.SET", key, path, payload)
+        if expire is not None:
+            await self.redis_client.expire(key, expire)
+
+    def initialize_runtime_state(self) -> None:
+        """Initialize runtime fields after Redis client setup."""
         self.last_quick_poll_at: float = 0.0
         try:
-            self.quick_poll_min_interval = int(os.environ.get("MIN_QUICK_POLL_INTERVAL_SECONDS", "300"))
+            self.quick_poll_min_interval = int(
+                os.environ.get("MIN_QUICK_POLL_INTERVAL_SECONDS", "300")
+            )
         except Exception:
             self.quick_poll_min_interval = 300
 
@@ -547,6 +591,8 @@ class WebhookDrivenPlannerSync:
                         await self._ensure_key_ttl(processed_key, PROCESSED_TTL)
                     except Exception:
                         pass
+                    if annika_id:
+                        await self._mark_task_synced(annika_id)
                     await self._log_sync_operation(
                         op_type or "unknown",
                         annika_id,
@@ -2098,6 +2144,8 @@ class WebhookDrivenPlannerSync:
                             f"annika:sync:last_upload:{annika_id}",
                             datetime.utcnow().isoformat() + "Z"
                         )
+                        # Update sync status for the Annika task
+                        await self._mark_task_synced(annika_id)
                         # Sanity: after create, verify mapping exists to avoid future duplicates
                         if not planner_id:
                             try:
@@ -2125,6 +2173,7 @@ class WebhookDrivenPlannerSync:
 
         # Build individual create payloads first with plan/bucket validation drop
         requests_payload = []
+        request_map: Dict[str, Dict] = {}
         planner_endpoint = f"{GRAPH_API_ENDPOINT}/planner/tasks"
         for idx, annika_task in enumerate(tasks):
             # Build Planner payload using adapter
@@ -2146,13 +2195,15 @@ class WebhookDrivenPlannerSync:
             except Exception:
                 body.pop("bucketId", None)
 
+            request_id = f"req{idx}"
             requests_payload.append({
-                "id": f"req{idx}",
+                "id": request_id,
                 "method": "POST",
                 "url": "/planner/tasks",
                 "headers": {"Content-Type": "application/json"},
                 "body": body,
             })
+            request_map[request_id] = annika_task
 
         if not requests_payload:
             return
@@ -2165,25 +2216,77 @@ class WebhookDrivenPlannerSync:
 
         # Process results: store mappings and ETags for successes
         data = resp.json()
+        successes: List[Dict[str, Optional[str]]] = []
         for r in data.get("responses", []):
             try:
                 status = r.get("status")
                 if status in (200, 201):
                     body = r.get("body", {})
                     planner_id = body.get("id")
+                    request_id = r.get("id")
+                    annika_task = request_map.get(request_id) if request_id else None
+                    annika_id = annika_task.get("id") if annika_task else None
                     # Map: find original annika task by title/heuristic
                     # Conservative: skip mapping if we can't resolve; single path will pick it up later
                     # Best-effort: rely on follow-up single ops to reconcile
+                    if planner_id and annika_id:
+                        await self._store_id_mapping(annika_id, planner_id)
                     if planner_id:
                         etag = body.get("@odata.etag", "")
                         await self._store_etag(planner_id, etag)
+                        successes.append(
+                            {
+                                "annika_id": annika_id,
+                                "planner_id": planner_id,
+                                "etag": etag,
+                            }
+                        )
                 elif status in (429, 500, 502, 503, 504):
                     # Force single-op fallback on transient errors
                     raise RuntimeError("Transient in batch results")
             except Exception:
                 continue
 
+        for success_item in successes:
+            annika_id = success_item.get("annika_id")
+            if not annika_id:
+                continue
+            planner_id = success_item.get("planner_id")
+            if planner_id:
+                await self._mark_task_synced(annika_id)
+            await self.redis_client.set(
+                f"annika:sync:last_upload:{annika_id}",
+                datetime.utcnow().isoformat() + "Z"
+            )
+
     # ========== HELPER METHODS ==========
+
+    async def _redis_json_set(self, key: str, path: str, value: Any) -> None:
+        """Wrapper for RedisJSON SET that handles JSON encoding."""
+        try:
+            payload: str
+            if isinstance(value, str):
+                if value.startswith("{") or value.startswith("[") or value.startswith('"'):
+                    payload = value
+                else:
+                    payload = json.dumps(value)
+            else:
+                payload = json.dumps(value)
+            await self.redis_client.execute_command("JSON.SET", key, path, payload)
+        except Exception as exc:
+            logger.debug(f"RedisJSON SET failed for {key} at {path}: {exc}")
+            raise
+
+    async def _mark_task_synced(self, annika_id: str) -> None:
+        """Mark task as synced in Redis after successful Planner upload."""
+        if not annika_id:
+            return
+        task_key = f"annika:tasks:{annika_id}"
+        try:
+            await self._redis_json_set(task_key, "$.sync_status", "synced")
+            logger.debug(f"Marked task {annika_id} as synced")
+        except Exception as exc:
+            logger.warning(f"Failed to update sync_status for {annika_id}: {exc}")
 
     async def _get_state_hash(self) -> Optional[str]:
         """Get hash of conscious_state for change detection."""
@@ -2519,9 +2622,9 @@ class WebhookDrivenPlannerSync:
             annika_task["updated_at"] = annika_task.get("updated_at") or now_ts
 
             # Always write authoritative per-task key first (agent detection relies on this)
-            await self.redis_client.set(
+            await self._redis_json_set(
                 f"annika:tasks:{annika_id}",
-                json.dumps(annika_task)
+                annika_task,
             )
             logger.debug(f"Wrote task to annika:tasks:{annika_id}")
 
@@ -2592,15 +2695,21 @@ class WebhookDrivenPlannerSync:
 
             # Always update authoritative per-task key first
             try:
-                existing_raw = await self.redis_client.get(f"annika:tasks:{annika_id}")
-                if existing_raw:
-                    existing_task = json.loads(existing_raw)
-                    if not isinstance(existing_task, dict):
-                        existing_task = {}
-                else:
-                    existing_task = {"id": annika_id, "external_id": planner_task.get("id"), "source": "planner"}
+                existing_task = await self._redis_json_get(
+                    f"annika:tasks:{annika_id}"
+                )
+                if not isinstance(existing_task, dict):
+                    existing_task = {
+                        "id": annika_id,
+                        "external_id": planner_task.get("id"),
+                        "source": "planner",
+                    }
             except Exception:
-                existing_task = {"id": annika_id, "external_id": planner_task.get("id"), "source": "planner"}
+                existing_task = {
+                    "id": annika_id,
+                    "external_id": planner_task.get("id"),
+                    "source": "planner",
+                }
 
             # Merge updates and timestamps
             existing_task.update(updates)
@@ -2608,9 +2717,9 @@ class WebhookDrivenPlannerSync:
             existing_task["last_modified_at"] = now_ts
             existing_task["updated_at"] = now_ts
 
-            await self.redis_client.set(
+            await self._redis_json_set(
                 f"annika:tasks:{annika_id}",
-                json.dumps(existing_task)
+                existing_task,
             )
             logger.debug(f"Updated task in annika:tasks:{annika_id}")
 
@@ -2788,6 +2897,9 @@ class WebhookDrivenPlannerSync:
                 etag = planner_task.get("@odata.etag", "")
                 await self._store_etag(planner_id, etag)
 
+                if annika_id:
+                    await self._mark_task_synced(annika_id)
+
                 await self._log_sync_operation(
                     SyncOperation.CREATE.value,
                     annika_id,
@@ -2834,6 +2946,10 @@ class WebhookDrivenPlannerSync:
                                 await self._store_id_mapping(annika_id, planner_id)
                                 etag = planner_task.get("@odata.etag", "")
                                 await self._store_etag(planner_id, etag)
+
+                                if annika_id:
+                                    await self._mark_task_synced(annika_id)
+
                                 try:
                                     # Cache plan selection for this Annika task (5 minutes)
                                     await self.redis_client.set(
@@ -2977,9 +3093,13 @@ class WebhookDrivenPlannerSync:
                 new_etag = response.headers.get("ETag") or response.headers.get("etag") or etag
                 await self._store_etag(planner_id, new_etag)
 
+                annika_id = annika_task.get("id")
+                if annika_id:
+                    await self._mark_task_synced(annika_id)
+
                 await self._log_sync_operation(
                     SyncOperation.UPDATE.value,
-                    annika_task.get("id"),
+                    annika_id,
                     planner_id,
                     "success"
                 )

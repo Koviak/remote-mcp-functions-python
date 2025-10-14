@@ -1,5 +1,44 @@
 import json
+import logging
+
 import azure.functions as func
+
+
+logger = logging.getLogger(__name__)
+
+
+def _parse_json_result(raw):
+    """Normalize RedisJSON responses into Python primitives."""
+    if raw is None:
+        return None
+    if isinstance(raw, (dict, list)):
+        return raw
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        logger.debug("Failed to decode RedisJSON payload", exc_info=True)
+        return None
+    if isinstance(data, list) and len(data) == 1:
+        return data[0]
+    return data
+
+
+def _redis_json_set_sync(client, key, value, path="$", expire=None):
+    """Store a JSON document using RedisJSON and optionally set TTL."""
+    payload = json.dumps(value)
+    client.execute_command("JSON.SET", key, path, payload)
+    if expire is not None:
+        client.expire(key, expire)
+
+
+def _redis_json_get_sync(client, key, path="$"):
+    """Read and normalize a RedisJSON value synchronously."""
+    try:
+        raw = client.execute_command("JSON.GET", key, path)
+    except Exception as exc:
+        logger.debug("RedisJSON GET failed for %s: %s", key, exc)
+        return None
+    return _parse_json_result(raw)
 
 
 def get_metadata_http(req: func.HttpRequest) -> func.HttpResponse:
@@ -24,9 +63,13 @@ def get_metadata_http(req: func.HttpRequest) -> func.HttpResponse:
             return func.HttpResponse(f"Invalid resource type: {resource_type}", status_code=400)
 
         key = key_patterns[resource_type]
-        data = redis_client.get(key)
-        if data:
-            return func.HttpResponse(data, status_code=200, mimetype="application/json")
+        data = _redis_json_get_sync(redis_client, key)
+        if data is not None:
+            return func.HttpResponse(
+                json.dumps(data),
+                status_code=200,
+                mimetype="application/json",
+            )
         return func.HttpResponse(
             json.dumps({
                 "error": "Resource not found in cache",
@@ -68,7 +111,7 @@ def create_agent_task_http(req: func.HttpRequest) -> func.HttpResponse:
         from mcp_redis_config import get_redis_token_manager
         redis_manager = get_redis_token_manager()
         redis_client = redis_manager._client
-        redis_client.set(f"annika:tasks:{task['id']}", json.dumps(task))
+        _redis_json_set_sync(redis_client, f"annika:tasks:{task['id']}", task)
         redis_client.publish(
             "annika:tasks:updates",
             json.dumps({

@@ -8,7 +8,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Any, Optional, List
+from typing import Any, Optional
 
 import redis.asyncio as redis
 import requests
@@ -39,7 +39,7 @@ METADATA_UPDATE_CHANNEL = "annika:pubsub:metadata"
 
 class GraphMetadataManager:
     """Manages Microsoft Graph metadata in Redis"""
-    
+
     def __init__(self):
         self.redis_manager = get_redis_token_manager()
         self.redis_client = None
@@ -47,6 +47,44 @@ class GraphMetadataManager:
         self.token_expires = None
         self.last_token_type = "unknown"
         self._init_redis_async()
+
+    @staticmethod
+    def _parse_json_result(raw: Any) -> Any:
+        """Normalize RedisJSON responses into native Python objects."""
+        if raw is None:
+            return None
+        if isinstance(raw, (dict, list)):
+            return raw
+        try:
+            data = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            logger.debug("Failed to decode RedisJSON payload", exc_info=True)
+            return None
+        if isinstance(data, list) and len(data) == 1:
+            return data[0]
+        return data
+
+    async def _redis_json_get(self, key: str, path: str = "$") -> Any:
+        """Retrieve and normalize a RedisJSON value."""
+        if not self.redis_client:
+            return None
+        try:
+            raw = await self.redis_client.execute_command("JSON.GET", key, path)
+        except Exception as exc:
+            logger.debug("RedisJSON GET failed for %s: %s", key, exc)
+            return None
+        return self._parse_json_result(raw)
+
+    async def _redis_json_set(
+        self, key: str, value: Any, path: str = "$", expire: Optional[int] = None
+    ) -> None:
+        """Store a value using RedisJSON with optional TTL."""
+        if not self.redis_client:
+            return
+        payload = json.dumps(value)
+        await self.redis_client.execute_command("JSON.SET", key, path, payload)
+        if expire is not None:
+            await self.redis_client.expire(key, expire)
     
     def _init_redis_async(self):
         """Initialize async Redis client"""
@@ -135,10 +173,10 @@ class GraphMetadataManager:
             
             # Cache in Redis
             key = REDIS_USER_KEY.format(user_id=user_id)
-            await self.redis_client.setex(
-                key, 
-                REDIS_METADATA_TTL, 
-                json.dumps(user_data)
+            await self._redis_json_set(
+                key,
+                user_data,
+                expire=REDIS_METADATA_TTL,
             )
             
             # Publish update notification
@@ -187,10 +225,10 @@ class GraphMetadataManager:
         
         # Cache in Redis
         key = REDIS_GROUP_KEY.format(group_id=group_id)
-        await self.redis_client.setex(
+        await self._redis_json_set(
             key,
-            REDIS_METADATA_TTL,
-            json.dumps(group_data)
+            group_data,
+            expire=REDIS_METADATA_TTL,
         )
         
         # Cache individual plans
@@ -241,18 +279,18 @@ class GraphMetadataManager:
             # Cache buckets individually
             for bucket in plan_data["buckets"]:
                 bucket_key = REDIS_BUCKET_KEY.format(bucket_id=bucket["id"])
-                await self.redis_client.setex(
+                await self._redis_json_set(
                     bucket_key,
-                    REDIS_METADATA_TTL,
-                    json.dumps(bucket)
+                    bucket,
+                    expire=REDIS_METADATA_TTL,
                 )
         
         # Cache in Redis
         key = REDIS_PLAN_KEY.format(plan_id=plan_id)
-        await self.redis_client.setex(
+        await self._redis_json_set(
             key,
-            REDIS_METADATA_TTL,
-            json.dumps(plan_data)
+            plan_data,
+            expire=REDIS_METADATA_TTL,
         )
         
         return plan_data
@@ -288,9 +326,10 @@ class GraphMetadataManager:
         
         # Cache in Redis (no expiry for tasks)
         key = REDIS_TASK_KEY.format(task_id=task_id)
-        await self.redis_client.set(
+        await self._redis_json_set(
             key,
-            json.dumps(task_data)
+            task_data,
+            expire=REDIS_TASK_TTL,
         )
         
         # Publish update
@@ -322,10 +361,10 @@ class GraphMetadataManager:
         
         key_format = key_patterns[resource_type]
         key = key_format.format(**{f"{resource_type}_id": resource_id})
-        data = await self.redis_client.get(key)
-        
-        if data:
-            return json.loads(data)
+        data = await self._redis_json_get(key)
+
+        if data is not None:
+            return data
         
         # If not cached, fetch and cache
         if resource_type == "user":
@@ -426,10 +465,10 @@ class GraphMetadataManager:
 
                 key = REDIS_USER_KEY.format(user_id=user_id)
                 try:
-                    await self.redis_client.setex(
+                    await self._redis_json_set(
                         key,
-                        REDIS_METADATA_TTL,
-                        json.dumps(record),
+                        record,
+                        expire=REDIS_METADATA_TTL,
                     )
                 except Exception as exc:
                     logger.debug("Failed to cache user %s: %s", user_id, exc)
@@ -444,10 +483,10 @@ class GraphMetadataManager:
             logger.warning("User enumeration truncated after %s pages", page)
 
         try:
-            await self.redis_client.setex(
+            await self._redis_json_set(
                 REDIS_USERS_INDEX_KEY,
-                REDIS_METADATA_TTL,
-                json.dumps(index),
+                index,
+                expire=REDIS_METADATA_TTL,
             )
         except Exception as exc:
             logger.debug("Failed to write users index: %s", exc)
@@ -457,4 +496,4 @@ class GraphMetadataManager:
     
     def get_sync_client(self):
         """Get synchronous Redis client for non-async contexts"""
-        return self.redis_manager._client 
+        return self.redis_manager._client
