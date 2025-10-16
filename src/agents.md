@@ -38,6 +38,11 @@
 - Scope changes, new delegated permissions, or token refresh failures require tenant approval. Reference `.cursor/rules/active-scopes.mdc` and capture evidence before escalating.
 - When adding endpoints, update the modular registration and associated tests (`src/Tests/test_http_delegated.py`, integration manifest). Keep response schemas backward compatible unless the rule set is updated.
 
+## 2025-10-15 Planner Checklist & Metrics
+- `_queue_upload` now filters any subtask/prerequisite artifacts; `_sync_checklist_to_planner` converts both stored `subtask_ids` and inline `subtasks`/`prerequisites` into bounded Planner checklist items using `annika_subtasks_to_planner_checklist`.
+- Planner details fetches are ETag-aware (304 short-circuit), and all 403/412/429 responses increment Redis metrics under `annika:planner:metrics` for capacity monitoring.
+- Deleted Planner tasks persist seven-day tombstones (`annika:planner:tasks:{id}:tombstone` plus `annika:planner:tombstone:annika:{task}`) so the upload queue skips resurrection attempts; mappings clear the tombstone once a fresh Graph ID is issued.
+- Batch uploads honor rate-limit backoff via `RateLimitHandler.retry_after`, preventing work from draining the queue during imposed cooldowns.
+
 ## Keep this guide current
 - Update this file whenever you introduce a new module, change bootstrap commands, or modify Redis contracts. Cross-check `.cursor/rules/agents-md.mdc` during reviews and note adjustments in your PR summary.
-

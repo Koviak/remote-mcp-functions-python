@@ -414,3 +414,32 @@ Impact
 - Local Redis no longer contains stale Annika/Planner task records that caused repeated 403 create attempts and dirty sync state.
 - Next MS-MCP start will repopulate from live Planner data only; prevents agents from acting on orphaned tasks.
 
+
+
+---
+
+## 2025-10-15 | Planner Task Overflow & Subtask Fix
+
+### Problem
+- **603 pending tasks** attempting to sync to a full Microsoft Planner plan
+- Error: \MaximumActiveTasksInProject\ (HTTP 403) - plan at 200+ task capacity
+- **Subtasks creating individual Planner tasks** instead of using checklist items
+- Batch processing continuing during rate-limit backoff periods
+- No plan capacity validation at Task Manager level
+
+### Implementation
+1. **Redis Reset**: Cleared 5,846 keys (1250 tasks, 1116 ID maps, 538 mirrors, 561 cached, 2381 sync state)
+2. **Subtask Filtering**: Added \_is_subtask_entry()\ helper to detect Task-CV-xxx-###-### pattern and skip queuing
+3. **Backoff Check**: Modified \_process_upload_batch()\ to respect backoff_until flag
+4. **403 Handling**: Enhanced error handling to detect MaximumActiveTasksInProject and mark tasks as failed (no retry)
+5. **Capacity Validation**: Added \check_plan_task_count()\ to Task Manager, blocks creation when plan ≥200 tasks
+
+### Files Modified
+- \planner_sync_service_v5.py\: Subtask filter, backoff check, 403 handling (lines 2042-2133, 3088-3133)
+- \config.py\: Added MAX_TASKS_PER_PLANNER_PLAN = 200
+- \edis_manager.py\: Added check_plan_task_count() method (lines 305-343)
+- \__init__.py\: Integrated plan capacity check into task_create (lines 141-152)
+
+### Status
+✅ Implemented - Ready for testing
+

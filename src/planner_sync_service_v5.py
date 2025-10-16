@@ -497,6 +497,32 @@ class WebhookDrivenPlannerSync:
         except Exception:
             pass
 
+    async def _record_metric(self, metric: str, increment: int = 1) -> None:
+        """Increment planner sync metrics for observability."""
+        try:
+            await self.redis_client.hincrby("annika:planner:metrics", metric, increment)
+        except Exception:
+            logger.debug(f"Failed to record metric {metric}")
+
+    async def _store_task_tombstone(
+        self, planner_id: str, reason: str, annika_id: Optional[str] = None
+    ) -> None:
+        """Persist a short-lived tombstone so deleted tasks do not resurrect."""
+        try:
+            payload = {
+                "deleted_at": datetime.utcnow().isoformat() + "Z",
+                "reason": reason,
+            }
+            key = f"annika:planner:tasks:{planner_id}:tombstone"
+            await self.redis_client.execute_command("JSON.SET", key, "$", json.dumps(payload))
+            await self.redis_client.expire(key, 7 * 24 * 60 * 60)
+            if annika_id:
+                await self.redis_client.set(
+                    f"annika:planner:tombstone:annika:{annika_id}", reason, ex=7 * 24 * 60 * 60
+                )
+        except Exception:
+            logger.debug(f"Failed to store tombstone for {planner_id}")
+
     async def _pending_queue_worker(self) -> None:
         """Consume operations from annika:sync:pending with retry/backoff and dedup."""
         MAX_RETRIES = 5
@@ -2015,6 +2041,18 @@ class WebhookDrivenPlannerSync:
     async def _task_needs_upload(self, annika_task: Dict) -> bool:
         """Check if a task needs to be uploaded to Planner."""
         annika_id = annika_task.get("id")
+
+        try:
+            if annika_id:
+                tombstone_exists = await self.redis_client.get(
+                    f"annika:planner:tombstone:annika:{annika_id}"
+                )
+                if tombstone_exists:
+                    logger.debug(f"Skipping upload for {annika_id} due to Planner tombstone")
+                    return False
+        except Exception:
+            pass
+
         planner_id = await self._get_planner_id(annika_id)
 
         if not planner_id:
@@ -2039,10 +2077,62 @@ class WebhookDrivenPlannerSync:
         except Exception:
             return True
 
+    def _is_subtask_entry(self, task: Dict[str, Any]) -> bool:
+        """Check if task is actually a subtask that shouldn't become a Planner task."""
+        if not isinstance(task, dict):
+            return False
+
+        task_id = task.get("id") or task.get("task_id") or ""
+        parent_reference = (
+            task.get("parent_task_id")
+            or task.get("parentTaskId")
+            or task.get("parent_id")
+            or task.get("root_task_id")
+        )
+
+        if parent_reference and parent_reference != task_id:
+            return True
+
+        relationship = str(task.get("relationship") or "").lower()
+        if relationship in {"subtask", "checklist"}:
+            return True
+
+        if task.get("is_prerequisite") or task.get("prerequisite_for"):
+            return True
+
+        parts = str(task_id).split("-")
+        if len(parts) >= 4:
+            trailing_digits = 0
+            for segment in reversed(parts):
+                if segment.isdigit():
+                    trailing_digits += 1
+                else:
+                    break
+            # Base tasks typically end with a single numeric segment; subtasks carry 2+
+            if trailing_digits >= 2:
+                return True
+
+        return False
+
     async def _queue_upload(self, annika_task: Dict):
-        """Queue a task for batch upload."""
+        """Queue a task for batch upload, filtering out subtask entries."""
+        annika_id = annika_task.get("id") or annika_task.get("task_id")
+        
+        # Subtasks/prerequisites should sync as checklist items on the parent task
+        if self._is_subtask_entry(annika_task):
+            logger.debug(f"Skipping subtask entry {annika_id} - will sync as checklist item on parent")
+            return
+
+    def _has_checklist_payload(self, task: Dict[str, Any]) -> bool:
+        """Return True if the task carries subtask/prerequisite data needing checklist sync."""
+        if not isinstance(task, dict):
+            return False
+        return any(
+            bool(task.get(field))
+            for field in ("subtask_ids", "subtasks", "prerequisites")
+        )
+        
         # Check if task is already queued to prevent duplicates
-        annika_id = annika_task.get("id")
         if annika_id:
             # Check if already in queue
             for queued_task in self.pending_uploads:
@@ -2083,6 +2173,11 @@ class WebhookDrivenPlannerSync:
     async def _process_upload_batch(self):
         """Process a batch of uploads to Planner."""
         if not self.pending_uploads:
+            return
+
+        if self.rate_limiter.is_rate_limited():
+            retry_in = max(0.0, self.rate_limiter.retry_after - time.time())
+            logger.debug(f"Skipping batch processing during rate limit backoff (retry in {retry_in:.1f}s)")
             return
 
         # Recursion guard - prevent concurrent batch processing
@@ -2133,25 +2228,24 @@ class WebhookDrivenPlannerSync:
 
                     try:
                         planner_id = await self._get_planner_id(annika_id)
+                        success = False
 
                         if planner_id:
-                            await self._update_planner_task(planner_id, task)
+                            success = await self._update_planner_task(planner_id, task)
                         else:
-                            await self._create_planner_task(task)
+                            success = await self._create_planner_task(task)
 
-                        # Mark as uploaded
-                        await self.redis_client.set(
-                            f"annika:sync:last_upload:{annika_id}",
-                            datetime.utcnow().isoformat() + "Z"
-                        )
-                        # Update sync status for the Annika task
-                        await self._mark_task_synced(annika_id)
-                        # Sanity: after create, verify mapping exists to avoid future duplicates
-                        if not planner_id:
-                            try:
-                                _ = await self._get_planner_id(annika_id)
-                            except Exception:
-                                pass
+                        if success:
+                            await self.redis_client.set(
+                                f"annika:sync:last_upload:{annika_id}",
+                                datetime.utcnow().isoformat() + "Z"
+                            )
+                            await self._mark_task_synced(annika_id)
+                            if not planner_id:
+                                try:
+                                    _ = await self._get_planner_id(annika_id)
+                                except Exception:
+                                    pass
 
                     finally:
                         self.processing_upload.discard(annika_id)
@@ -2261,32 +2355,20 @@ class WebhookDrivenPlannerSync:
 
     # ========== HELPER METHODS ==========
 
-    async def _redis_json_set(self, key: str, path: str, value: Any) -> None:
-        """Wrapper for RedisJSON SET that handles JSON encoding."""
-        try:
-            payload: str
-            if isinstance(value, str):
-                if value.startswith("{") or value.startswith("[") or value.startswith('"'):
-                    payload = value
-                else:
-                    payload = json.dumps(value)
-            else:
-                payload = json.dumps(value)
-            await self.redis_client.execute_command("JSON.SET", key, path, payload)
-        except Exception as exc:
-            logger.debug(f"RedisJSON SET failed for {key} at {path}: {exc}")
-            raise
-
     async def _mark_task_synced(self, annika_id: str) -> None:
-        """Mark task as synced in Redis after successful Planner upload."""
-        if not annika_id:
-            return
-        task_key = f"annika:tasks:{annika_id}"
+        """Mark a task as successfully synced with timestamp.
+        
+        Uses a separate Redis string key to track sync status without
+        modifying the core task document.
+        """
         try:
-            await self._redis_json_set(task_key, "$.sync_status", "synced")
-            logger.debug(f"Marked task {annika_id} as synced")
-        except Exception as exc:
-            logger.warning(f"Failed to update sync_status for {annika_id}: {exc}")
+            await self.redis_client.set(
+                f"annika:sync:status:{annika_id}",
+                datetime.utcnow().isoformat() + "Z",
+                ex=7 * 24 * 60 * 60  # 7 day TTL
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update sync_status for {annika_id}: {e}")
 
     async def _get_state_hash(self) -> Optional[str]:
         """Get hash of conscious_state for change detection."""
@@ -2487,6 +2569,11 @@ class WebhookDrivenPlannerSync:
             f"annika:task:mapping:planner:{planner_id}",
             annika_id
         )
+        try:
+            await self.redis_client.delete(f"annika:planner:tasks:{planner_id}:tombstone")
+            await self.redis_client.delete(f"annika:planner:tombstone:annika:{annika_id}")
+        except Exception:
+            pass
 
     async def _get_planner_id(self, annika_id: str) -> Optional[str]:
         """Get Planner ID for Annika task.
@@ -2553,12 +2640,117 @@ class WebhookDrivenPlannerSync:
         """Store ETag for update detection."""
         await self.redis_client.set(f"{ETAG_PREFIX}{planner_id}", etag)
 
+    async def _store_details_etag(self, planner_id: str, etag: str):
+        """Store task details ETag separately."""
+        await self.redis_client.set(f"{ETAG_PREFIX}{planner_id}:details", etag)
+
+    async def _get_details_etag(self, planner_id: str) -> Optional[str]:
+        """Get stored task details ETag."""
+        return await self.redis_client.get(f"{ETAG_PREFIX}{planner_id}:details")
+
+    async def _get_planner_task_details(
+        self, planner_id: str, token: str
+    ) -> Optional[Dict]:
+        """Fetch task details including checklist from Planner with conditional GET."""
+        try:
+            headers = {"Authorization": f"Bearer {token}"}
+            stored_etag = await self._get_details_etag(planner_id)
+            if stored_etag:
+                headers["If-None-Match"] = stored_etag
+
+            response = self.http.get(
+                f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}/details",
+                headers=headers,
+                timeout=10
+            )
+            if response.status_code == 200:
+                return response.json()
+            if response.status_code == 304:
+                await self._record_metric("planner_details_304")
+                return {"@odata.etag": stored_etag, "_not_modified": True}
+            if response.status_code == 404:
+                await self._record_metric("planner_details_404")
+                await self._store_task_tombstone(planner_id, "not_found")
+        except Exception as e:
+            logger.debug(f"Error fetching task details for {planner_id}: {e}")
+        return None
+
+    async def _sync_checklist_to_planner(
+        self, planner_id: str, annika_task: Dict[str, Any]
+    ) -> bool:
+        """Sync Annika subtasks to Planner checklist items."""
+        try:
+            token = get_agent_token()
+            if not token:
+                return False
+            
+            # Get task details to retrieve current ETag
+            details = await self._get_planner_task_details(planner_id, token)
+            if not details:
+                logger.debug(f"Could not fetch details for {planner_id}")
+                return False
+            
+            details_etag = details.get("@odata.etag")
+            if not details_etag:
+                return False
+            
+            # Convert Annika subtasks to checklist format
+            checklist = await self.adapter.annika_subtasks_to_planner_checklist(
+                annika_task.get("id"),
+                inline_subtasks=annika_task.get("subtasks"),
+                inline_prerequisites=annika_task.get("prerequisites"),
+            )
+            
+            # Skip if no checklist items
+            if not checklist:
+                logger.debug(f"No subtasks to sync for {annika_task.get('id')}")
+                return True
+            
+            # Update task details with checklist
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "If-Match": details_etag,
+                "Prefer": "return=representation"
+            }
+            
+            response = self.http.patch(
+                f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}/details",
+                headers=headers,
+                json={"checklist": checklist},
+                timeout=10
+            )
+            
+            if response.status_code in (200, 204):
+                # Store new ETag if returned
+                if response.status_code == 200:
+                    new_details = response.json()
+                    new_etag = new_details.get("@odata.etag")
+                    if new_etag:
+                        await self._store_details_etag(planner_id, new_etag)
+                logger.debug(f"✅ Synced {len(checklist)} checklist items for {planner_id}")
+                return True
+            elif response.status_code == 412:
+                logger.warning(f"ETag conflict for task details {planner_id}")
+                await self._record_metric("planner_details_412")
+                return False
+            else:
+                logger.warning(
+                    f"Failed to update checklist: {response.status_code} - {response.text[:200]}"
+                )
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error syncing checklist for {planner_id}: {e}")
+            return False
+
     async def _remove_mapping(self, annika_id: str, planner_id: str):
-        """Remove ID mappings."""
+        """Remove ID mappings and ETags."""
         await self.redis_client.delete(
             f"{PLANNER_ID_MAP_PREFIX}{annika_id}",
             f"annika:task:mapping:planner:{planner_id}",
-            f"{ETAG_PREFIX}{planner_id}"
+            f"{ETAG_PREFIX}{planner_id}",
+            f"{ETAG_PREFIX}{planner_id}:details"
         )
 
     # ========== TASK OPERATIONS (Complete implementations) ==========
@@ -2664,6 +2856,30 @@ class WebhookDrivenPlannerSync:
             except Exception as mirror_err:
                 logger.debug(f"Mirror to conscious_state skipped due to error: {mirror_err}")
 
+            # Import checklist items as subtasks
+            try:
+                token = get_agent_token()
+                if token:
+                    details = await self._get_planner_task_details(planner_id, token)
+                    if details and details.get("checklist"):
+                        subtask_ids = await self.adapter.planner_checklist_to_annika_subtasks(
+                            annika_id, details["checklist"]
+                        )
+                        # Update parent task with subtask_ids
+                        if subtask_ids:
+                            existing_task = await self._redis_json_get(f"annika:tasks:{annika_id}")
+                            if existing_task:
+                                existing_task["subtask_ids"] = subtask_ids
+                                existing_task["subtasks_created"] = True
+                                await self._redis_json_set(
+                                    f"annika:tasks:{annika_id}",
+                                    existing_task
+                                )
+                            await self._store_details_etag(planner_id, details.get("@odata.etag"))
+                            logger.debug(f"Imported {len(subtask_ids)} checklist items as subtasks for {annika_id}")
+            except Exception as checklist_err:
+                logger.debug(f"Checklist import skipped due to error: {checklist_err}")
+
             # Log success irrespective of mirror presence
             await self._log_sync_operation(
                 SyncOperation.CREATE.value,
@@ -2762,6 +2978,30 @@ class WebhookDrivenPlannerSync:
                     logger.debug("conscious_state not present; skipped mirror update")
             except Exception as mirror_err:
                 logger.debug(f"Mirror update to conscious_state skipped due to error: {mirror_err}")
+
+            # Import checklist items as subtasks
+            try:
+                token = get_agent_token()
+                if token:
+                    details = await self._get_planner_task_details(planner_task["id"], token)
+                    if details and details.get("checklist"):
+                        subtask_ids = await self.adapter.planner_checklist_to_annika_subtasks(
+                            annika_id, details["checklist"]
+                        )
+                        # Update parent task with subtask_ids if changed
+                        if subtask_ids:
+                            task_update = await self._redis_json_get(f"annika:tasks:{annika_id}")
+                            if task_update and task_update.get("subtask_ids") != subtask_ids:
+                                task_update["subtask_ids"] = subtask_ids
+                                task_update["subtasks_created"] = True
+                                await self._redis_json_set(
+                                    f"annika:tasks:{annika_id}",
+                                    task_update
+                                )
+                            await self._store_details_etag(planner_task["id"], details.get("@odata.etag"))
+                            logger.debug(f"Updated {len(subtask_ids)} checklist items as subtasks for {annika_id}")
+            except Exception as checklist_err:
+                logger.debug(f"Checklist import skipped due to error: {checklist_err}")
 
             await self._log_sync_operation(
                 SyncOperation.UPDATE.value,
@@ -2909,17 +3149,84 @@ class WebhookDrivenPlannerSync:
 
                 logger.info(f"✅ Created Planner task: {annika_task.get('title')}")
                 self.rate_limiter.reset()
+                
+                # Sync checklist if task has subtasks/prerequisites
+                if self._has_checklist_payload(annika_task):
+                    await self._sync_checklist_to_planner(planner_id, annika_task)
+                
                 return True
 
             elif response.status_code == 429:
+                await self._record_metric("planner_rate_limit_429")
                 retry_after = int(response.headers.get("Retry-After", 60))
                 self.rate_limiter.handle_rate_limit(retry_after)
                 await self._queue_upload(annika_task)
                 return False
 
             else:
-                # Fallback on 403: try creating in an accessible plan without bucketId
+                # Fallback on 403: check for specific error types
                 if response.status_code == 403:
+                    await self._record_metric("planner_create_403")
+                    # Check for MaximumActiveTasksInProject error specifically
+                    try:
+                        error_data = response.json()
+                        error_code = error_data.get("error", {}).get("code")
+                        
+                        if error_code == "MaximumActiveTasksInProject":
+                            # Plan at capacity - mark task as failed, don't retry
+                            plan_id = planner_data.get("planId", "unknown")
+                            annika_id = annika_task.get("id")
+                            await self._record_metric("planner_plan_full_403")
+                            logger.error(
+                                f"Plan {plan_id[:8] if plan_id != 'unknown' else plan_id} at capacity (200+ tasks). "
+                                f"Task {annika_id} cannot sync to Planner. "
+                                f"Marking task as planner_sync_failed."
+                            )
+                            
+                            # Update Annika task to indicate sync failure
+                            try:
+                                task_key = f"annika:tasks:{annika_id}"
+                                await self.redis_client.json().set(
+                                    task_key,
+                                    "$.planner_sync_status",
+                                    "failed"
+                                )
+                                await self.redis_client.json().set(
+                                    task_key,
+                                    "$.planner_sync_error",
+                                    f"Plan at capacity (200+ active tasks)"
+                                )
+                            except Exception as update_err:
+                                logger.debug(f"Could not update task status: {update_err}")
+                            
+                            fail_entry = {
+                                "timestamp": datetime.utcnow().isoformat(),
+                                "annika_id": annika_id,
+                                "plan_id": plan_id,
+                                "error": "MaximumActiveTasksInProject",
+                                "operation": "create",
+                            }
+                            try:
+                                await self.redis_client.lpush(FAILED_OPS_KEY, json.dumps(fail_entry))
+                                await self.redis_client.ltrim(FAILED_OPS_KEY, 0, 999)
+                                await self._ensure_key_ttl(FAILED_OPS_KEY, 7 * 24 * 60 * 60)
+                            except Exception as fail_err:
+                                logger.debug(f"Could not append failed operation entry: {fail_err}")
+                            
+                            await self._log_sync_operation(
+                                SyncOperation.CREATE.value,
+                                annika_id,
+                                None,
+                                "error",
+                                "Plan at capacity (MaximumActiveTasksInProject)"
+                            )
+                            
+                            # Remove from pending operations - don't retry
+                            return False
+                    except Exception:
+                        pass  # Fall through to general 403 handling
+                    
+                    # General 403 handling: try creating in an accessible plan without bucketId
                     try:
                         headers_auth = {"Authorization": f"Bearer {token}"}
                         plans = await self._get_all_plans_for_polling(headers_auth)
@@ -2967,6 +3274,11 @@ class WebhookDrivenPlannerSync:
                                     f"✅ Created Planner task via fallback plan: {annika_task.get('title')}"
                                 )
                                 self.rate_limiter.reset()
+                                
+                                # Sync checklist if task has subtasks/prerequisites
+                                if self._has_checklist_payload(annika_task):
+                                    await self._sync_checklist_to_planner(planner_id, annika_task)
+                                
                                 return True
                     except Exception as fb_err:
                         logger.debug(f"Create fallback failed: {fb_err}")
@@ -2979,6 +3291,8 @@ class WebhookDrivenPlannerSync:
                             pass
 
                 logger.error(f"Failed to create Planner task: {response.status_code}")
+                if response.status_code == 412:
+                    await self._record_metric("planner_create_412")
                 logger.error(f"Response: {response.text}")
 
                 await self._log_sync_operation(
@@ -3106,15 +3420,25 @@ class WebhookDrivenPlannerSync:
 
                 logger.debug(f"✅ Updated Planner task: {annika_task.get('title')}")
                 self.rate_limiter.reset()
+                
+                # Sync checklist if task has subtasks/prerequisites
+                if self._has_checklist_payload(annika_task):
+                    await self._sync_checklist_to_planner(planner_id, annika_task)
+                
                 return True
 
             elif response.status_code == 429:
+                await self._record_metric("planner_rate_limit_429")
                 retry_after = int(response.headers.get("Retry-After", 60))
                 self.rate_limiter.handle_rate_limit(retry_after)
                 await self._queue_upload(annika_task)
                 return False
 
             else:
+                if response.status_code == 412:
+                    await self._record_metric("planner_update_412")
+                if response.status_code == 403:
+                    await self._record_metric("planner_update_403")
                 logger.error(f"Failed to update Planner task: {response.status_code}")
                 return False
 
@@ -3170,6 +3494,7 @@ class WebhookDrivenPlannerSync:
                 annika_id = await self._get_annika_id(planner_id)
                 if annika_id:
                     await self._remove_mapping(annika_id, planner_id)
+                await self._store_task_tombstone(planner_id, "deleted", annika_id)
                 await self._log_sync_operation(
                     SyncOperation.DELETE.value,
                     annika_id,
@@ -3183,13 +3508,16 @@ class WebhookDrivenPlannerSync:
                 annika_id = await self._get_annika_id(planner_id)
                 if annika_id:
                     await self._remove_mapping(annika_id, planner_id)
+                await self._store_task_tombstone(planner_id, "already_deleted", annika_id)
                 logger.debug(f"Planner task {planner_id} already deleted")
                 return True
             elif response.status_code == 429:
+                await self._record_metric("planner_rate_limit_429")
                 retry_after = int(response.headers.get("Retry-After", 60))
                 self.rate_limiter.handle_rate_limit(retry_after)
                 return False
             elif response.status_code == 412:
+                await self._record_metric("planner_delete_412")
                 # Precondition failed due to ETag; fetch fresh ETag and retry once
                 try:
                     get_resp2 = self.http.get(

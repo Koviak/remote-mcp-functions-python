@@ -9,7 +9,8 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Iterable
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -376,3 +377,112 @@ class AnnikaTaskAdapter:
             return "user_tasks"
         else:
             return "system_two_tasks"
+
+    async def get_subtasks_for_task(self, task_id: str) -> List[Dict[str, Any]]:
+        """Get all subtasks for a parent task from Redis."""
+        subtasks = []
+        try:
+            # Get parent task to find subtask_ids
+            parent = await self._redis_json_get(f"annika:tasks:{task_id}")
+            if parent and parent.get("subtask_ids"):
+                for subtask_id in parent["subtask_ids"]:
+                    subtask = await self._redis_json_get(f"annika:tasks:{subtask_id}")
+                    if subtask:
+                        subtasks.append(subtask)
+        except Exception as e:
+            logger.debug(f"Error loading subtasks for {task_id}: {e}")
+        return subtasks
+
+    async def annika_subtasks_to_planner_checklist(
+        self,
+        task_id: str,
+        inline_subtasks: Optional[Iterable[Dict[str, Any]]] = None,
+        inline_prerequisites: Optional[Iterable[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Convert Annika subtasks/prerequisites to Planner checklist format."""
+
+        checklist: Dict[str, Dict[str, Any]] = {}
+        seen_ids: set[str] = set()
+
+        def _derive_title(source: Dict[str, Any], fallback_index: int) -> str:
+            raw_title = (
+                source.get("title")
+                or source.get("name")
+                or source.get("description")
+                or f"Checklist item {fallback_index}"
+            )
+            return str(raw_title)[:256]
+
+        def _derive_state(source: Dict[str, Any]) -> bool:
+            if "isChecked" in source:
+                return bool(source["isChecked"])
+            if "completed" in source:
+                return bool(source["completed"])
+            status = (source.get("status") or "").lower()
+            return status in {"completed", "done", "finished"}
+
+        def _normalize_item_id(candidate: Optional[str]) -> str:
+            if not candidate:
+                return uuid4().hex
+            candidate = str(candidate)
+            if candidate.startswith("Task-"):
+                candidate = candidate.replace("Task-", "", 1)
+            if candidate in seen_ids:
+                candidate = uuid4().hex
+            seen_ids.add(candidate)
+            return candidate
+
+        aggregated: List[Dict[str, Any]] = []
+
+        if inline_subtasks:
+            aggregated.extend(list(inline_subtasks))
+        if inline_prerequisites:
+            aggregated.extend(list(inline_prerequisites))
+
+        redis_subtasks = await self.get_subtasks_for_task(task_id)
+        aggregated.extend(redis_subtasks)
+
+        for idx, subtask in enumerate(aggregated, start=1):
+            item_id = _normalize_item_id(subtask.get("id") or subtask.get("external_id"))
+            checklist[item_id] = {
+                "@odata.type": "microsoft.graph.plannerChecklistItem",
+                "title": _derive_title(subtask, idx),
+                "isChecked": _derive_state(subtask),
+                "orderHint": subtask.get("order_hint") or " !",
+            }
+
+        return checklist
+
+    async def planner_checklist_to_annika_subtasks(
+        self, parent_task_id: str, checklist: Dict[str, Any]
+    ) -> List[str]:
+        """Convert Planner checklist items to Annika subtasks.
+        
+        Returns list of subtask IDs created/updated.
+        """
+        subtask_ids = []
+        
+        for item_id, item_data in checklist.items():
+            if item_data is None:
+                # Deleted item - remove corresponding subtask
+                subtask_id = f"Task-{item_id}"
+                await self.redis.delete(f"annika:tasks:{subtask_id}")
+                continue
+                
+            # Create or update subtask
+            subtask_id = f"Task-{item_id}"
+            subtask = {
+                "id": subtask_id,
+                "title": item_data.get("title", ""),
+                "status": "completed" if item_data.get("isChecked") else "not_started",
+                "parent_task_id": parent_task_id,
+                "source": "planner",
+                "external_id": item_id,
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": datetime.utcnow().isoformat() + "Z",
+            }
+            
+            await self._redis_json_set(f"annika:tasks:{subtask_id}", subtask)
+            subtask_ids.append(subtask_id)
+        
+        return subtask_ids
