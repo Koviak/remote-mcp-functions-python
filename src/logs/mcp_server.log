@@ -5696,3 +5696,32 @@ Response headers:
 2025-10-15T19:33:05 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
 2025-10-15T19:34:05 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
 2025-10-15T19:35:05 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-10-15T19:36:05 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-10-15T19:37:05 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-10-15T19:38:05 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-10-15T19:39:05 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-10-15T19:40:05 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-10-15T19:41:05 | INFO | planner_sync_service_v5 | 📊 Health Check: processed=0 pending=0 failed=0 rate=ok webhooks=3
+2025-10-15T19:41:50 | INFO | __main__ | 
+Shutdown signal received...
+2025-10-15T19:41:50 | INFO | __main__ | 
+Cleaning up...
+2025-10-15T19:41:50 | INFO | __main__ | 
+Stopping all services...
+2025-10-15T19:41:50 | INFO | __main__ | Stopping Planner sync service V5...
+2025-10-15T19:41:50 | INFO | planner_sync_service_v5 | 🧹 Cleaning up webhooks...
+2025-10-15T19:41:51 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/7ca91354-b342-49b5-addf-91d571cf7c53 "HTTP/1.1 204 No Content"
+2025-10-15T19:41:51 | INFO | planner_sync_service_v5 | ✅ Cleaned up webhook: groups
+2025-10-15T19:41:52 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/ec025d5b-fd4e-45b1-9f27-f5889dae59b2 "HTTP/1.1 404 Not Found"
+2025-10-15T19:41:52 | WARNING | planner_sync_service_v5 | Failed to cleanup webhook teams_chats: 404
+2025-10-15T19:41:52 | INFO | httpx | HTTP Request: DELETE https://graph.microsoft.com/v1.0/subscriptions/74238220-688e-4d70-98e0-eb6a9cf711f8 "HTTP/1.1 404 Not Found"
+2025-10-15T19:41:52 | WARNING | planner_sync_service_v5 | Failed to cleanup webhook teams_channels: 404
+2025-10-15T19:41:52 | INFO | planner_sync_service_v5 | Webhook-driven sync service stopped
+2025-10-15T19:41:52 | INFO | __main__ | Planner sync service V5 stopped.
+2025-10-15T19:41:52 | INFO | __main__ | Stopping ngrok...
+2025-10-15T19:41:52 | INFO | __main__ | ngrok stopped.
+2025-10-15T19:41:52 | INFO | __main__ | Stopping Azure Function App...
+2025-10-15T19:41:54 | INFO | __main__ | Function App stopped.
+2025-10-15T19:41:58 | INFO | __main__ | All services stopped.
+2025-10-15T19:41:59 | INFO | __main__ | 
+Goodbye!
