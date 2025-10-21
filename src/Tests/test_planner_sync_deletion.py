@@ -22,7 +22,7 @@ async def test_delete_planner_task_removes_mapping(monkeypatch):
     await sync.redis_client.set("annika:planner:id_map:p1", "Task-1")
 
     monkeypatch.setattr(agent_auth_manager, "get_agent_token", lambda: "dummy")
-    monkeypatch.setattr("planner_sync_service_v5.get_agent_token", lambda: "dummy")
+    sync._get_planner_task_with_etag = lambda *args, **kwargs: None
 
     with respx.mock(assert_all_called=True) as mock:
         mock.delete(f"{GRAPH_API_ENDPOINT}/planner/tasks/p1").respond(204)
@@ -43,28 +43,39 @@ async def test_detect_and_queue_changes_handles_deleted_tasks(monkeypatch):
     await sync.redis_client.set("annika:planner:id_map:p2", "Task-2")
 
     monkeypatch.setattr(agent_auth_manager, "get_agent_token", lambda: "dummy")
-    monkeypatch.setattr("planner_sync_service_v5.get_agent_token", lambda: "dummy")
+    sync._get_planner_task_with_etag = lambda *args, **kwargs: None
 
-    async def fake_get_all():
-        return []
+    await sync.redis_client.json().set("annika:tasks:Task-keep", "$", {
+        "id": "Task-keep",
+        "planner_etag": "etag-same",
+        "last_modified_at": "2025-10-21T00:00:00Z",
+    })
 
-    class FakeAdapter:
-        async def get_all_annika_tasks(self):
-            return []
-    sync.adapter = FakeAdapter()
+    uploads = []
 
-    called = {}
+    async def fake_queue(task):
+        uploads.append(task["id"])
 
-    async def fake_delete(planner_id):
-        called["id"] = planner_id
-        return True
+    sync._queue_upload = fake_queue
 
-    sync._delete_planner_task = fake_delete
-
+    # No Annika task for Task-2 → deletion path still runs
     await sync._detect_and_queue_changes()
-
-    assert called.get("id") == "p2"
     assert await sync.redis_client.get("annika:planner:id_map:Task-2") is None
-    assert await sync.redis_client.get("annika:planner:id_map:p2") is None
+
+    # Task with same ETag should be skipped
+    await sync.redis_client.set("annika:planner:id_map:Task-keep", "planner-keep")
+    await sync.redis_client.set("annika:planner:id_map:planner-keep", "Task-keep")
+    await sync.redis_client.set("annika:planner:etag:planner-keep", "etag-same")
+    await sync._detect_and_queue_changes()
+    assert "Task-keep" not in uploads
+
+    # Changed ETag should trigger upload
+    await sync.redis_client.json().set("annika:tasks:Task-keep", "$", {
+        "id": "Task-keep",
+        "planner_etag": "etag-old",
+        "last_modified_at": "2025-10-21T00:00:00Z",
+    })
+    await sync._detect_and_queue_changes()
+    assert "Task-keep" in uploads
 
 

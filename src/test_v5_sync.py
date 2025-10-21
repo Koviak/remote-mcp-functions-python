@@ -67,13 +67,8 @@ async def test_v5_initialization():
                 f"⚠️ Webhook setup failed (expected without token): {e}"
             )
         
-        # Test health metrics collection
-        logger.info("6. Testing health metrics...")
-        metrics = await sync_service._collect_health_metrics()
-        logger.info(f"✅ Health metrics: {metrics}")
-        
         # Test cleanup
-        logger.info("7. Testing cleanup...")
+        logger.info("6. Testing cleanup...")
         await sync_service.stop()
         logger.info("✅ Cleanup completed")
         

@@ -1565,29 +1565,15 @@ class WebhookDrivenPlannerSync:
             elif "teams_channels" in client_state:
                 await self._handle_teams_channel_notification(notification)
             elif "/planner/tasks" in resource or client_state == "annika_planner_sync_v5":
-                # Poll the specific task or plan to handle updates quickly
-                try:
-                    resource_data = notification.get("resourceData", {})
-                    planner_id = resource_data.get("id")
-                    if planner_id:
-                        # Fetch latest and route to existing sync path
-                        token, _ = self._get_preferred_read_token()
-                        if token:
-                            headers = {"Authorization": f"Bearer {token}"}
-                            resp = self.http.get(
-                                f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
-                                headers=headers,
-                                timeout=10,
-                            )
-                            if resp.status_code == 200:
-                                await self._sync_existing_task(planner_id, resp.json())
-                            else:
-                                # Fallback to detect cycle
-                                await self._detect_and_queue_changes()
+                resource_data = notification.get("resourceData", {})
+                planner_id = resource_data.get("id")
+                if planner_id:
+                    planner_task = await self._get_planner_task_with_etag(planner_id, expect_change=True)
+                    if planner_task:
+                        await self._sync_existing_task(planner_id, planner_task)
                     else:
-                        # Fallback: run a quick detect cycle
                         await self._detect_and_queue_changes()
-                except Exception:
+                else:
                     await self._detect_and_queue_changes()
             elif "/chats" in resource:
                 # Handle chat notifications even without specific client state
@@ -1888,15 +1874,16 @@ class WebhookDrivenPlannerSync:
                     if task.get("percentComplete", 0) == 100 or task.get("completedDateTime"):
                         continue
                     task_id = task.get("id")
-                    if task_id:
-                        # Check if this task needs to be synced
-                        annika_id = await self._get_annika_id(task_id)
-                        if not annika_id:
-                            # New task - create in Annika
-                            await self._create_annika_task_from_planner(task)
-                        else:
-                            # Existing task - check if it needs updating
-                            await self._sync_existing_task(task_id, task)
+                    if not task_id:
+                        continue
+                    planner_task = await self._get_planner_task_with_etag(task_id, expect_change=False)
+                    if not planner_task:
+                        continue
+                    annika_id = await self._get_annika_id(task_id)
+                    if not annika_id:
+                        await self._create_annika_task_from_planner(planner_task)
+                    else:
+                        await self._sync_existing_task(task_id, planner_task)
             else:
                 logger.debug(f"Could not access tasks for plan {plan_id}: {tasks_response.status_code}")
 
@@ -1994,17 +1981,23 @@ class WebhookDrivenPlannerSync:
     async def _detect_and_queue_changes(self):
         """Detect changed tasks and queue them for upload."""
         try:
-            annika_tasks = await self.adapter.get_all_annika_tasks()
+            annika_keys = []
+            cursor = 0
+            pattern = "annika:tasks:*"
+            while True:
+                cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=200)
+                annika_keys.extend(keys)
+                if cursor == 0:
+                    break
 
-            current_ids = set()
-            for task in annika_tasks:
-                annika_id = task.get("id")
+            current_ids: Set[str] = set()
+            for task_key in annika_keys:
+                annika_id = task_key.split(":")[-1]
                 if not annika_id or annika_id in self.processing_upload:
                     continue
                 current_ids.add(annika_id)
-
-                # Check if task needs upload
-                if await self._task_needs_upload(task):
+                task = await self._redis_json_get(task_key)
+                if isinstance(task, dict) and await self._task_needs_upload(task):
                     await self._queue_upload(task)
 
             # Detect deletions
@@ -2073,7 +2066,14 @@ class WebhookDrivenPlannerSync:
         try:
             annika_time = datetime.fromisoformat(annika_modified.replace('Z', '+00:00'))
             sync_time = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
-            return annika_time > sync_time
+            if annika_time > sync_time:
+                return True
+            stored_etag = annika_task.get("planner_etag")
+            if stored_etag:
+                cached_etag = await self.redis_client.get(f"{ETAG_PREFIX}{planner_id}")
+                if cached_etag and cached_etag != stored_etag:
+                    return True
+            return False
         except Exception:
             return True
 
@@ -2385,10 +2385,9 @@ class WebhookDrivenPlannerSync:
     async def _get_annika_task(self, annika_id: str) -> Optional[Dict]:
         """Get Annika task by ID."""
         try:
-            annika_tasks = await self.adapter.get_all_annika_tasks()
-            for task in annika_tasks:
-                if task.get("id") == annika_id:
-                    return task
+            task = await self._redis_json_get(f"annika:tasks:{annika_id}")
+            if isinstance(task, dict):
+                return task
         except Exception:
             pass
         return None
@@ -2505,31 +2504,35 @@ class WebhookDrivenPlannerSync:
             # This catches any gaps without overwhelming the API
             cutoff_time = datetime.utcnow() - timedelta(hours=24)
 
-            annika_tasks = await self.adapter.get_all_annika_tasks()
-            recent_tasks = []
+            recent_count = 0
+            cursor = 0
+            pattern = "annika:tasks:*"
+            while True:
+                cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=200)
+                for task_key in keys:
+                    task = await self._redis_json_get(task_key)
+                    if not isinstance(task, dict):
+                        continue
+                    modified_at = (
+                        task.get("last_modified_at")
+                        or task.get("updated_at")
+                        or task.get("modified_at")
+                    )
+                    include = True
+                    if modified_at:
+                        try:
+                            mod_time = datetime.fromisoformat(modified_at.replace('Z', '+00:00'))
+                            include = mod_time > cutoff_time
+                        except Exception:
+                            include = True
+                    if include and await self._task_needs_upload(task):
+                        await self._queue_upload(task)
+                        synced_anything = True
+                        recent_count += 1
+                if cursor == 0:
+                    break
 
-            for task in annika_tasks:
-                modified_at = (
-                    task.get("last_modified_at")
-                    or task.get("updated_at")
-                    or task.get("modified_at")
-                )
-                if modified_at:
-                    try:
-                        mod_time = datetime.fromisoformat(modified_at.replace('Z', '+00:00'))
-                        if mod_time > cutoff_time:
-                            recent_tasks.append(task)
-                    except Exception:
-                        # If we can't parse the time, include it to be safe
-                        recent_tasks.append(task)
-
-            logger.info(f"Found {len(recent_tasks)} recently modified tasks to sync")
-
-            # Queue recent tasks for upload
-            for task in recent_tasks:
-                if await self._task_needs_upload(task):
-                    await self._queue_upload(task)
-                    synced_anything = True
+            logger.info(f"Found {recent_count} recently modified tasks to sync")
 
             # Also do an immediate Planner poll to catch any recent changes
             logger.info("🔍 Performing immediate Planner poll as part of initial sync...")
@@ -2812,6 +2815,7 @@ class WebhookDrivenPlannerSync:
             now_ts = datetime.utcnow().isoformat() + "Z"
             annika_task["last_modified_at"] = annika_task.get("last_modified_at") or now_ts
             annika_task["updated_at"] = annika_task.get("updated_at") or now_ts
+            annika_task["planner_etag"] = planner_task.get("@odata.etag")
 
             # Always write authoritative per-task key first (agent detection relies on this)
             await self._redis_json_set(
@@ -2828,6 +2832,7 @@ class WebhookDrivenPlannerSync:
                     "task_id": annika_id,
                     "task": annika_task,
                     "source": "planner",
+                    "planner_etag": planner_task.get("@odata.etag"),
                 })
             )
             logger.debug(f"Published creation notification for {annika_id}")
@@ -2932,6 +2937,8 @@ class WebhookDrivenPlannerSync:
             now_ts = datetime.utcnow().isoformat() + "Z"
             existing_task["last_modified_at"] = now_ts
             existing_task["updated_at"] = now_ts
+            if planner_task.get("@odata.etag"):
+                existing_task["planner_etag"] = planner_task["@odata.etag"]
 
             await self._redis_json_set(
                 f"annika:tasks:{annika_id}",
@@ -2946,6 +2953,7 @@ class WebhookDrivenPlannerSync:
                     "task_id": annika_id,
                     "task": existing_task,
                     "source": "planner",
+                    "planner_etag": planner_task.get("@odata.etag"),
                 })
             )
             logger.debug(f"Published update notification for {annika_id}")
@@ -4079,6 +4087,35 @@ class WebhookDrivenPlannerSync:
                 break
             except Exception as exc:
                 logger.warning("Metadata refresh loop error: %s", exc)
+
+    async def _get_planner_task_with_etag(self, planner_id: str, expect_change: bool) -> Optional[Dict]:
+        token, _ = self._get_preferred_read_token()
+        if not token:
+            return None
+        headers = {"Authorization": f"Bearer {token}"}
+        cached_etag = await self.redis_client.get(f"{ETAG_PREFIX}{planner_id}")
+        if cached_etag:
+            headers["If-None-Match"] = cached_etag
+        resp = self.http.get(
+            f"{GRAPH_API_ENDPOINT}/planner/tasks/{planner_id}",
+            headers=headers,
+            timeout=10,
+        )
+        if resp.status_code == 304:
+            if expect_change:
+                await self._record_metric("planner_webhook_304")
+            return None
+        if resp.status_code != 200:
+            return None
+        task = resp.json()
+        etag = task.get("@odata.etag")
+        if etag:
+            await self._store_etag(planner_id, etag)
+        return task
+
+    async def _sync_existing_task(self, planner_id: str, planner_task: Dict):
+        # definition already exists above; no duplicate
+        return await super()._sync_existing_task(planner_id, planner_task)
 
 
 async def main():

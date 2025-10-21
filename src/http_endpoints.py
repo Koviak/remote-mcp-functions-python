@@ -4539,8 +4539,13 @@ def sync_planner_task(resource: str, resource_data: Dict, redis_manager):
         
         if response.status_code == 200:
             task = response.json()
+            etag = task.get("@odata.etag")
+            if etag:
+                redis_client = redis_manager._client
+                redis_client.set(f"annika:planner:etag:{task_id}", etag, ex=86400)
+            else:
+                redis_client = redis_manager._client
             # Store in Redis
-            redis_client = redis_manager._client
             _redis_json_set_sync(
                 redis_client,
                 f"annika:planner:tasks:{task_id}",
@@ -4555,7 +4560,8 @@ def sync_planner_task(resource: str, resource_data: Dict, redis_manager):
                     "action": "updated",
                     "task_id": task_id,
                     "task": task,
-                    "source": "webhook"
+                    "source": "webhook",
+                    "planner_etag": etag,
                 })
             )
 

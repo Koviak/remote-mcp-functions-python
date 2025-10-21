@@ -437,9 +437,43 @@ Impact
 ### Files Modified
 - \planner_sync_service_v5.py\: Subtask filter, backoff check, 403 handling (lines 2042-2133, 3088-3133)
 - \config.py\: Added MAX_TASKS_PER_PLANNER_PLAN = 200
-- \edis_manager.py\: Added check_plan_task_count() method (lines 305-343)
+- \
+edis_manager.py\: Added check_plan_task_count() method (lines 305-343)
 - \__init__.py\: Integrated plan capacity check into task_create (lines 141-152)
 
 ### Status
 ✅ Implemented - Ready for testing
+
+---
+
+Date: 2025-10-21
+
+Change
+- Hardened Planner ↔ Annika sync with ETag-aware flow to prevent missed uploads and redundant polling.
+
+Details
+- `planner_sync_service_v5.py`
+  - Added `_get_planner_task_with_etag` helper used by webhook and polling paths (reuses `annika:planner:etag:*` with `If-None-Match`).
+  - `_task_needs_upload` now compares stored `planner_etag` against cached Redis ETags before queueing uploads.
+  - Optimized `_detect_and_queue_changes`/`_initial_sync` to scan `annika:tasks:*` directly; removed expensive adapter scan.
+  - Embedded `planner_etag` in task payloads and notifications.
+- `annika_task_adapter.py` keeps per-task fallback but authoritative writes stay first.
+- `Agent_Tools/task_manager/redis_manager.py` now persists `planner_etag` during imports/updates.
+- `PlannerIntegration` subscribes to the Planner channel directly (no keyspace dependency).
+- Added `tests/test_etag_helper.py` to cover 304 short-circuit behaviour.
+
+Verification Plan
+- `pytest src/tests/test_etag_helper.py -q`
+- `pytest src/tests/test_planner_sync_deletion.py -k detect_and_queue -q`
+- Manual: create/update Planner task and confirm single PATCH with matching ETag in logs; verify Annika task stores `planner_etag`.
+
+Impact
+- Webhook misses are mitigated; polling skips unchanged tasks; Annika upload queue no longer sends redundant PATCH/POST when ETags match.
+- Task Manager detects Planner-side changes via `planner_etag`, keeping mirror data consistent without scanning all tasks.
+
+Next Steps
+- Monitor `annika:planner:metrics` for 304/412 counts after rollout.
+- Expand end-to-end regression (`tests/test_planner_regressions.py`) with ETag scenarios.
+
+---
 

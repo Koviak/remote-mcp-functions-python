@@ -12,6 +12,7 @@
 - `function_app.py` bootstraps the Azure Functions host, MCP triggers, and background threads. See `.cursor/rules/module_Function_App.mdc` for lifecycle and health-route requirements.
 - `http_endpoints.py` plus the modular files under `endpoints/` expose Graph REST routes. The canonical contract lives in `.cursor/rules/module_HTTP_Endpoints.mdc` and `.cursor/rules/http-endpoints-modular-architecture.mdc`.
 - `planner_sync_service_v5.py` is the active webhook-driven sync engine. Guard its queues, ID maps, and timestamp logic with `.cursor/rules/module_Planner_Sync.mdc` and `.cursor/rules/planner-annika-sync-fixes-and-trace.mdc`.
+- Planner sync now relies on ETag-aware detection; see `.cursor/rules/planner-sync-master.mdc` for the cached ETag flow and consult `tests/test_etag_helper.py` for coverage expectations.
 - `webhook_handler.py`, `setup_local_webhooks.py`, and `webhook_monitor.py` manage webhook ingress and diagnostics. Reference `.cursor/rules/module_Webhook_System.mdc` before touching them.
 - `chat_subscription_manager.py`, `setup_teams_subscriptions.py`, and supporting scripts handle Teams chat subscriptions. Rules: `.cursor/rules/module_Chat_Subscriptions.mdc`.
 - `agent_auth_manager.py`, `dual_auth_manager.py`, and `http_auth_helper.py` own delegated/app token acquisition. Keep scope normalisation aligned with `.cursor/rules/module_Auth_Manager.mdc` and `.cursor/rules/active-scopes.mdc`.
@@ -24,6 +25,7 @@
 - Lightweight bootstrap: `python startup_local_services.py | tee ../.cursor/artifacts/startup-local.log` to validate tokens and webhook registration without Planner sync.
 - Function host only: `func start --python | tee ../.cursor/artifacts/func-host.log` with your virtual environment activated.
 - Planner sync smoke: `python test_phase2_webhooks.py | tee ../.cursor/artifacts/phase2-webhooks.log`. Ensure Redis has the Annika task schema seeded first.
+- Targeted ETag helper: `python -m pytest tests/test_etag_helper.py -q` (runs in `src/tests`).
 - Webhook diagnostics: `python webhook_monitor.py --tail | tee ../.cursor/artifacts/webhook-monitor.log` to watch Redis channels listed in `.cursor/rules/module_Webhook_System.mdc`.
 - When you add scripts, document CLI flags, required environment variables, and output paths here.
 
