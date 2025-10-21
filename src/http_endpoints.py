@@ -9,6 +9,7 @@ import azure.functions as func
 import requests
 from azure.identity import ClientSecretCredential
 
+from Redis_Master_Manager_Client import set_json
 from graph_metadata_manager import GraphMetadataManager
 
 # Global app instance - will be set by register_http_endpoints
@@ -43,10 +44,7 @@ def _redis_json_set_sync(
     client, key: str, value: Any, path: str = "$", expire: Optional[int] = None
 ) -> None:
     """Store a JSON document using RedisJSON with optional TTL."""
-    payload = json.dumps(value)
-    client.execute_command("JSON.SET", key, path, payload)
-    if expire is not None:
-        client.expire(key, expire)
+    set_json(client, key, value, path=path, expire_seconds=expire)
 
 
 def _redis_json_get_sync(client, key: str, path: str = "$") -> Any:

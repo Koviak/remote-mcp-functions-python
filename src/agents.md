@@ -34,6 +34,9 @@
 - Token cache and auth metrics live under `annika:tokens:*` and related sets. Use `mcp_redis_config.py` helpers instead of raw Redis clients.
 - Webhook + chat subscription status keys are captured in `.cursor/rules/module_Webhook_System.mdc` and `.cursor/rules/module_Chat_Subscriptions.mdc`. Verify TTLs after modifying renewal loops.
 
+## Observations
+- Planner webhook cache paths now invoke the centralized Redis JSON helper (`set_json`) so `annika:planner:tasks:{id}` always stores proper RedisJSON with TTL. Treat that helper as the only sanctioned write path.
+
 ## Escalation cues and caveats
 - Never instantiate `redis.Redis` directly in new code; reuse `mcp_redis_config.get_redis_token_manager()` or the async helpers already present.
 - Planner sync timestamp or ID mapping regressions break the Annika contract. If you observe divergence, follow the remediation steps in `.cursor/rules/planner-annika-sync-fixes-and-trace.mdc` and escalate alongside logs.

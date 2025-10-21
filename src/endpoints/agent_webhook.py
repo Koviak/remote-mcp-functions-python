@@ -5,6 +5,8 @@ import os
 
 import azure.functions as func
 
+from Redis_Master_Manager_Client import set_json
+
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +29,7 @@ def _parse_json_result(raw):
 
 def _redis_json_set_sync(client, key, value, path="$", expire=None):
     """Store a value in RedisJSON with optional TTL."""
-    payload = json.dumps(value)
-    client.execute_command("JSON.SET", key, path, payload)
-    if expire is not None:
-        client.expire(key, expire)
+    set_json(client, key, value, path=path, expire_seconds=expire)
 
 
 def _redis_json_get_sync(client, key, path="$"):

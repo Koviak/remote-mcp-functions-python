@@ -36,6 +36,40 @@ Impact
 - Agents will receive notifications for Planner tasks
 - Task Manager will have visibility of all synced tasks
 
+Date: 2025-10-21
+
+Change
+- Restore RedisJSON cache writes for Planner webhook ingestion so Annika’s Task Manager can import Planner payloads again.
+
+Details
+- `src/http_endpoints.py`: switched helper `_redis_json_set_sync` to use the centralized `set_json` utility so webhook-triggered cache writes issue `JSON.SET` with optional TTL.
+- `src/endpoints/agent_webhook.py`: same fix for the endpoint version to keep both ingestion paths consistent.
+- `Annika_2.0/Redis_Master_Manager_Client.py`: extended `set_json`/`set_json_async` to accept custom paths and TTLs, preserving backward compatibility.
+
+Verification
+- Static inspection: confirmed both endpoints now call the centralized helper and that the helper performs RedisJSON writes with TTL when requested.
+- No runtime tests executed yet; need to restart the Azure Function host and trigger a Planner webhook to validate end-to-end.
+
+Impact
+- Planner payloads written via the MCP webhook layer will once again populate `annika:planner:tasks:{id}` as proper RedisJSON.
+- Annika Task Manager can resume importing Planner tasks because the expected cache entries exist.
+- Centralized helper now supports TTL for other modules without reimplementing JSON.SET logic.
+
+Date: 2025-10-21
+
+Issue
+- Azure Functions host failed during module indexing with `ModuleNotFoundError: Redis_Master_Manager_Client` because the canonical manager lives in the sibling Annika_2.0 repository.
+
+Fix
+- Added `src/Redis_Master_Manager_Client.py`, a shim that locates and imports the Annika master manager (env overrides or sibling repository) and re-exports its public API so existing imports keep working inside the Functions runtime sandbox.
+
+Verification
+- `python -c "import Redis_Master_Manager_Client"` now succeeds from the remote MCP repo.
+- Local `func start` no longer crashes with the ModuleNotFoundError.
+
+Impact
+- Azure Functions runtime can consume the canonical Redis manager without manually copying code between repositories.
+
 ---
 
 Date: 2025-09-16

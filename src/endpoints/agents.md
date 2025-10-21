@@ -29,6 +29,7 @@
 - HTTP requests inherit logging from `function_app.py`; expand logs cautiously to avoid leaking secrets. Prefer structured dictionaries and redact tokens.
 - For mutation routes, confirm they publish the expected Redis events (see `.cursor/rules/redis-component-keys-map.mdc`).
  - Storage policy: Route handlers must persist state via RedisJSON only; do not store JSON as strings. Strings allowed only for pub/sub payloads and counters.
+- Webhook cache writes (`http_endpoints.py`, `agent_webhook.py`) now call the centralized `set_json` helper so Planner payloads land in RedisJSON with TTL; keep this as the single write path.
 - Planner and webhook endpoints interact with sync telemetry keys noted in `.cursor/rules/module_Planner_Sync.mdc` and `.cursor/rules/module_Webhook_System.mdc`.
 
 ## Caveats and escalation
