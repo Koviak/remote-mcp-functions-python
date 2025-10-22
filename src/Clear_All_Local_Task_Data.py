@@ -84,6 +84,14 @@ PATTERN_GROUPS: Dict[str, List[str]] = {
         "annika:tasks:completions",
         "annika:tasks:queue",
     ],
+    "planner_tombstones": [
+        "annika:planner:tasks:*:tombstone",
+        "annika:planner:tombstone:annika:*",
+    ],
+    "planner_plan_preferences": [
+        "annika:planner:plan_choice:*",
+        "annika:planner:inaccessible_plans",
+    ],
     "legacy": [
         "annika:consciousness:Global:components:tasks",
     ],
