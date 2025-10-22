@@ -10,7 +10,16 @@ import logging
 import os
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Iterable
+
 from uuid import uuid4
+
+try:
+    from src.graph_metadata_manager import GraphMetadataManager  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - local execution fallback
+    try:
+        from graph_metadata_manager import GraphMetadataManager  # type: ignore
+    except ModuleNotFoundError:  # pragma: no cover - optional dependency in isolated tests
+        GraphMetadataManager = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +75,10 @@ class AnnikaTaskAdapter:
     
     def __init__(self, redis_client):
         self.redis = redis_client
+        if GraphMetadataManager:
+            self.metadata_manager = GraphMetadataManager()
+        else:
+            self.metadata_manager = None
         # Log current mappings on init
         logger.info(f"Initialized with {len(USER_ID_MAP)} user mappings")
 
@@ -130,6 +143,7 @@ class AnnikaTaskAdapter:
             "percent_complete": planner_task.get("percentComplete", 0) / 100.0,
             "source": "planner",
             "external_id": planner_task["id"],
+            "planner_id": planner_task["id"],
         }
         
         # Map assigned users
@@ -163,6 +177,68 @@ class AnnikaTaskAdapter:
         annika_task["notes"] = planner_task.get("notes", "")
         annika_task["bucket_id"] = planner_task.get("bucketId")
         annika_task["order"] = planner_task.get("orderHint", "")
+
+        plan_id = planner_task.get("planId")
+        plan_data: Optional[Dict[str, Any]] = None
+        if plan_id:
+            annika_task["planner_plan_id"] = plan_id
+            annika_task.setdefault("plan_id", plan_id)
+            plan_data = None
+            if self.metadata_manager:
+                try:
+                    plan_data = await self.metadata_manager.get_cached_metadata("plan", plan_id)
+                    if not plan_data:
+                        plan_data = await self.metadata_manager.cache_plan_metadata(plan_id)
+                except Exception:
+                    plan_data = None
+            if isinstance(plan_data, dict):
+                annika_task.setdefault(
+                    "planner_plan_title", plan_data.get("title")
+                )
+                annika_task.setdefault(
+                    "planner_plan_owner_id",
+                    (plan_data.get("createdBy", {}).get("user") or {}).get("id"),
+                )
+
+        bucket_id = planner_task.get("bucketId")
+        bucket_name = None
+        order_hint = planner_task.get("orderHint")
+        bucket_order_hint = order_hint
+        if bucket_id:
+            annika_task["planner_bucket_id"] = bucket_id
+            annika_task.setdefault("bucket_id", bucket_id)
+            # Try to hydrate bucket metadata from cache
+            if self.metadata_manager:
+                try:
+                    bucket_data = await self.metadata_manager.get_cached_metadata("bucket", bucket_id)
+                    if not bucket_data and plan_id:
+                        await self.metadata_manager.cache_plan_metadata(plan_id)  # refresh plan+buckets
+                        bucket_data = await self.metadata_manager.get_cached_metadata("bucket", bucket_id)
+                    if isinstance(bucket_data, dict):
+                        bucket_name = bucket_data.get("name")
+                        bucket_order_hint = bucket_data.get("orderHint", order_hint)
+                    elif order_hint and isinstance(plan_data, dict):
+                        try:
+                            for bucket in plan_data.get("buckets", []) or []:
+                                if bucket.get("id") == bucket_id:
+                                    bucket_name = bucket.get("name", bucket_name)
+                                    bucket_order_hint = bucket.get("orderHint", bucket_order_hint)
+                                    break
+                        except Exception:
+                            pass
+                except Exception:
+                    bucket_name = None
+            if bucket_name is None:
+                try:
+                    bucket_data = await self._redis_json_get(f"annika:graph:buckets:{bucket_id}")
+                    if isinstance(bucket_data, dict):
+                        bucket_name = bucket_data.get("name", bucket_name)
+                        bucket_order_hint = bucket_data.get("orderHint", bucket_order_hint)
+                except Exception:
+                    pass
+        annika_task.setdefault("planner_bucket_id", bucket_id)
+        annika_task.setdefault("planner_bucket_name", bucket_name)
+        annika_task.setdefault("planner_bucket_order_hint", bucket_order_hint)
         
         # Set timestamps
         now = datetime.utcnow().isoformat() + "Z"
@@ -215,8 +291,12 @@ class AnnikaTaskAdapter:
             date_str = annika_task["due_date"] + "T00:00:00Z"
             planner_task["dueDateTime"] = date_str
             
-        if annika_task.get("bucket_id"):
-            planner_task["bucketId"] = annika_task["bucket_id"]
+        bucket_id = (
+            annika_task.get("planner_bucket_id")
+            or annika_task.get("bucket_id")
+        )
+        if bucket_id:
+            planner_task["bucketId"] = bucket_id
             
         if annika_task.get("priority"):
             planner_task["priority"] = self._map_priority_to_planner(

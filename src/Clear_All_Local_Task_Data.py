@@ -63,6 +63,13 @@ PATTERN_GROUPS: Dict[str, List[str]] = {
         "annika:planner:tasks:*",
         "annika:planner:etag:*",
     ],
+    "graph_metadata": [
+        "annika:graph:plans:*",
+        "annika:graph:buckets:*",
+        "annika:graph:groups:*",
+        "annika:graph:users:*",
+        "annika:graph:tasks:*",
+    ],
     "planner_sync_state": [
         "annika:sync:pending",
         "annika:sync:failed",

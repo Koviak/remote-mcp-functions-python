@@ -35,7 +35,10 @@ try:
 except ModuleNotFoundError:
     # When running from inside src/ (python start_all_services.py)
     from agent_auth_manager import get_agent_token  # type: ignore
-from annika_task_adapter import AnnikaTaskAdapter
+try:
+    from src.annika_task_adapter import AnnikaTaskAdapter  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - local execution fallback
+    from annika_task_adapter import AnnikaTaskAdapter  # type: ignore
 from dual_auth_manager import get_application_token, get_delegated_token
 from graph_metadata_manager import GraphMetadataManager
 
@@ -2810,6 +2813,10 @@ class WebhookDrivenPlannerSync:
             annika_task["id"] = annika_id
             annika_task["external_id"] = planner_id
             annika_task["source"] = "planner"
+            annika_task["planner_plan_id"] = planner_task.get("planId")
+            annika_task.setdefault("plan_id", planner_task.get("planId"))
+            annika_task["planner_bucket_id"] = planner_task.get("bucketId")
+            annika_task.setdefault("bucket_id", planner_task.get("bucketId"))
             annika_task["created_at"] = datetime.utcnow().isoformat() + "Z"
             # Ensure canonical timestamps for change detection
             now_ts = datetime.utcnow().isoformat() + "Z"
