@@ -5,7 +5,7 @@ import os
 
 import azure.functions as func
 
-from Redis_Master_Manager_Client import set_json
+from Redis_Master_Manager_Client import set_json, get_redis_client
 
 
 logger = logging.getLogger(__name__)
@@ -49,11 +49,75 @@ def hello_http(req: func.HttpRequest) -> func.HttpResponse:
     )
 
 
+def task_events_http(req: func.HttpRequest) -> func.HttpResponse:
+    """Receive Task Manager task events and fan out to sync channels.
+
+    Expected payload: { action: "created"|"updated", task_id: str, task: {...} }
+    """
+    try:
+        body = req.get_json()
+    except Exception:
+        return func.HttpResponse("Invalid JSON body", status_code=400)
+
+    try:
+        client = get_redis_client()
+
+        # Record a webhook-like notification so health metrics reflect activity
+        log_entry = {
+            "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+            "change_type": body.get("action", "unknown"),
+            "resource": "/annika/task-events",
+            "resource_id": body.get("task_id"),
+            "client_state": "annika_task_manager",
+            "subscription_id": "local-task-events",
+        }
+        import json as _json
+        client.lpush("annika:webhooks:notifications", _json.dumps(log_entry))
+        client.expire("annika:webhooks:notifications", 3600)
+
+        # Fan out to task updates channel after logging
+        try:
+            client.publish("annika:tasks:updates", _json.dumps(body))
+        except Exception:
+            logger.debug("Publish to annika:tasks:updates failed")
+
+        # Optional fast-path: push to pending ops queue so uploads don't wait on listeners
+        task_id = body.get("task_id") or (body.get("task") or {}).get("id")
+        if task_id:
+            # Mark task record with explicit pending status so upload detector triggers
+            try:
+                client.execute_command(
+                    "JSON.SET",
+                    f"annika:tasks:{task_id}",
+                    "$.sync_status",
+                    '"pending_sync"'
+                )
+            except Exception:
+                logger.debug("Failed to set sync_status pending_sync for %s", task_id)
+
+            # Queue an update operation for immediate processing by sync worker
+            try:
+                op = {
+                    "type": "update",
+                    "task_id": task_id,
+                    "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+                    "source": "annika_webhook",
+                }
+                client.lpush("annika:sync:pending", _json.dumps(op))
+            except Exception:
+                logger.debug("Fast-path queue push failed; listener path will handle upload")
+
+        return func.HttpResponse("OK", status_code=200)
+    except Exception as e:
+        logger.error("Task events handler error: %s", e)
+        return func.HttpResponse("Internal Server Error", status_code=500)
+
+
 def graph_webhook_http(req: func.HttpRequest) -> func.HttpResponse:
     """Handle Microsoft Graph webhook notifications."""
     try:
         from logging_setup import setup_logging
-        setup_logging(add_console=True)
+        setup_logging(add_console=False)
     except Exception:
         pass
 

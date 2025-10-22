@@ -2030,6 +2030,8 @@ def register_http_endpoints(function_app):
     app.route(route="groups/check-planner", methods=["GET"])(
         ep_admin.check_group_planner_status_http)
     app.route(route="hello", methods=["GET"])(ep_webhook.hello_http)
+    # Annika Task Manager → MS‑MCP webhook-like ingress
+    app.route(route="annika/task-events", methods=["POST"])(ep_webhook.task_events_http)
     
     # Plan endpoints
     app.route(route="plans", methods=["GET"])(ep_planner.list_plans_http)

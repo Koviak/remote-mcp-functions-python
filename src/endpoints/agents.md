@@ -10,6 +10,7 @@
 ## Key files
 - `common.py` centralises auth helpers, metadata manager access, and shared response helpers. Keep changes aligned with `.cursor/rules/module_Auth_Manager.mdc`, `.cursor/rules/module_Token_Service.mdc`, and `.cursor/rules/module_Graph_Metadata.mdc`.
 - `admin.py`, `planner.py`, `tasks_buckets.py`, `planner_formats.py`, `mail.py`, `calendar.py`, `teams.py`, `files_sites.py`, `security_reports.py`, `agent_webhook.py`, and `agent_tools.py` each register routes via `register_endpoints(app)`. Reference the module rule above before refactoring any handler.
+  - `agent_webhook.py` now exposes `POST /api/annika/task-events` for Task Manager → MS‑MCP ingress. Health metrics count these events under `annika:webhooks:notifications`.
 - `users_groups.py` performs privileged user management tasks. Double-check permitted scopes in `.cursor/rules/active-scopes.mdc` when editing.
 - Add new feature files only after extending `http_endpoints.py` registration to import them in a deterministic order.
 
@@ -23,6 +24,7 @@
 - Unit: `python -m pytest src/Tests/test_http_delegated.py -q | tee ../../.cursor/artifacts/test-http-delegated.log` validates delegated flows.
 - Planner coverage: `python -m pytest src/Tests/test_planner_sync_deletion.py -q` when touching Planner-specific handlers.
 - Integration: `python -m pytest src/Tests/integration/test_http_endpoints_live.py -k <route>` requires live Graph credentials; review `.cursor/rules/module_HTTP_Endpoints.mdc` for prerequisites before running.
+- Webhook ingress sanity: POST a minimal payload to `POST /api/annika/task-events` and verify Planner Sync logs increment `webhooks` in health checks and trigger a quick poll.
 - When adding new endpoints, extend the manifest in `src/Tests/integration/endpoints_manifest.json` so live checks include them.
 
 ## Observability

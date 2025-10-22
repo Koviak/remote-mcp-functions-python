@@ -29,11 +29,16 @@ from token_refresh_service import start_token_refresh_service
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Configure logging (idempotent, single console handler)
+try:
+    from logging_setup import setup_logging
+    # Re-enable console logging (idempotent single handler)
+    setup_logging(add_console=True)
+except Exception:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 logger = logging.getLogger(__name__)
 
 
