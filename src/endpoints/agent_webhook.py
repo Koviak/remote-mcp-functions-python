@@ -147,6 +147,13 @@ def graph_webhook_http(req: func.HttpRequest) -> func.HttpResponse:
                         logger.warning(f"Failed to process webhook notification: {notification}")
                 except Exception as e:
                     logger.error(f"Error processing individual notification: {e}")
+
+            # Wait for all pending async tasks to complete before closing
+            pending = asyncio.all_tasks(loop)
+            if pending:
+                loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
         finally:
             loop.close()
 

@@ -3368,7 +3368,41 @@ class WebhookDrivenPlannerSync:
             )
 
             if response.status_code != 200:
-                logger.error(f"Failed to get task for update: {planner_id}")
+                # Task may have been deleted - clean up ID mapping if 404
+                logger.error(
+                    "Failed to get task for update: %s (status: %s)",
+                    planner_id,
+                    response.status_code
+                )
+                if response.status_code == 403:
+                    logger.error(
+                        "403 updating %s – OAuth token lacks Planner.Tasks.ReadWrite permission",
+                        planner_id,
+                    )
+                if response.status_code == 404:
+                    # Task deleted in Planner - clean up stale mappings
+                    annika_id = annika_task.get("id")
+                    if annika_id:
+                        try:
+                            # Remove forward mapping
+                            await self.redis_client.hdel(
+                                "ms_mcp:planner_sync_v5:id_map:planner_to_annika",
+                                planner_id
+                            )
+                            # Remove reverse mapping
+                            await self.redis_client.hdel(
+                                "ms_mcp:planner_sync_v5:id_map:annika_to_planner",
+                                annika_id
+                            )
+                            logger.info(
+                                "Cleaned up stale mappings for deleted task %s",
+                                planner_id
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to clean up stale mappings: %s",
+                                e
+                            )
                 return False
 
             current_task = response.json()
@@ -4192,10 +4226,6 @@ class WebhookDrivenPlannerSync:
         if etag:
             await self._store_etag(planner_id, etag)
         return task
-
-    async def _sync_existing_task(self, planner_id: str, planner_task: Dict):
-        # definition already exists above; no duplicate
-        return await super()._sync_existing_task(planner_id, planner_task)
 
 
 async def main():

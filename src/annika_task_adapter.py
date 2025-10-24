@@ -288,7 +288,15 @@ class AnnikaTaskAdapter:
             
         if annika_task.get("due_date"):
             # Convert date to datetime
-            date_str = annika_task["due_date"] + "T00:00:00Z"
+            due_date = annika_task["due_date"]
+            # Check if due_date already has time component (contains 'T')
+            if 'T' in due_date:
+                # Already has time component, use as-is
+                # But ensure it ends with 'Z' timezone indicator
+                date_str = due_date if due_date.endswith('Z') else due_date + 'Z'
+            else:
+                # Just a date string, append time component
+                date_str = due_date + "T00:00:00Z"
             planner_task["dueDateTime"] = date_str
             
         bucket_id = (
