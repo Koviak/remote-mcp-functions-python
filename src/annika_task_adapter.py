@@ -262,17 +262,19 @@ class AnnikaTaskAdapter:
         }
         
         # Map assigned user
-        assigned_to = annika_task.get("assigned_to")
-        if assigned_to and assigned_to != "Annika":
-            user_id = USER_NAME_MAP.get(assigned_to)
-            if user_id:
-                planner_task["assignments"] = {
-                    user_id: {
-                        "@odata.type": "#microsoft.graph.plannerAssignment",
-                        "orderHint": " !"
-                    }
+        human_id = (
+            annika_task.get("assigned_to_human_id")
+            or annika_task.get("planner_assigned_to_id")
+            or USER_NAME_MAP.get(annika_task.get("assigned_to"))
+        )
+        if human_id:
+            planner_task["assignments"] = {
+                human_id: {
+                    "@odata.type": "#microsoft.graph.plannerAssignment",
+                    "orderHint": " !",
                 }
-        
+            }
+ 
         # Map notes/description/output to Planner notes
         notes_parts: List[str] = []
         if annika_task.get("description"):
@@ -282,6 +284,10 @@ class AnnikaTaskAdapter:
         if annika_task.get("output"):
             notes_parts.append(
                 "[Agent Output]\n" + str(annika_task.get("output"))
+            )
+        if annika_task.get("reasoning"):
+            notes_parts.append(
+                "[Reasoning]\n" + str(annika_task.get("reasoning"))
             )
         if notes_parts:
             planner_task["notes"] = "\n\n".join([p for p in notes_parts if p])

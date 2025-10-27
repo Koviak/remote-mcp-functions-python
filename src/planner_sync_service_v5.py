@@ -3069,6 +3069,21 @@ class WebhookDrivenPlannerSync:
 
             # Convert to Planner format
             planner_data = self.adapter.annika_to_planner(annika_task)
+            logger.info(
+                "Planner payload for %s: assignments=%s, plan=%s, bucket=%s, notes_len=%s",
+                annika_task.get("id"),
+                list(planner_data.get("assignments", {}).keys()),
+                planner_data.get("planId"),
+                planner_data.get("bucketId"),
+                len(planner_data.get("notes", "")),
+            )
+            logger.debug(
+                "Source fields - description=%s notes=%s output=%s reasoning=%s",
+                bool(annika_task.get("description")),
+                bool(annika_task.get("notes")),
+                bool(annika_task.get("output")),
+                bool(annika_task.get("reasoning")),
+            )
             # De-dupe: if Annika task has external_id and reverse map exists, update instead
             maybe_external = annika_task.get("external_id")
             if maybe_external:
@@ -3410,6 +3425,21 @@ class WebhookDrivenPlannerSync:
 
             # Convert to update format
             update_data = self.adapter.annika_to_planner(annika_task)
+            logger.info(
+                "Update payload for %s -> %s: assignments=%s, bucket=%s, notes_len=%s",
+                annika_task.get("id"),
+                planner_id,
+                list(update_data.get("assignments", {}).keys()),
+                update_data.get("bucketId"),
+                len(update_data.get("notes", "")),
+            )
+            logger.debug(
+                "Update source fields - description=%s notes=%s output=%s reasoning=%s",
+                bool(annika_task.get("description")),
+                bool(annika_task.get("notes")),
+                bool(annika_task.get("output")),
+                bool(annika_task.get("reasoning")),
+            )
             update_data.pop("planId", None)  # Can't update plan
 
             # If bucketId present, ensure it's valid for the task's plan; if not, drop it
