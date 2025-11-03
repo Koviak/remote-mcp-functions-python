@@ -8,7 +8,7 @@ for bidirectional synchronization.
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Iterable
 
 from uuid import uuid4
@@ -117,6 +117,42 @@ class AnnikaTaskAdapter:
     def _serialize_json_value(value: Any) -> str:
         """Serialize a value for RedisJSON operations."""
         return json.dumps(value)
+
+    @staticmethod
+    def _normalize_datetime_field(value: Optional[str]) -> Optional[str]:
+        if not value or not isinstance(value, str):
+            return None
+        candidate = value.strip()
+        if not candidate:
+            return None
+        if "T" not in candidate:
+            candidate = f"{candidate}T00:00:00Z"
+        elif candidate.endswith("Z") is False and "+" not in candidate:
+            candidate = f"{candidate}Z"
+        return candidate
+
+    @staticmethod
+    def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
+        if not value or not isinstance(value, str):
+            return None
+        candidate = value.strip()
+        if not candidate:
+            return None
+        try:
+            if candidate.endswith("Z"):
+                candidate = candidate[:-1] + "+00:00"
+            dt = datetime.fromisoformat(candidate)
+        except ValueError:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    @staticmethod
+    def _format_iso_datetime(value: datetime) -> str:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
     async def _redis_json_get(self, key: str, path: str = "$") -> Any:
         """Retrieve a value from RedisJSON storage."""
@@ -317,18 +353,24 @@ class AnnikaTaskAdapter:
         if notes_parts:
             planner_task["notes"] = "\n\n".join([p for p in notes_parts if p])
             
-        if annika_task.get("due_date"):
-            # Convert date to datetime
-            due_date = annika_task["due_date"]
-            # Check if due_date already has time component (contains 'T')
-            if 'T' in due_date:
-                # Already has time component, use as-is
-                # But ensure it ends with 'Z' timezone indicator
-                date_str = due_date if due_date.endswith('Z') else due_date + 'Z'
-            else:
-                # Just a date string, append time component
-                date_str = due_date + "T00:00:00Z"
-            planner_task["dueDateTime"] = date_str
+        start_iso = self._normalize_datetime_field(annika_task.get("start_date"))
+        if start_iso:
+            planner_task["startDateTime"] = start_iso
+
+        due_iso = self._normalize_datetime_field(annika_task.get("due_date"))
+        if due_iso:
+            planner_task["dueDateTime"] = due_iso
+
+        start_dt = self._parse_iso_datetime(planner_task.get("startDateTime"))
+        due_dt = self._parse_iso_datetime(planner_task.get("dueDateTime"))
+        if start_dt and due_dt and due_dt < start_dt:
+            logger.warning(
+                "Due date %s precedes start date %s for Annika task %s; adjusting dueDateTime to match startDateTime.",
+                planner_task.get("dueDateTime"),
+                planner_task.get("startDateTime"),
+                annika_task.get("id"),
+            )
+            planner_task["dueDateTime"] = self._format_iso_datetime(start_dt)
             
         bucket_id = (
             annika_task.get("planner_bucket_id")

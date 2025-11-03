@@ -19,7 +19,7 @@ import time
 import uuid
 import random
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -41,6 +41,7 @@ except ModuleNotFoundError:  # pragma: no cover - local execution fallback
     from annika_task_adapter import AnnikaTaskAdapter  # type: ignore
 from dual_auth_manager import get_application_token, get_delegated_token
 from graph_metadata_manager import GraphMetadataManager
+from Redis_Master_Manager_Client import get_json_async, set_json_async
 
 # Load environment variables from .env file
 env_file = Path(__file__).parent / '.env'
@@ -223,6 +224,56 @@ class WebhookDrivenPlannerSync:
         if isinstance(data, list) and len(data) == 1:
             return data[0]
         return data
+
+    @staticmethod
+    def _parse_planner_datetime(value: Optional[str]) -> Optional[datetime]:
+        if not value or not isinstance(value, str):
+            return None
+        candidate = value.strip()
+        if not candidate:
+            return None
+        try:
+            if candidate.endswith("Z"):
+                candidate = candidate[:-1] + "+00:00"
+            dt = datetime.fromisoformat(candidate)
+        except ValueError:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    @staticmethod
+    def _format_planner_datetime(value: datetime) -> str:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    def _ensure_planner_schedule_bounds(
+        self,
+        update_data: Dict[str, Any],
+        *,
+        current_task: Optional[Dict[str, Any]] = None,
+        task_id: Optional[str] = None,
+    ) -> None:
+        start_candidate = update_data.get("startDateTime")
+        if not start_candidate and current_task:
+            start_candidate = current_task.get("startDateTime")
+
+        due_candidate = update_data.get("dueDateTime")
+        if not due_candidate or not start_candidate:
+            return
+
+        start_dt = self._parse_planner_datetime(start_candidate)
+        due_dt = self._parse_planner_datetime(due_candidate)
+
+        if start_dt and due_dt and due_dt < start_dt:
+            logger.warning(
+                "Planner payload dueDateTime %s precedes startDateTime %s for task %s; adjusting dueDateTime to match startDateTime.",
+                due_candidate,
+                start_candidate,
+                task_id or (current_task or {}).get("id"),
+            )
+            update_data["dueDateTime"] = self._format_planner_datetime(start_dt)
 
     async def _redis_json_get(self, key: str, path: str = "$") -> Any:
         """Retrieve and parse a RedisJSON document."""
@@ -435,7 +486,7 @@ class WebhookDrivenPlannerSync:
                                     "planner_id": planner_id,
                                 }))
                             else:
-                                await self.redis_client.set(reverse_key, annika_id)
+                                await self._store_id_mapping(annika_id, planner_id)
                         else:
                             # Malformed mapping; skip
                             pass
@@ -2606,24 +2657,34 @@ class WebhookDrivenPlannerSync:
     # ========== ID MAPPING AND STORAGE ==========
 
     async def _store_id_mapping(self, annika_id: str, planner_id: str):
-        """Store bidirectional ID mapping.
+        """Store bidirectional ID mapping using RedisJSON payloads."""
+        timestamp = datetime.utcnow().isoformat()
 
-        Writes:
-        - annika:planner:id_map:{annika_id} -> {planner_id} (string)
-        - annika:task:mapping:planner:{planner_id} -> {annika_id} (reverse for compat)
+        forward_payload = {
+            "annika_id": annika_id,
+            "planner_id": planner_id,
+            "stored_at": timestamp,
+            "version": 1,
+        }
 
-        Note: We no longer store annika:planner:id_map:{planner_id} to avoid confusion
-        """
-        # Primary forward mapping: Annika ID -> Planner ID
-        await self.redis_client.set(
+        reverse_payload = {
+            "planner_id": planner_id,
+            "annika_id": annika_id,
+            "stored_at": timestamp,
+            "version": 1,
+        }
+
+        await set_json_async(
+            self.redis_client,
             f"{PLANNER_ID_MAP_PREFIX}{annika_id}",
-            planner_id
+            forward_payload,
         )
-        # Reverse mapping for Task Manager compatibility
-        await self.redis_client.set(
+        await set_json_async(
+            self.redis_client,
             f"annika:task:mapping:planner:{planner_id}",
-            annika_id
+            reverse_payload,
         )
+
         try:
             await self.redis_client.delete(f"annika:planner:tasks:{planner_id}:tombstone")
             await self.redis_client.delete(f"annika:planner:tombstone:annika:{annika_id}")
@@ -2638,6 +2699,18 @@ class WebhookDrivenPlannerSync:
         Accepts string or JSON values for backward compatibility.
         """
         try:
+            payload = await get_json_async(
+                self.redis_client, f"{PLANNER_ID_MAP_PREFIX}{annika_id}"
+            )
+            if isinstance(payload, dict):
+                planner_id = (
+                    payload.get("planner_id")
+                    or payload.get("plannerId")
+                    or payload.get("planner")
+                )
+                if planner_id:
+                    return planner_id
+
             value = await self.redis_client.get(f"{PLANNER_ID_MAP_PREFIX}{annika_id}")
             if not value:
                 return None
@@ -2659,6 +2732,14 @@ class WebhookDrivenPlannerSync:
         annika:task:mapping:planner:{planner_id}
         """
         try:
+            payload = await get_json_async(
+                self.redis_client, f"annika:task:mapping:planner:{planner_id}"
+            )
+            if isinstance(payload, dict):
+                annika_id = payload.get("annika_id") or payload.get("annikaId")
+                if annika_id:
+                    return annika_id
+
             # Use the reverse mapping key for Planner -> Annika lookups
             return await self.redis_client.get(
                 f"annika:task:mapping:planner:{planner_id}"
@@ -2674,6 +2755,17 @@ class WebhookDrivenPlannerSync:
             while True:
                 cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=200)
                 for key in keys:
+                    payload = await get_json_async(self.redis_client, key)
+                    if isinstance(payload, dict):
+                        candidate = (
+                            payload.get("planner_id")
+                            or payload.get("plannerId")
+                            or payload.get("planner")
+                        )
+                        if candidate == planner_id:
+                            return key.replace(PLANNER_ID_MAP_PREFIX, "")
+                        continue
+
                     val = await self.redis_client.get(key)
                     if not val:
                         continue
@@ -2685,6 +2777,8 @@ class WebhookDrivenPlannerSync:
                                 return key.replace(PLANNER_ID_MAP_PREFIX, "")
                         except Exception:
                             continue
+                    if v == planner_id:
+                        return key.replace(PLANNER_ID_MAP_PREFIX, "")
                 if cursor == 0:
                     break
         except Exception:
@@ -2825,8 +2919,15 @@ class WebhookDrivenPlannerSync:
                     planner_id,
                 )
                 # Ensure reverse mapping is present
-                await self.redis_client.set(
-                    f"annika:task:mapping:planner:{planner_id}", existing_annika_id
+                await set_json_async(
+                    self.redis_client,
+                    f"annika:task:mapping:planner:{planner_id}",
+                    {
+                        "planner_id": planner_id,
+                        "annika_id": existing_annika_id,
+                        "stored_at": datetime.utcnow().isoformat(),
+                        "version": 1,
+                    },
                 )
                 # Treat as update to avoid duplicate creates
                 await self._update_annika_task_from_planner(existing_annika_id, planner_task)
@@ -2845,9 +2946,7 @@ class WebhookDrivenPlannerSync:
             )
             if not setnx_ok:
                 try:
-                    existing_annika_id = await self.redis_client.get(
-                        f"annika:task:mapping:planner:{planner_id}"
-                    )
+                    existing_annika_id = await self._get_annika_id(planner_id)
                     if existing_annika_id:
                         await self._update_annika_task_from_planner(existing_annika_id, planner_task)
                         return
@@ -3194,6 +3293,11 @@ class WebhookDrivenPlannerSync:
                 logger.debug(f"Bucket validation error: {bucket_err}; removing bucketId to be safe")
                 planner_data.pop("bucketId", None)
 
+            self._ensure_planner_schedule_bounds(
+                planner_data,
+                task_id=annika_task.get("id"),
+            )
+
             headers = {
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json"
@@ -3502,6 +3606,12 @@ class WebhookDrivenPlannerSync:
             except Exception as bucket_err:
                 logger.debug(f"Bucket validation error (update): {bucket_err}; removing bucketId")
                 update_data.pop("bucketId", None)
+
+            self._ensure_planner_schedule_bounds(
+                update_data,
+                current_task=current_task,
+                task_id=annika_task.get("id"),
+            )
 
             headers = {
                 "Authorization": f"Bearer {token}",
