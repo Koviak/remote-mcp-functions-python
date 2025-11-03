@@ -332,6 +332,7 @@ class WebhookDrivenPlannerSync:
         self.plan_cache_token_type: str = "unknown"
         self.bucket_cache: Dict[str, Dict[str, any]] = {}
         self.last_read_token_choice: str = "delegated"
+        self.last_write_token_choice: str = "delegated"
 
         # Cleanup/housekeeping
         self.cleanup_enabled = os.environ.get("CLEANUP_ENABLED", "false").lower() == "true"
@@ -1426,6 +1427,36 @@ class WebhookDrivenPlannerSync:
 
         return token, token_type
 
+    def _get_preferred_write_token(self) -> tuple[Optional[str], str]:
+        """Return a Graph token for write operations, preferring application auth."""
+        token_type = "application"
+        token: Optional[str] = None
+        try:
+            token = get_application_token()
+            if token:
+                if self.last_write_token_choice != "application":
+                    logger.info("Using application token for Planner writes")
+                self.last_write_token_choice = "application"
+                return token, token_type
+            logger.warning("Application token unavailable for Planner writes; falling back to delegated")
+        except Exception as exc:
+            logger.error("Failed to acquire application token for Planner write: %s", exc)
+
+        token_type = "delegated"
+        try:
+            token = get_agent_token("Tasks.ReadWrite")
+            if token:
+                if self.last_write_token_choice != "delegated":
+                    logger.info("Using delegated token for Planner writes")
+                self.last_write_token_choice = "delegated"
+                return token, token_type
+            logger.error("Delegated token unavailable for Planner writes")
+        except Exception as exc:
+            logger.error("Failed to acquire delegated write token: %s", exc)
+            token = None
+
+        return token, token_type
+
     async def _cleanup_webhooks(self):
         """Clean up webhook subscriptions on shutdown."""
         logger.info("🧹 Cleaning up webhooks...")
@@ -2276,7 +2307,7 @@ class WebhookDrivenPlannerSync:
         """Create tasks via Graph $batch (creates only)."""
         if not tasks:
             return
-        token = get_agent_token()
+        token, _ = self._get_preferred_write_token()
         if not token:
             raise RuntimeError("No token for batch create")
 
@@ -2704,7 +2735,7 @@ class WebhookDrivenPlannerSync:
     ) -> bool:
         """Sync Annika subtasks to Planner checklist items."""
         try:
-            token = get_agent_token()
+            token, _ = self._get_preferred_write_token()
             if not token:
                 return False
             
@@ -2888,7 +2919,7 @@ class WebhookDrivenPlannerSync:
 
             # Import checklist items as subtasks
             try:
-                token = get_agent_token()
+                token, token_type = self._get_preferred_read_token()
                 if token:
                     details = await self._get_planner_task_details(planner_id, token)
                     if details and details.get("checklist"):
@@ -3014,7 +3045,7 @@ class WebhookDrivenPlannerSync:
 
             # Import checklist items as subtasks
             try:
-                token = get_agent_token()
+                token, _ = self._get_preferred_read_token()
                 if token:
                     details = await self._get_planner_task_details(planner_task["id"], token)
                     if details and details.get("checklist"):
@@ -3062,7 +3093,7 @@ class WebhookDrivenPlannerSync:
             return False
 
         try:
-            token = get_agent_token()
+            token, _ = self._get_preferred_write_token()
             if not token:
                 logger.error("No token available for task creation")
                 return False
@@ -3371,7 +3402,7 @@ class WebhookDrivenPlannerSync:
             return False
 
         try:
-            token = get_agent_token()
+            token, _ = self._get_preferred_write_token()
             if not token:
                 return False
 
@@ -3536,7 +3567,15 @@ class WebhookDrivenPlannerSync:
                     await self._record_metric("planner_update_412")
                 if response.status_code == 403:
                     await self._record_metric("planner_update_403")
-                logger.error(f"Failed to update Planner task: {response.status_code}")
+                body_preview = response.text[:512] if hasattr(response, "text") else ""
+                if body_preview:
+                    logger.error(
+                        "Failed to update Planner task: %s - %s",
+                        response.status_code,
+                        body_preview,
+                    )
+                else:
+                    logger.error(f"Failed to update Planner task: {response.status_code}")
                 return False
 
         except Exception as e:
@@ -3557,7 +3596,7 @@ class WebhookDrivenPlannerSync:
             return False
 
         try:
-            token = get_agent_token()
+            token, _ = self._get_preferred_write_token()
             if not token:
                 logger.error("No token available for task deletion")
                 return False

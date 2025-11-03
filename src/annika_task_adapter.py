@@ -70,6 +70,21 @@ if not USER_ID_MAP:
 USER_NAME_MAP = {v: k for k, v in USER_ID_MAP.items()}
 
 
+def _is_probable_graph_user_id(value: Optional[str]) -> bool:
+    """Return True when the identifier looks like a Microsoft Graph user ID."""
+    if not value or not isinstance(value, str):
+        return False
+    candidate = value.strip()
+    if not candidate:
+        return False
+    if "@" in candidate or " " in candidate:
+        return False
+    # Graph IDs are GUID strings (36 chars with hyphens) or base64-looking strings (>=22 chars)
+    if len(candidate) < 16:
+        return False
+    return True
+
+
 class AnnikaTaskAdapter:
     """Adapts between Annika and MS Planner task formats."""
     
@@ -265,8 +280,18 @@ class AnnikaTaskAdapter:
         human_id = (
             annika_task.get("assigned_to_human_id")
             or annika_task.get("planner_assigned_to_id")
+            or USER_NAME_MAP.get(annika_task.get("assigned_to_display_name"))
             or USER_NAME_MAP.get(annika_task.get("assigned_to"))
         )
+
+        if human_id and not _is_probable_graph_user_id(human_id):
+            logger.debug(
+                "Skipping invalid Planner assignment identifier %s for task %s",
+                human_id,
+                annika_task.get("id"),
+            )
+            human_id = None
+
         if human_id:
             planner_task["assignments"] = {
                 human_id: {

@@ -10,6 +10,8 @@ Key Changes:
 - Includes health monitoring and auto-restart
 """
 
+import load_env  # noqa: F401  # ensures .env + warning filters applied on import
+
 import asyncio
 import json
 import logging

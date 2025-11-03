@@ -2,6 +2,7 @@
 Startup script for local development services.
 Automatically starts ngrok, sets up webhooks, and initializes monitoring.
 """
+import load_env  # noqa: F401  # loads .env and warning filters early
 import asyncio
 import json
 import logging

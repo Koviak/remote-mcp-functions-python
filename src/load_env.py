@@ -1,7 +1,21 @@
 """Load environment variables from .env file into environment"""
 
 import os
+import warnings
 from pathlib import Path
+
+
+# Suppress noisy SWIG DeprecationWarnings emitted by transitive dependencies
+warnings.filterwarnings(
+    "ignore",
+    message="builtin type SwigPy.* has no __module__ attribute",
+    category=DeprecationWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message=".*swigvarlink.*__module__ attribute",
+    category=DeprecationWarning,
+)
 
 # Try to find .env file
 # Include the directory of this file (src/) to support src/.env placement

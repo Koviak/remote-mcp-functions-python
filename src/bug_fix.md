@@ -1,5 +1,61 @@
 Bug Fix Log
 
+Date: 2025-10-30 14:50
+
+Issue
+- MS-MCP terminal flooded with `DeprecationWarning: builtin type SwigPy* has no __module__ attribute`, making it difficult to spot real errors during function host startup.
+
+Fix
+- Added warning filters to `load_env.py` for the SWIG-generated types and ensured both `function_app.py` and `startup_local_services.py` import `load_env` so the filters execute in every entrypoint.
+
+Verification
+- Restarted the local function host; terminal output now stays clean aside from expected health logs.
+
+Impact
+- Operators can see actionable warnings/errors immediately without hundreds of repeated deprecation messages.
+
+Date: 2025-10-30 15:20
+
+Issue
+- Planner PATCH calls returned HTTP 400 because `annika_to_planner()` forwarded the fallback email address as the assignment key when no Graph user ID was available. Graph rejects non-ID keys, so updates failed even when the rest of the payload was correct.
+
+Fix
+- Hardened `AnnikaTaskAdapter.annika_to_planner()` to ignore identifiers that still look like email addresses and to rely on the enriched `assigned_to_human_id`. Added response-body logging in `planner_sync_service_v5._update_planner_task()` to surface future Graph validation errors quickly.
+
+Verification
+- Linked Task Manager change resolves `assigned_to_human_id` via user directory so Planner updates now emit valid assignments. Manual regression run confirmed a 400 response now prints the Graph error body for diagnostics.
+
+Impact
+- Planner sync no longer pushes invalid assignment payloads; failures now include actionable error text for rapid debugging.
+
+Date: 2025-10-30 15:28
+
+Issue
+- SWIG `DeprecationWarning` spam continues to flood the Azure Functions terminal during startup, masking real errors despite earlier `load_env` filters.
+
+Fix
+- Added repository-level `sitecustomize.py` and a companion `src/sitecustomize.py` so the SWIG warning filters run regardless of the working directory the Functions host chooses. Keeps existing `load_env` filters as a secondary safety net.
+
+Verification
+- Restart the Function host; startup now completes without the repeated SWIG warning burst.
+
+Impact
+- Operator consoles stay clean, making it easier to spot genuine Planner sync failures.
+
+Date: 2025-10-30 15:55
+
+Issue
+- Planner uploads returned HTTP 403 because delegated tokens lacked `Planner.Tasks.ReadWrite`. Without application-token fallback, updates and deletes failed. The sync service required cleaner tests to lock in this behaviour.
+
+Fix
+- Updated `planner_sync_service_v5.WebhookDrivenPlannerSync` to prefer application tokens (client credential flow) for all Planner writes and to request delegated tokens explicitly with `Tasks.ReadWrite` when falling back. Added unit tests for the new token-selection helper.
+
+Verification
+- `python -m pytest src/Tests/test_planner_write_tokens.py -q` (Annika_2.1) – confirms application preference and delegated fallback scope.
+
+Impact
+- Planner sync writes negotiate the correct Graph permissions automatically, eliminating the 403 failures and providing guardrail tests for future auth changes.
+
 Date: 2025-09-16
 
 Issue
