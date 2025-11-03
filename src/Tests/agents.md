@@ -14,6 +14,7 @@
 ## Running tests
 - Default regression: `python -m pytest src/Tests --maxfail=1 --disable-warnings -q | tee ../../.cursor/artifacts/pytest.txt` (re-use the same artifact when triggered from the repo root).
 - Focused module checks: `python -m pytest src/Tests/test_agent_auth.py -q`, `python -m pytest src/Tests/test_token_api_endpoints.py -q`, etc. Capture logs under `.cursor/artifacts/` using descriptive names.
+- Schedule safety regression: `python -m pytest src/Tests/test_planner_schedule_safety.py -q` after changes to `annika_task_adapter.py` or `planner_sync_service_v5.py` to ensure start/due guards remain intact.
 - Integration sweep: `python -m pytest src/Tests/integration/test_http_endpoints_live.py --maxfail=1 --disable-warnings -k planner | tee ../../.cursor/artifacts/pytest-integration.txt`. Requires live Azure credentials, Redis, and ngrok tunnel per `.cursor/rules/module_Start_Services.mdc`.
 - Planner sync regression: `python -m pytest src/test_v5_sync.py -q | tee ../.cursor/artifacts/pytest-v5-sync.txt` after modifying sync internals.
 

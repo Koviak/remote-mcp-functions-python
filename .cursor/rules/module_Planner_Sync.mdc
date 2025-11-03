@@ -23,6 +23,7 @@ alwaysApply: false
 - **[token_api_endpoints.py](mdc:src/token_api_endpoints.py)**: Exposes sync health + manual refresh endpoints relying on sync state.
 
 ### Test Files
+- **[Tests/test_planner_schedule_safety.py](mdc:src/Tests/test_planner_schedule_safety.py)**
 - **[Tests/test_planner_sync_deletion.py](mdc:src/Tests/test_planner_sync_deletion.py)**
 - **[Tests/test_v5_sync.py](mdc:src/Tests/test_v5_sync.py)**
 - **[Tests/test_phase2_*](mdc:src/test_phase2_comprehensive.py)**: Phase 2 comprehensive tests covering Planner sync flows.
@@ -78,6 +79,15 @@ _housekeeping_loop()
 - **Files**: `planner_sync_service_v5.py`
 - **Classes**: `RateLimitHandler`, `_queue_upload`
 - **Rule Reference**: Always honor Graph 429/Retry-After; use exponential backoff capped at 5 minutes.
+
+### Schedule Bound Enforcement
+- **Files**: `planner_sync_service_v5.py`, `annika_task_adapter.py`
+- **Functions**: `WebhookDrivenPlannerSync._ensure_planner_schedule_bounds`, `AnnikaTaskAdapter.annika_to_planner`
+- **Runtime Contract**:
+  - Adapter always emits ISO datetimes for `startDateTime`/`dueDateTime` and clamps `dueDateTime` forward when the Annika payload is reversed.
+  - `_ensure_planner_schedule_bounds()` runs immediately before every Planner POST/PATCH to guarantee Graph never receives `due < start`; it also falls back to the current Planner start when the upload omits one.
+  - `Tests/test_planner_schedule_safety.py` must pass after touching either file.
+- **Rule Reference**: [planner-annika-sync-fixes-and-trace.mdc](mdc:.cursor/rules/planner-annika-sync-fixes-and-trace.mdc) (Graph 400 taxonomy), [module-task-manager.mdc](mdc:.cursor/rules/module-task-manager.mdc) (upstream schedule guard)
 
 ## Module Dependencies
 ### Internal Dependencies
