@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional, Set
 import httpx
 import redis.asyncio as redis
 import requests
+from redis.exceptions import ResponseError
 
 # FIX: Use package-absolute import to avoid ModuleNotFoundError when running as src.*
 try:
@@ -275,12 +276,63 @@ class WebhookDrivenPlannerSync:
             )
             update_data["dueDateTime"] = self._format_planner_datetime(start_dt)
 
+    def _ensure_planner_title(
+        self,
+        annika_task: Dict[str, Any],
+        planner_payload: Dict[str, Any],
+    ) -> None:
+        """Ensure Planner payload includes a non-empty title and apply safe fallback."""
+
+        raw_title = planner_payload.get("title")
+        normalized = raw_title.strip() if isinstance(raw_title, str) else ""
+
+        if not normalized:
+            candidates = [
+                annika_task.get("title"),
+                annika_task.get("name"),
+                annika_task.get("summary"),
+                annika_task.get("id"),
+            ]
+
+            for candidate in candidates:
+                if isinstance(candidate, str):
+                    trimmed = candidate.strip()
+                    if trimmed:
+                        normalized = trimmed
+                        break
+
+            if not normalized:
+                normalized = f"Task {annika_task.get('id') or uuid.uuid4().hex[:8]}"
+
+            logger.warning(
+                "Planner payload missing title; applying fallback '%s' for Annika task %s",
+                normalized,
+                annika_task.get("id"),
+            )
+
+        planner_payload["title"] = normalized
+
     async def _redis_json_get(self, key: str, path: str = "$") -> Any:
         """Retrieve and parse a RedisJSON document."""
         if not self.redis_client:
             return None
         try:
             raw = await self.redis_client.execute_command("JSON.GET", key, path)
+        except ResponseError as exc:
+            message = str(exc)
+            if "WRONGTYPE" in message.upper():
+                normalized = await self._normalize_json_key(key)
+                if not normalized:
+                    logger.error("Failed to normalize Redis key %s after WRONGTYPE response", key)
+                    return None
+                try:
+                    raw = await self.redis_client.execute_command("JSON.GET", key, path)
+                except Exception as retry_exc:
+                    logger.debug("RedisJSON GET retry failed for %s: %s", key, retry_exc)
+                    return None
+            else:
+                logger.debug("RedisJSON GET failed for %s: %s", key, exc)
+                return None
         except Exception as exc:
             logger.debug("RedisJSON GET failed for %s: %s", key, exc)
             return None
@@ -293,9 +345,68 @@ class WebhookDrivenPlannerSync:
         if not self.redis_client:
             return
         payload = json.dumps(value)
+        try:
         await self.redis_client.execute_command("JSON.SET", key, path, payload)
+        except ResponseError as exc:
+            message = str(exc)
+            if "WRONGTYPE" in message.upper():
+                try:
+                    await self.redis_client.delete(key)
+                    await self.redis_client.execute_command("JSON.SET", key, path, payload)
+                    logger.warning("Replaced legacy Redis key %s with RedisJSON document", key)
+                except Exception as retry_exc:
+                    logger.error("Failed to replace legacy Redis key %s: %s", key, retry_exc)
+                    return
+            else:
+                logger.debug("RedisJSON SET failed for %s: %s", key, exc)
+                return
         if expire is not None:
             await self.redis_client.expire(key, expire)
+
+    async def _normalize_json_key(self, key: str, default: Optional[Any] = None) -> bool:
+        """Ensure the given key is stored as RedisJSON; convert legacy types when possible."""
+        if not self.redis_client:
+            return False
+        try:
+            key_type = await self.redis_client.type(key)
+            if key_type in {"none", "ReJSON-RL"}:
+                if key_type == "none" and default is not None:
+                    await self._redis_json_set(key, default)
+                return True
+
+            value_to_store: Any = default if default is not None else {}
+
+            if key_type == "string":
+                raw_value = await self.redis_client.get(key)
+                if raw_value:
+                    try:
+                        value_to_store = json.loads(raw_value)
+                    except json.JSONDecodeError:
+                        value_to_store = {"value": raw_value}
+                elif default is None:
+                    value_to_store = {}
+            elif key_type == "hash":
+                value_to_store = await self.redis_client.hgetall(key)
+            elif key_type == "list":
+                value_to_store = await self.redis_client.lrange(key, 0, -1)
+            elif key_type == "set":
+                members = await self.redis_client.smembers(key)
+                value_to_store = sorted(list(members))
+            elif key_type == "zset":
+                zvalues = await self.redis_client.zrange(key, 0, -1, withscores=True)
+                value_to_store = [
+                    {"value": member, "score": score} for member, score in zvalues
+                ]
+            else:
+                logger.debug("Unsupported Redis type %s for key %s; using default envelope", key_type, key)
+
+            await self.redis_client.delete(key)
+            await self.redis_client.execute_command("JSON.SET", key, "$", json.dumps(value_to_store))
+            logger.warning("Normalized Redis key %s from type %s to RedisJSON", key, key_type)
+            return True
+        except Exception as exc:
+            logger.error("Failed to normalize Redis key %s: %s", key, exc)
+            return False
 
     def initialize_runtime_state(self) -> None:
         """Initialize runtime fields after Redis client setup."""
@@ -574,7 +685,7 @@ class WebhookDrivenPlannerSync:
                 "reason": reason,
             }
             key = f"annika:planner:tasks:{planner_id}:tombstone"
-            await self.redis_client.execute_command("JSON.SET", key, "$", json.dumps(payload))
+            await self._redis_json_set(key, payload)
             await self.redis_client.expire(key, 7 * 24 * 60 * 60)
             if annika_id:
                 await self.redis_client.set(
@@ -2086,6 +2197,7 @@ class WebhookDrivenPlannerSync:
                 if not annika_id or annika_id in self.processing_upload:
                     continue
                 current_ids.add(annika_id)
+                await self._normalize_json_key(task_key)
                 task = await self._redis_json_get(task_key)
                 if isinstance(task, dict) and await self._task_needs_upload(task):
                     await self._queue_upload(task)
@@ -2482,6 +2594,7 @@ class WebhookDrivenPlannerSync:
     async def _get_annika_task(self, annika_id: str) -> Optional[Dict]:
         """Get Annika task by ID."""
         try:
+            await self._normalize_json_key(f"annika:tasks:{annika_id}")
             task = await self._redis_json_get(f"annika:tasks:{annika_id}")
             if isinstance(task, dict):
                 return task
@@ -3199,6 +3312,7 @@ class WebhookDrivenPlannerSync:
 
             # Convert to Planner format
             planner_data = self.adapter.annika_to_planner(annika_task)
+            self._ensure_planner_title(annika_task, planner_data)
             logger.info(
                 "Planner payload for %s: assignments=%s, plan=%s, bucket=%s, notes_len=%s",
                 annika_task.get("id"),
@@ -3560,6 +3674,7 @@ class WebhookDrivenPlannerSync:
 
             # Convert to update format
             update_data = self.adapter.annika_to_planner(annika_task)
+            self._ensure_planner_title(annika_task, update_data)
             logger.info(
                 "Update payload for %s -> %s: assignments=%s, bucket=%s, notes_len=%s",
                 annika_task.get("id"),

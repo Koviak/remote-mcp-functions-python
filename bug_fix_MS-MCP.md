@@ -7,6 +7,29 @@
 - Teams chat subscription manager records persistent metadata (`mode`, timestamps) for both global and per-chat subscriptions.
 - **[2025-10-22]** Fixed critical date formatting bug causing all task sync failures, removed duplicate method causing polling crashes, added stale ID mapping cleanup for deleted tasks.
 - **[2025-10-23]** Fixed "Event loop is closed" error in webhook handler by ensuring all pending async tasks complete before closing the event loop.
+- **[2025-11-03]** Added RedisJSON normalization for legacy task records and enforced Planner title fallbacks to resolve WRONGTYPE errors and Graph 400 responses.
+
+---
+
+## [2025-11-03] RedisJSON Normalization & Planner Title Guard
+
+**Problems Identified:**
+
+1. Planner sync emitted repeated `WRONGTYPE Operation against a key holding the wrong kind of value` errors when reading legacy `annika:tasks:*` keys that were still stored as raw strings instead of RedisJSON documents.
+2. Planner task POST/PATCH calls intermittently failed with `400` responses because payloads inherited empty titles from Annika tasks, leaving Graph to reject `null`/blank `title` fields.
+
+**Solutions Implemented:**
+
+- Added `_normalize_json_key` plus enhanced `_redis_json_get/_redis_json_set` to detect non-RedisJSON keys, convert legacy string/list/hash content into JSON documents, and retry failed operations without crashing the sync loop.
+- Proactively normalize task keys before change detection to upgrade legacy data in-place, wrapping plain text values in a `{"value": ...}` envelope when no JSON structure exists.
+- Introduced `_ensure_planner_title` to trim whitespace and apply deterministic fallbacks (`title`, `name`, `summary`, or `task.id`) so every Planner create/update carries a valid title.
+
+**Files Modified:**
+- `src/planner_sync_service_v5.py`
+- `src/Tests/test_planner_sync_normalization.py`
+
+**Verification:**
+- `python -m pytest Tests/test_planner_sync_normalization.py -q`
 
 ---
 
