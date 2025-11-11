@@ -1,5 +1,55 @@
 Bug Fix Log
 
+Date: 2025-11-10 19:13
+
+Issue
+- Clearing Redis removed every `annika:planner:tasks:*` snapshot, and the Planner sync poll loop never rewrote them, leaving Task Manager without cached Planner tasks after a wipe.
+
+Fix
+- Added `_store_planner_snapshot` in `planner_sync_service_v5.py` to persist each raw Planner payload to `annika:planner:tasks:{planner_id}` via RedisJSON (no TTL) and refresh the matching ETag.
+- Invoke snapshot storage during hourly polling and inside `_create_annika_task_from_planner` / `_update_annika_task_from_planner` so cache hydration happens for both new and existing tasks.
+
+Verification
+- `python -m pytest Tests/test_planner_sync_normalization.py -q` (Annika_2.1, run from `src/`) — new TTL assertion and existing normalization tests all pass.
+- `python src/diagnostics/task_key_counts.py` — reports 764 planner task snapshots with TTL `-1`, confirming persistent cache after sync-led rehydration.
+
+Impact
+- Planner snapshot cache now self-heals after wipes or cold starts, preventing analyzer token waste and ensuring Task Manager always sees up-to-date Planner topology.
+
+Date: 2025-11-10 14:30
+
+Issue
+- Health check reported `failed=1000` (max capacity) in `annika:sync:failed` queue. Investigation revealed all 1000 failures were `annika_task_not_found` errors dating back to November 3rd. Tasks like `Task-63e2069c`, `Task-e270aaca` were deleted from Annika but sync operations were still queued, causing 5 retry attempts each before logging to failed queue.
+
+Root Cause
+- When Annika tasks were deleted (or never existed), sync operations continued to be queued for them. The retry mechanism attempted 5 times per operation before giving up, wasting resources and filling the failed queue with stale errors. The queue is capped at 1000 entries with a 7-day TTL.
+
+Fix
+- Enhanced `_pending_queue_worker` to handle deleted/missing tasks intelligently:
+  - **Create operations**: Check for tombstone markers; if tombstoned, treat as success (already handled).
+  - **Update operations**: If task not found, check for Planner mapping and tombstone. If no mapping exists OR tombstoned, treat as success (task was deleted or never synced, nothing to update). Only fail if Planner mapping exists but Annika task missing (orphaned Planner task).
+  - This prevents retry loops on tasks that legitimately don't exist and reduces failed queue pollution.
+
+Verification
+- Code changes applied to `planner_sync_service_v5.py` lines 755-801. The failed queue will naturally drain as old entries expire (7-day TTL), and new operations for deleted tasks will be handled gracefully without accumulating failures.
+
+Impact
+- Failed queue will stop accumulating stale `annika_task_not_found` errors. Deleted tasks are handled gracefully without retry loops. Health check metrics will reflect actual sync issues rather than historical deleted task noise.
+
+Date: 2025-11-10 14:08
+
+Issue
+- `start_all_services.py` aborted when importing `planner_sync_service_v5` due to an `IndentationError` introduced in `_redis_json_set` (missing indentation after `try`).
+
+Fix
+- Restored the expected indentation inside `_redis_json_set` so `await self.redis_client.execute_command("JSON.SET", ...)` executes inside the `try` block.
+
+Verification
+- `python -m compileall planner_sync_service_v5.py` (Annika_2.1) – confirms the module now compiles without syntax errors.
+
+Impact
+- Planner sync V5 service can start again; start_all_services completes bootstrapping instead of failing during import.
+
 Date: 2025-10-30 14:50
 
 Issue

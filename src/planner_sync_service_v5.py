@@ -346,7 +346,7 @@ class WebhookDrivenPlannerSync:
             return
         payload = json.dumps(value)
         try:
-        await self.redis_client.execute_command("JSON.SET", key, path, payload)
+            await self.redis_client.execute_command("JSON.SET", key, path, payload)
         except ResponseError as exc:
             message = str(exc)
             if "WRONGTYPE" in message.upper():
@@ -758,7 +758,14 @@ class WebhookDrivenPlannerSync:
                         if task:
                             success = await self._create_planner_task(task)
                         else:
-                            error_detail = "annika_task_not_found"
+                            # Check for tombstone - if tombstoned, treat as already handled
+                            tombstone = await self.redis_client.get(
+                                f"annika:planner:tombstone:annika:{annika_id}"
+                            )
+                            if tombstone:
+                                success = True  # Already deleted, no action needed
+                            else:
+                                error_detail = "annika_task_not_found"
                     elif op_type == "update":
                         task = await self._get_annika_task(annika_id)
                         if task:
@@ -769,7 +776,18 @@ class WebhookDrivenPlannerSync:
                                 # If no mapping, upgrade to create
                                 success = await self._create_planner_task(task)
                         else:
-                            error_detail = "annika_task_not_found"
+                            # Task not found - check if it was deleted or never existed
+                            planner_id = await self._get_planner_id(annika_id)
+                            tombstone = await self.redis_client.get(
+                                f"annika:planner:tombstone:annika:{annika_id}"
+                            )
+                            if tombstone or not planner_id:
+                                # No Planner mapping or tombstoned = treat as success
+                                # (task was deleted or never synced, nothing to update)
+                                success = True
+                            else:
+                                # Planner mapping exists but Annika task missing = orphaned
+                                error_detail = "annika_task_not_found_orphaned_planner"
                     elif op_type == "delete":
                         planner_id = await self._get_planner_id(annika_id)
                         if planner_id:
@@ -2804,6 +2822,42 @@ class WebhookDrivenPlannerSync:
         except Exception:
             pass
 
+    async def _store_planner_snapshot(self, planner_task: Dict[str, Any]) -> None:
+        """Persist the raw Planner task payload for local cache hydration."""
+        if not isinstance(planner_task, dict):
+            return
+
+        if not getattr(self, "redis_client", None):
+            return
+
+        planner_id = planner_task.get("id")
+        if not planner_id:
+            return
+
+        try:
+            await set_json_async(
+                self.redis_client,
+                f"annika:planner:tasks:{planner_id}",
+                planner_task,
+            )
+        except Exception as exc:
+            logger.debug(
+                "Planner snapshot write failed for %s: %s",
+                planner_id,
+                exc,
+            )
+        else:
+            etag = planner_task.get("@odata.etag")
+            if etag:
+                try:
+                    await self._store_etag(planner_id, etag)
+                except Exception as etag_err:
+                    logger.debug(
+                        "Planner snapshot etag write skipped for %s: %s",
+                        planner_id,
+                        etag_err,
+                    )
+
     async def _get_planner_id(self, annika_id: str) -> Optional[str]:
         """Get Planner ID for Annika task.
 
@@ -3051,6 +3105,8 @@ class WebhookDrivenPlannerSync:
 
         annika_id = f"Task-{uuid.uuid4().hex[:8]}"
 
+        await self._store_planner_snapshot(planner_task)
+
         try:
             # Store mapping first to prevent duplicates (with atomic guard)
             # SETNX reverse map; if already set, adopt existing ID and update instead
@@ -3175,6 +3231,8 @@ class WebhookDrivenPlannerSync:
     async def _update_annika_task_from_planner(self, annika_id: str, planner_task: Dict):
         """Update Annika task from Planner changes."""
         try:
+            await self._store_planner_snapshot(planner_task)
+
             # Dedup/consistency: ensure mapping stored before update
             pid = planner_task.get("id")
             if pid:
@@ -4125,6 +4183,9 @@ class WebhookDrivenPlannerSync:
                             task_id = task.get("id")
                             if not task_id:
                                 continue
+
+                            await self._store_planner_snapshot(task)
+
                             seen_planner_ids.add(task_id)
 
                             tasks_checked += 1

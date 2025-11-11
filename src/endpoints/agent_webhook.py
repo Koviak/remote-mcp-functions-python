@@ -246,7 +246,7 @@ def sync_planner_task(resource: str, resource_data, redis_manager):
                 redis_client,
                 f"annika:planner:tasks:{task_id}",
                 task,
-                expire=3600,
+        expire=None,
             )
             redis_client.publish(
                 "annika:tasks:updates",

@@ -4550,7 +4550,7 @@ def sync_planner_task(resource: str, resource_data: Dict, redis_manager):
                 redis_client,
                 f"annika:planner:tasks:{task_id}",
                 task,
-                expire=3600,
+                expire=24 * 3600,
             )
             
             # Publish standardized task update
