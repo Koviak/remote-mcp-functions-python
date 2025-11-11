@@ -5,6 +5,8 @@
 - Planner CRUD flows handle 403/412 fallbacks, cache plan selections, and manage Redis processed/pending queues per spec.
 - Health monitoring honors a configurable 5-minute TTL for `annika:sync:health`, and housekeeping respects the same TTL.
 - Teams chat subscription manager records persistent metadata (`mode`, timestamps) for both global and per-chat subscriptions.
+- **[2025-11-11]** Updated root `AGENTS.md` to reflect Annika_2.1 environment usage, corrected Redis rule references, refreshed repository map, and documented verified run commands.
+- **[2025-11-11]** Removed the RedisJSON conversion initiative section from `AGENTS.md` now that the migration is complete; instructions remain in the dedicated conversion documents if needed for future reference.
 - **[2025-10-22]** Fixed critical date formatting bug causing all task sync failures, removed duplicate method causing polling crashes, added stale ID mapping cleanup for deleted tasks.
 - **[2025-10-23]** Fixed "Event loop is closed" error in webhook handler by ensuring all pending async tasks complete before closing the event loop.
 - **[2025-11-03]** Added RedisJSON normalization for legacy task records and enforced Planner title fallbacks to resolve WRONGTYPE errors and Graph 400 responses.
