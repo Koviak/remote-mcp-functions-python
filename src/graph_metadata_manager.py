@@ -26,7 +26,9 @@ REDIS_USERS_INDEX_KEY = "annika:graph:users:index"
 GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
 
 REDIS_GROUP_KEY = "annika:graph:groups:{group_id}"
+REDIS_GROUPS_INDEX_KEY = "annika:graph:groups:index"
 REDIS_PLAN_KEY = "annika:graph:plans:{plan_id}"
+REDIS_PLANS_INDEX_KEY = "annika:graph:plans:index"
 REDIS_TASK_KEY = "annika:graph:tasks:{task_id}"
 REDIS_BUCKET_KEY = "annika:graph:buckets:{bucket_id}"
 REDIS_METADATA_TTL = 86400  # 24 hour cache
@@ -86,6 +88,65 @@ class GraphMetadataManager:
         if expire is not None:
             await self.redis_client.expire(key, expire)
     
+    @staticmethod
+    def _normalize_index_list(payload: Any) -> list[str]:
+        """Normalize an index payload into a list of non-empty strings."""
+        if payload is None:
+            return []
+        if isinstance(payload, list):
+            if payload and isinstance(payload[0], list):
+                payload = payload[0]
+            return [
+                str(item).strip()
+                for item in payload
+                if item not in (None, "") and str(item).strip()
+            ]
+        if isinstance(payload, str):
+            try:
+                data = json.loads(payload)
+            except (TypeError, json.JSONDecodeError):
+                return []
+            return GraphMetadataManager._normalize_index_list(data)
+        return []
+
+    async def _update_index(self, index_key: str, identifier: str) -> None:
+        """Ensure the specified metadata index tracks the given identifier."""
+        if not identifier:
+            return
+        if not self.redis_client:
+            return
+
+        normalized = str(identifier).strip()
+        if not normalized:
+            return
+
+        try:
+            current = await self._redis_json_get(index_key)
+            index = self._normalize_index_list(current)
+            if normalized not in index:
+                index.append(normalized)
+                await self._redis_json_set(
+                    index_key,
+                    index,
+                    expire=REDIS_METADATA_TTL,
+                )
+                logger.debug(
+                    "Added %s to index %s (%s total)", normalized, index_key, len(index)
+                )
+        except Exception as exc:
+            logger.debug(
+                "Failed to update index %s for %s: %s", index_key, normalized, exc
+            )
+
+    async def _update_plans_index(self, plan_id: str) -> None:
+        await self._update_index(REDIS_PLANS_INDEX_KEY, plan_id)
+
+    async def _update_groups_index(self, group_id: str) -> None:
+        await self._update_index(REDIS_GROUPS_INDEX_KEY, group_id)
+
+    async def _update_users_index(self, user_id: str) -> None:
+        await self._update_index(REDIS_USERS_INDEX_KEY, user_id)
+
     def _init_redis_async(self):
         """Initialize async Redis client"""
         try:
@@ -178,6 +239,8 @@ class GraphMetadataManager:
                 user_data,
                 expire=REDIS_METADATA_TTL,
             )
+
+            await self._update_users_index(user_id)
             
             # Publish update notification
             await self.redis_client.publish(
@@ -230,6 +293,8 @@ class GraphMetadataManager:
             group_data,
             expire=REDIS_METADATA_TTL,
         )
+
+        await self._update_groups_index(group_id)
         
         # Cache individual plans
         for plan in group_data.get("plans", []):
@@ -292,6 +357,8 @@ class GraphMetadataManager:
             plan_data,
             expire=REDIS_METADATA_TTL,
         )
+
+        await self._update_plans_index(plan_id)
         
         return plan_data
     
@@ -494,6 +561,111 @@ class GraphMetadataManager:
         logger.info("Cached %s users in Redis", len(users))
         return users
     
+    async def cache_all_plans(self) -> list[dict[str, Any]]:
+        """Retrieve all Planner plans and refresh the Redis cache and index."""
+        token = self._get_graph_token()
+        if not token:
+            logger.error("Unable to acquire Graph token for cache_all_plans")
+            return []
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "ConsistencyLevel": "eventual",
+        }
+
+        plans: list[dict[str, Any]] = []
+        index: list[str] = []
+
+        next_url = f"{GRAPH_API_ENDPOINT}/groups?$select=id"
+        page = 0
+        max_pages = 200
+
+        while next_url and page < max_pages:
+            page += 1
+            try:
+                response = requests.get(next_url, headers=headers, timeout=30)
+            except Exception as exc:
+                logger.error("Failed to enumerate groups (page %s): %s", page, exc)
+                break
+
+            if response.status_code != 200:
+                logger.error(
+                    "Failed to list groups (page %s): %s - %s",
+                    page,
+                    response.status_code,
+                    response.text[:256],
+                )
+                break
+
+            payload = response.json()
+            group_items = payload.get("value", [])
+            if not isinstance(group_items, list):
+                break
+
+            for group in group_items:
+                group_id = group.get("id")
+                if not group_id:
+                    continue
+
+                plans_url = f"{GRAPH_API_ENDPOINT}/groups/{group_id}/planner/plans"
+                try:
+                    plans_response = requests.get(plans_url, headers=headers, timeout=15)
+                except Exception as exc:
+                    logger.debug("Failed to fetch plans for group %s: %s", group_id, exc)
+                    continue
+
+                if plans_response.status_code != 200:
+                    logger.debug(
+                        "Planner plans fetch failed for group %s: %s - %s",
+                        group_id,
+                        plans_response.status_code,
+                        plans_response.text[:256],
+                    )
+                    continue
+
+                group_plans = plans_response.json().get("value", [])
+                if not isinstance(group_plans, list):
+                    continue
+
+                for plan in group_plans:
+                    plan_id = plan.get("id")
+                    plan_id_str = str(plan_id).strip() if plan_id else ""
+                    if not plan_id_str:
+                        continue
+
+                    if plan_id_str not in index:
+                        index.append(plan_id_str)
+
+                    detailed: dict[str, Any] | None = None
+                    try:
+                        detailed = await self.cache_plan_metadata(plan_id_str)
+                    except Exception as exc:
+                        logger.debug("Failed to cache plan %s: %s", plan_id_str, exc)
+
+                    plans.append(detailed or plan)
+
+            next_link = payload.get("@odata.nextLink")
+            if next_link and next_link.startswith("/"):
+                next_url = f"{GRAPH_API_ENDPOINT}{next_link}"
+            else:
+                next_url = next_link
+
+        if next_url and page >= max_pages:
+            logger.warning("Group enumeration truncated after %s pages", page)
+
+        if index:
+            try:
+                await self._redis_json_set(
+                    REDIS_PLANS_INDEX_KEY,
+                    index,
+                    expire=REDIS_METADATA_TTL,
+                )
+            except Exception as exc:
+                logger.debug("Failed to write plans index: %s", exc)
+
+        logger.info("Cached %s plans in Redis", len(plans))
+        return plans
+
     def get_sync_client(self):
         """Get synchronous Redis client for non-async contexts"""
         return self.redis_manager._client

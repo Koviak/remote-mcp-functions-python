@@ -1,5 +1,25 @@
 Bug Fix Log
 
+Date: 2025-11-12 21:30
+
+Issue
+- `annika:graph:plans:index` only retained a single Planner plan ID even though 44 plan documents existed (`annika:graph:plans:*`), causing downstream panels (e.g., Meta State `plans_data`) to surface a single plan.
+
+Fix
+- Added `REDIS_PLANS_INDEX_KEY` constant to `src/graph_metadata_manager.py`.
+- Introduced `_normalize_index_list` utility and `_update_index` helper family (`_update_plans_index`, `_update_groups_index`, `_update_users_index`) to normalize and persist identifiers via RedisJSON with TTL alignment to other metadata caches.
+- Updated `cache_plan_metadata`, `cache_group_metadata`, and `cache_user_metadata` to register each cached document in its respective index.
+- Added `cache_all_plans` orchestration method to enumerate all groups, cache their plans, and rewrite the index for full refresh scenarios.
+
+Verification
+- Regenerated Meta State graph data samples to confirm full plan payload availability (count now 44):  
+  `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m meta_state.panels.graph_data.generate_sample`
+- Retrieved `PlansDataPanel` output directly in Python to assert `count == 44` and owners distribution populated.
+- Temporary diagnostics rebuilt users/groups indexes from existing Redis cache and verified counts (`verify_graph_caches.py` → Users index 39/keys 40, Groups index 16/keys 17). Scripts removed post-run.
+
+Impact
+- Planner metadata index stays in sync with cached plan documents, preventing partial context in Annika agents and UI panels and avoiding future drift after incremental cache writes.
+
 Date: 2025-11-10 19:13
 
 Issue
