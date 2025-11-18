@@ -42,5 +42,5 @@
 
 ## Maintenance checklist
 - Confirm `register_http_endpoints(app)` imports the module once and avoids circular dependencies.
-- Update this file whenever you add a module, adjust testing commands, or change observability hooks. Follow `.cursor/rules/agents-md.mdc` to keep the guidance actionable.
+- Update this file whenever you add a module, adjust testing commands, or change observability hooks. Follow `.cursor/rules/documentation-agents-md.mdc` to keep the guidance actionable.
 

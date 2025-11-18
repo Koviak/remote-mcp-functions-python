@@ -50,4 +50,4 @@
 - Batch uploads honor rate-limit backoff via `RateLimitHandler.retry_after`, preventing work from draining the queue during imposed cooldowns.
 
 ## Keep this guide current
-- Update this file whenever you introduce a new module, change bootstrap commands, or modify Redis contracts. Cross-check `.cursor/rules/agents-md.mdc` during reviews and note adjustments in your PR summary.
+- Update this file whenever you introduce a new module, change bootstrap commands, or modify Redis contracts. Cross-check `.cursor/rules/documentation-agents-md.mdc` during reviews and note adjustments in your PR summary.

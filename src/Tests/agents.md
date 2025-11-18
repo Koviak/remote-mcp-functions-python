@@ -26,5 +26,5 @@
 ## Maintenance
 - Update manifests and expected payloads when adding endpoints or changing response formats.
 - Prefer deterministic test data; store any large fixtures inside `.cursor/artifacts/` during runs and clean up afterwards.
-- Keep this guide aligned with new suites, fixtures, or command changes. Follow `.cursor/rules/agents-md.mdc` during reviews and mention adjustments in summaries.
+- Keep this guide aligned with new suites, fixtures, or command changes. Follow `.cursor/rules/documentation-agents-md.mdc` during reviews and mention adjustments in summaries.
 
