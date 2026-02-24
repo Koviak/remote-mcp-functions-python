@@ -24,9 +24,57 @@ from chat_subscription_manager import (
     chat_subscription_manager,
     initialize_chat_subscription_manager,
 )
+from graph_subscription_manager import GraphSubscriptionManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def python_can_import_modules(
+    python_executable: str,
+    modules: list[str],
+) -> tuple[bool, str]:
+    """Return whether a Python executable can import all modules."""
+    import_code = "; ".join(f"import {module}" for module in modules)
+    cmd = [python_executable, "-c", import_code]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=20,
+        )
+    except Exception as exc:  # pragma: no cover - defensive path
+        return False, str(exc)
+
+    if result.returncode == 0:
+        return True, ""
+
+    stderr = (result.stderr or "").strip()
+    stdout = (result.stdout or "").strip()
+    details = stderr or stdout or "Unknown import failure"
+    return False, details
+
+
+def build_function_host_env(
+    base_env: Optional[dict[str, str]] = None,
+    python_executable: Optional[str] = None,
+) -> dict[str, str]:
+    """Build child environment for Azure Functions host process."""
+    env = dict(base_env or os.environ)
+    resolved_python = (
+        python_executable
+        or os.environ.get("FUNCTIONS_PYTHON_EXE")
+        or sys.executable
+    )
+    env.setdefault("ASPNETCORE_URLS", "http://0.0.0.0:7071")
+    # Core Tools resolves Python using this exact key name first.
+    # Keep both forms for compatibility across config readers.
+    env["languageWorkers:python:defaultExecutablePath"] = resolved_python
+    env["languageWorkers__python__defaultExecutablePath"] = resolved_python
+    env["PYTHONEXECUTABLE"] = resolved_python
+    return env
 
 
 class ServiceManager:
@@ -38,8 +86,10 @@ class ServiceManager:
         self.shutdown_in_progress = False
         self.background_tasks = []  # Track background async tasks
         self.sync_service = None  # Track the sync service instance
+        self.contact_sync_service = None
         self.webhook_url = None
         self.chat_subscription_manager = chat_subscription_manager
+        self.graph_subscription_manager = GraphSubscriptionManager()
 
     def _append_dir_to_path(self, directory: Path) -> None:
         """Ensure the given directory is on PATH for child processes."""
@@ -373,9 +423,24 @@ class ServiceManager:
             )
         # Run from the function app directory where host.json resides
         func_cwd = str(self.base_dir)
-        # Ensure the host binds to all interfaces so remote machines can connect
-        child_env = os.environ.copy()
-        child_env.setdefault("ASPNETCORE_URLS", "http://0.0.0.0:7071")
+        # Ensure host uses current interpreter and binds to all interfaces.
+        child_env = build_function_host_env()
+        worker_python = child_env.get(
+            "languageWorkers__python__defaultExecutablePath",
+            sys.executable,
+        )
+
+        ok, details = python_can_import_modules(
+            worker_python,
+            ["azure.identity", "azure.functions"],
+        )
+        if not ok:
+            raise RuntimeError(
+                "Selected Functions Python interpreter cannot import required "
+                f"Azure modules: {worker_python}. Details: {details}"
+            )
+        logger.info("Using Functions Python worker: %s", worker_python)
+
         cmd = [func_path, "start", "--port", "7071"]
         if sys.platform == "win32":
             self.func_process = subprocess.Popen(
@@ -409,6 +474,33 @@ class ServiceManager:
         sync_task = asyncio.create_task(self.sync_service.start())
         self.background_tasks.append(sync_task)
         
+        # Start contact sync service in background
+        try:
+            from contact_sync_service import ContactSyncService
+
+            self.contact_sync_service = ContactSyncService()
+            contact_task = asyncio.create_task(self.contact_sync_service.start())
+            self.background_tasks.append(contact_task)
+            logger.info("Contact sync service started")
+        except Exception as exc:
+            logger.error("Failed to start contact sync service: %s", exc)
+
+        async def renew_graph_subscriptions_loop():
+            while True:
+                try:
+                    await asyncio.to_thread(
+                        self.graph_subscription_manager.renew_all_subscriptions
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "Graph subscription renewal loop failed: %s",
+                        exc,
+                    )
+                await asyncio.sleep(1800)
+
+        graph_renew_task = asyncio.create_task(renew_graph_subscriptions_loop())
+        self.background_tasks.append(graph_renew_task)
+
         logger.info("Planner sync service V5 started")
 
     async def ensure_token_available(self, max_attempts=10):
@@ -538,6 +630,7 @@ class ServiceManager:
         if self.webhook_url:
             logger.info("Webhook URL: %s", self.webhook_url)
         logger.info("Planner sync service: Running")
+        logger.info("Contact sync service: Running")
         logger.info("Webhooks: Configured")
         
         return True
@@ -645,6 +738,14 @@ class ServiceManager:
                 logger.info("Planner sync service V5 stopped.")
             except Exception as e:
                 logger.error("Error stopping V5 sync service: %s", e)
+
+        if self.contact_sync_service:
+            logger.info("Stopping contact sync service...")
+            try:
+                await self.contact_sync_service.stop()
+                logger.info("Contact sync service stopped.")
+            except Exception as e:
+                logger.error("Error stopping contact sync service: %s", e)
 
         # Cancel any remaining background tasks and wait for them
         for task in list(self.background_tasks):

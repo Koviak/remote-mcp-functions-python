@@ -7,7 +7,7 @@ Manages webhook subscriptions for Graph resources
 import os
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
 import requests
 from agent_auth_manager import get_agent_token
@@ -21,6 +21,22 @@ WEBHOOK_URL = os.environ.get(
     "https://agency-swarm.ngrok.app/api/graph_webhook"
 )
 CLIENT_STATE = os.environ.get("GRAPH_WEBHOOK_CLIENT_STATE", "annika-secret")
+MAIL_CLIENT_STATE = os.environ.get(
+    "GRAPH_WEBHOOK_MAIL_CLIENT_STATE",
+    "annika_mail_messages",
+)
+CONTACTS_CLIENT_STATE = os.environ.get(
+    "GRAPH_WEBHOOK_CONTACTS_CLIENT_STATE",
+    "annika_contacts",
+)
+
+
+def _parse_graph_datetime_utc(value: str) -> datetime:
+    """Parse Graph datetime string as timezone-aware UTC."""
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 class GraphSubscriptionManager:
@@ -30,8 +46,12 @@ class GraphSubscriptionManager:
         self.redis_manager = get_redis_token_manager()
         self.subscriptions = {}
     
-    def create_user_subscription(self) -> Optional[str]:
-        """Create subscription for Annika's user changes"""
+    def create_mail_subscription(
+        self,
+        resource: str = "/me/messages",
+        client_state: Optional[str] = None,
+    ) -> Optional[str]:
+        """Create subscription for Outlook mail message changes."""
         token = get_agent_token()
         if not token:
             logger.error("Failed to get agent token")
@@ -42,15 +62,14 @@ class GraphSubscriptionManager:
             "Content-Type": "application/json"
         }
         
-        # Subscribe to messages for Annika
         subscription = {
             "changeType": "created,updated,deleted",
             "notificationUrl": WEBHOOK_URL,
-            "resource": "/me/messages",
+            "resource": resource,
             "expirationDateTime": (
                 datetime.utcnow() + timedelta(days=2)
             ).isoformat() + "Z",
-            "clientState": CLIENT_STATE
+            "clientState": client_state or MAIL_CLIENT_STATE,
         }
         
         response = requests.post(
@@ -71,11 +90,67 @@ class GraphSubscriptionManager:
                 json.dumps(sub)
             )
             
-            logger.info(f"Created user subscription: {subscription_id}")
+            logger.info(
+                "Created mail subscription: %s (%s)",
+                subscription_id,
+                resource,
+            )
             return subscription_id
         else:
             logger.error(f"Failed to create subscription: {response.text}")
             return None
+
+    def create_user_subscription(self) -> Optional[str]:
+        """Backward-compatible alias for mail message subscription."""
+        return self.create_mail_subscription()
+
+    def create_contacts_subscription(
+        self,
+        resource: str = "/me/contacts",
+        client_state: Optional[str] = None,
+    ) -> Optional[str]:
+        """Create subscription for Outlook contact changes."""
+        token = get_agent_token()
+        if not token:
+            logger.error("Failed to get agent token")
+            return None
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        subscription = {
+            "changeType": "created,updated,deleted",
+            "notificationUrl": WEBHOOK_URL,
+            "resource": resource,
+            "expirationDateTime": (
+                datetime.utcnow() + timedelta(days=2)
+            ).isoformat() + "Z",
+            "clientState": client_state or CONTACTS_CLIENT_STATE,
+        }
+
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/subscriptions",
+            headers=headers,
+            json=subscription,
+            timeout=10,
+        )
+        if response.status_code == 201:
+            sub = response.json()
+            subscription_id = sub["id"]
+            self.redis_manager._client.setex(
+                f"annika:subscriptions:{subscription_id}",
+                int(timedelta(days=2).total_seconds()),
+                json.dumps(sub),
+            )
+            logger.info(
+                "Created contacts subscription: %s (%s)",
+                subscription_id,
+                resource,
+            )
+            return subscription_id
+        logger.error("Failed to create contacts subscription: %s", response.text)
+        return None
     
     def create_event_subscription(self) -> Optional[str]:
         """Create subscription for Annika's calendar events"""
@@ -240,11 +315,18 @@ class GraphSubscriptionManager:
     def _store_subscription(self, subscription: Dict):
         """Store subscription in Redis"""
         subscription_id = subscription["id"]
-        expires_on = subscription["expirationDateTime"]
+        expires_on = subscription.get("expirationDateTime")
+        if not expires_on:
+            logger.warning(
+                "Subscription %s missing expirationDateTime; skipping cache write",
+                subscription_id,
+            )
+            return
         
-        # Calculate TTL
-        expire_time = datetime.fromisoformat(expires_on.replace("Z", "+00:00"))
-        ttl = int((expire_time - datetime.utcnow()).total_seconds())
+        # Calculate TTL using timezone-aware UTC to avoid naive/aware subtraction.
+        expire_time = _parse_graph_datetime_utc(expires_on)
+        now_utc = datetime.now(timezone.utc)
+        ttl = int((expire_time - now_utc).total_seconds())
         
         if ttl > 0:
             self.redis_manager._client.setex(
@@ -613,7 +695,8 @@ class GraphSubscriptionManager:
         logger.info("Setting up Annika's webhook subscriptions...")
         
         # 1. Subscribe to Annika's user resources
-        self.create_user_subscription()
+        self.create_mail_subscription()
+        self.create_contacts_subscription()
         self.create_event_subscription()
         
         # 2. Subscribe to Teams chat messages

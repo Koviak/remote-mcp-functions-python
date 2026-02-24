@@ -7,16 +7,22 @@ and routes them to the appropriate sync services via Redis pub/sub.
 
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Dict, List
 
-import redis.asyncio as redis
+from Redis_Master_Manager_Client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
-REDIS_PASSWORD = "password"
+MAIL_MESSAGES_CHANNEL = "annika:mail:messages"
+MAIL_MESSAGES_HISTORY_KEY = "annika:mail:messages:history"
+MAIL_MESSAGES_HISTORY_MAX = 200
+CONTACTS_CHANNEL = "annika:contacts:webhook"
+CONTACTS_HISTORY_KEY = "annika:contacts:webhook:history"
+CONTACTS_HISTORY_MAX = 200
+CONTACTS_DEDUP_PREFIX = "annika:contacts:webhook:dedup:"
+CONTACTS_DEDUP_TTL_SECONDS = 24 * 60 * 60
 
 
 class GraphWebhookHandler:
@@ -27,12 +33,9 @@ class GraphWebhookHandler:
         
     async def initialize(self):
         """Initialize Redis connection bound to the current event loop."""
-        self.redis_client = redis.Redis(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            password=REDIS_PASSWORD,
-            decode_responses=True,
-        )
+        self.redis_client = await get_async_redis_client()
+        if self.redis_client is None:
+            raise RuntimeError("Redis client unavailable for webhook handler")
         await self.redis_client.ping()
     
     async def handle_webhook_notification(self, notification: Dict) -> bool:
@@ -78,6 +81,10 @@ class GraphWebhookHandler:
                 await self._handle_planner_plan_notification(notification)
             elif "/groups" in resource or "groups" in client_state:
                 await self._handle_groups_notification(notification)
+            elif self._is_mail_message_resource(resource) or "mail_messages" in client_state:
+                await self._handle_mail_notification(notification)
+            elif self._is_contact_resource(resource) or "contacts" in client_state:
+                await self._handle_contacts_notification(notification)
             elif "/chats" in resource or "teams_chats" in client_state:
                 await self._handle_teams_chats_notification(notification)
             elif "/teams" in resource or "teams_channels" in client_state:
@@ -124,6 +131,182 @@ class GraphWebhookHandler:
             return False
 
         return True
+
+    def _is_mail_message_resource(self, resource: str) -> bool:
+        """Return True when a Graph webhook resource points to Outlook mail messages."""
+        if not resource:
+            return False
+
+        resource_l = resource.lower()
+
+        # Exclude Teams chat/channel message resources.
+        if "/chats" in resource_l or "/teams" in resource_l:
+            return False
+
+        return (
+            "/me/messages" in resource_l
+            or ("/users/" in resource_l and "/messages" in resource_l)
+            or ("/mailfolders/" in resource_l and "/messages" in resource_l)
+            or ("users(" in resource_l and "/messages(" in resource_l)
+            or ("mailfolders(" in resource_l and "/messages(" in resource_l)
+        )
+
+    def _extract_message_id(self, notification: Dict) -> str:
+        """Extract the message id from resourceData first, then resource path fallback."""
+        resource_data = notification.get("resourceData", {}) or {}
+        resource_id = resource_data.get("id")
+        if resource_id:
+            return str(resource_id)
+
+        resource = notification.get("resource", "") or ""
+        patterns = [
+            r"/messages/([^/]+)$",
+            r"/messages\('([^']+)'\)",
+            r"messages\('([^']+)'\)",
+            r"/messages\(([^)]+)\)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, resource, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).strip("'\"()")
+
+        return ""
+
+    def _is_contact_resource(self, resource: str) -> bool:
+        """Return True when a Graph webhook resource points to contacts."""
+        if not resource:
+            return False
+        resource_l = resource.lower()
+        return (
+            "/me/contacts" in resource_l
+            or ("/users/" in resource_l and "/contacts" in resource_l)
+            or ("contacts(" in resource_l)
+        )
+
+    def _extract_contact_id(self, notification: Dict) -> str:
+        """Extract contact id from resourceData first, then resource path fallback."""
+        resource_data = notification.get("resourceData", {}) or {}
+        resource_id = resource_data.get("id")
+        if resource_id:
+            return str(resource_id)
+        resource = notification.get("resource", "") or ""
+        patterns = [
+            r"/contacts/([^/]+)$",
+            r"/contacts\('([^']+)'\)",
+            r"contacts\('([^']+)'\)",
+            r"/contacts\(([^)]+)\)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, resource, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).strip("'\"()")
+        return ""
+
+    async def _handle_mail_notification(self, notification: Dict):
+        """Handle Outlook message webhook notifications."""
+        try:
+            change_type = notification.get("changeType")
+            resource_data = notification.get("resourceData", {})
+            resource = notification.get("resource", "")
+            client_state = notification.get("clientState", "")
+            message_id = self._extract_message_id(notification)
+
+            logger.info(
+                "Mail message %s: id=%s resource=%s",
+                change_type,
+                message_id or "unknown",
+                resource,
+            )
+
+            message_notification = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "type": "mail_message",
+                "change_type": change_type,
+                "message_id": message_id,
+                "resource": resource,
+                "resource_data": resource_data,
+                "client_state": client_state,
+                "subscription_id": notification.get("subscriptionId"),
+                "tenant_id": notification.get("tenantId"),
+                "raw_notification": notification,
+            }
+
+            await self.redis_client.publish(
+                MAIL_MESSAGES_CHANNEL,
+                json.dumps(message_notification),
+            )
+            await self.redis_client.lpush(
+                MAIL_MESSAGES_HISTORY_KEY,
+                json.dumps(message_notification),
+            )
+            await self.redis_client.ltrim(
+                MAIL_MESSAGES_HISTORY_KEY, 0, MAIL_MESSAGES_HISTORY_MAX - 1
+            )
+        except Exception as e:
+            logger.error(f"Error handling mail notification: {e}")
+
+    async def _handle_contacts_notification(self, notification: Dict):
+        """Handle Outlook contacts webhook notifications."""
+        try:
+            change_type = notification.get("changeType")
+            resource_data = notification.get("resourceData", {})
+            resource = notification.get("resource", "")
+            client_state = notification.get("clientState", "")
+            contact_id = self._extract_contact_id(notification)
+            subscription_id = notification.get("subscriptionId")
+            dedup_key = (
+                f"{CONTACTS_DEDUP_PREFIX}{subscription_id}:{contact_id}:{change_type}"
+            )
+
+            if hasattr(self.redis_client, "get"):
+                already_seen = await self.redis_client.get(dedup_key)
+                if already_seen:
+                    logger.debug(
+                        "Skipping duplicate contacts notification: %s",
+                        dedup_key,
+                    )
+                    return
+
+            contact_notification = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "type": "contact",
+                "change_type": change_type,
+                "contact_id": contact_id,
+                "resource": resource,
+                "resource_data": resource_data,
+                "client_state": client_state,
+                "subscription_id": subscription_id,
+                "tenant_id": notification.get("tenantId"),
+                "raw_notification": notification,
+            }
+
+            await self.redis_client.publish(
+                CONTACTS_CHANNEL,
+                json.dumps(contact_notification),
+            )
+            await self.redis_client.lpush(
+                CONTACTS_HISTORY_KEY,
+                json.dumps(contact_notification),
+            )
+            await self.redis_client.ltrim(
+                CONTACTS_HISTORY_KEY, 0, CONTACTS_HISTORY_MAX - 1
+            )
+
+            if hasattr(self.redis_client, "setex"):
+                await self.redis_client.setex(
+                    dedup_key,
+                    CONTACTS_DEDUP_TTL_SECONDS,
+                    "1",
+                )
+            elif hasattr(self.redis_client, "set"):
+                await self.redis_client.set(dedup_key, "1")
+                if hasattr(self.redis_client, "expire"):
+                    await self.redis_client.expire(
+                        dedup_key,
+                        CONTACTS_DEDUP_TTL_SECONDS,
+                    )
+        except Exception as e:
+            logger.error(f"Error handling contacts notification: {e}")
     
     async def _handle_planner_task_notification(self, notification: Dict):
         """Handle Planner task webhook notifications."""
@@ -558,6 +741,10 @@ class GraphWebhookHandler:
                         resource_type = "teams_channels"
                     elif "/planner" in resource:
                         resource_type = "planner"
+                    elif self._is_mail_message_resource(resource):
+                        resource_type = "mail_messages"
+                    elif self._is_contact_resource(resource):
+                        resource_type = "contacts"
                     else:
                         resource_type = "other"
                     

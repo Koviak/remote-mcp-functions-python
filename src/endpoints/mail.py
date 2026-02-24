@@ -10,6 +10,124 @@ from endpoints.common import (
     build_json_headers,
 )
 
+DEFAULT_INBOX_SELECT = (
+    "id,subject,from,receivedDateTime,isRead,"
+    "internetMessageId,changeKey,conversationId,lastModifiedDateTime,"
+    "createdDateTime,toRecipients,ccRecipients,bccRecipients,replyTo,hasAttachments"
+)
+
+
+def _normalize_content_type(value: object) -> str:
+    """Normalize mail body content type to Graph-supported values."""
+    if isinstance(value, str) and value.strip().lower() == "html":
+        return "HTML"
+    return "Text"
+
+
+def _normalize_recipients(raw_value: object, field_name: str) -> list[dict[str, dict[str, str]]]:
+    """Convert recipient lists into Graph `emailAddress` payload objects."""
+    if raw_value is None:
+        return []
+    if not isinstance(raw_value, list):
+        raise ValueError(f"{field_name} must be a list of email addresses")
+
+    recipients: list[dict[str, dict[str, str]]] = []
+    for item in raw_value:
+        if isinstance(item, str) and item.strip():
+            recipients.append({"emailAddress": {"address": item.strip()}})
+            continue
+
+        if isinstance(item, dict):
+            email_address = item.get("emailAddress")
+            if isinstance(email_address, dict):
+                address = email_address.get("address")
+                if isinstance(address, str) and address.strip():
+                    recipients.append({"emailAddress": {"address": address.strip()}})
+                    continue
+
+            address = item.get("address")
+            if isinstance(address, str) and address.strip():
+                recipients.append({"emailAddress": {"address": address.strip()}})
+                continue
+
+        raise ValueError(
+            f"{field_name} must contain non-empty email strings or emailAddress objects"
+        )
+
+    return recipients
+
+
+def _build_mail_message(
+    req_body: dict,
+    *,
+    require_to: bool,
+    require_subject: bool,
+    require_body: bool,
+) -> dict:
+    """Build canonical Microsoft Graph mail message payload from request body."""
+    if not isinstance(req_body, dict):
+        raise ValueError("Request body must be a JSON object")
+
+    message: dict = {}
+
+    subject = req_body.get("subject")
+    if subject is None:
+        if require_subject:
+            raise ValueError("Missing required field: subject")
+    elif not isinstance(subject, str):
+        raise ValueError("subject must be a string")
+    else:
+        message["subject"] = subject
+
+    body_content = req_body.get("bodyContent")
+    if body_content is None:
+        if require_body:
+            raise ValueError("Missing required field: bodyContent")
+    elif not isinstance(body_content, str):
+        raise ValueError("bodyContent must be a string")
+    else:
+        message["body"] = {
+            "contentType": _normalize_content_type(req_body.get("contentType")),
+            "content": body_content,
+        }
+
+    to_recipients = _normalize_recipients(req_body.get("toRecipients"), "toRecipients")
+    if require_to and not to_recipients:
+        raise ValueError("Missing required field: toRecipients")
+    if to_recipients:
+        message["toRecipients"] = to_recipients
+
+    cc_recipients = _normalize_recipients(req_body.get("ccRecipients"), "ccRecipients")
+    if cc_recipients:
+        message["ccRecipients"] = cc_recipients
+
+    bcc_recipients = _normalize_recipients(req_body.get("bccRecipients"), "bccRecipients")
+    if bcc_recipients:
+        message["bccRecipients"] = bcc_recipients
+
+    importance = req_body.get("importance")
+    if importance is not None:
+        if not isinstance(importance, str):
+            raise ValueError("importance must be one of: low, normal, high")
+        normalized = importance.strip().lower()
+        if normalized not in {"low", "normal", "high"}:
+            raise ValueError("importance must be one of: low, normal, high")
+        message["importance"] = normalized
+
+    request_delivery_receipt = req_body.get("requestDeliveryReceipt")
+    if request_delivery_receipt is not None:
+        if not isinstance(request_delivery_receipt, bool):
+            raise ValueError("requestDeliveryReceipt must be a boolean")
+        message["isDeliveryReceiptRequested"] = request_delivery_receipt
+
+    request_read_receipt = req_body.get("requestReadReceipt")
+    if request_read_receipt is not None:
+        if not isinstance(request_read_receipt, bool):
+            raise ValueError("requestReadReceipt must be a boolean")
+        message["isReadReceiptRequested"] = request_read_receipt
+
+    return message
+
 
 def get_mail_folders_http(req: func.HttpRequest) -> func.HttpResponse:
     """Get mail folders for a specific user. Uses application token."""
@@ -105,6 +223,10 @@ def get_message_http(req: func.HttpRequest) -> func.HttpResponse:
         message_id = req.route_params.get('message_id')
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
+        if message_id.lower() == "delta":
+            # Azure Functions route resolution may dispatch /me/messages/delta
+            # to /me/messages/{message_id}. Delegate explicitly.
+            return list_inbox_delta_http(req)
 
         token, path = (None, None)
         delegated, base = _get_token_and_base_for_me("Mail.ReadWrite")
@@ -144,11 +266,15 @@ def create_draft_message_http(req: func.HttpRequest) -> func.HttpResponse:
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
 
-        subject = req_body.get('subject')
-        body = req_body.get('body')
-        to_recipients = req_body.get('toRecipients', [])
-        if not subject:
-            return func.HttpResponse("Missing required field: subject", status_code=400)
+        try:
+            data = _build_mail_message(
+                req_body,
+                require_to=False,
+                require_subject=False,
+                require_body=False,
+            )
+        except ValueError as validation_exc:
+            return func.HttpResponse(str(validation_exc), status_code=400)
 
         token, base = _get_token_and_base_for_me("Mail.ReadWrite")
         if not token or not base:
@@ -158,11 +284,6 @@ def create_draft_message_http(req: func.HttpRequest) -> func.HttpResponse:
             )
 
         headers = build_json_headers(token)
-        data = {
-            "subject": subject,
-            "body": {"contentType": "text", "content": body or ""},
-            "toRecipients": [{"emailAddress": {"address": email}} for email in to_recipients],
-        }
         response = requests.post(
             f"{GRAPH_API_ENDPOINT}{base}/messages",
             headers=headers,
@@ -229,6 +350,51 @@ def delete_message_http(req: func.HttpRequest) -> func.HttpResponse:
             return func.HttpResponse("Message deleted successfully", status_code=204)
         return func.HttpResponse(
             f"Error: {response.status_code} - {response.text}", status_code=response.status_code
+        )
+    except Exception as e:
+        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
+
+
+def mark_as_read_http(req: func.HttpRequest) -> func.HttpResponse:
+    """Update a message read-state. Delegated token required."""
+    try:
+        message_id = req.route_params.get('message_id')
+        if not message_id:
+            return func.HttpResponse("Missing message_id in URL path", status_code=400)
+
+        req_body = req.get_json()
+        if not req_body:
+            return func.HttpResponse("Request body required", status_code=400)
+        if "isRead" not in req_body:
+            return func.HttpResponse("Missing required field: isRead", status_code=400)
+
+        is_read = req_body.get("isRead")
+        if not isinstance(is_read, bool):
+            return func.HttpResponse("isRead must be a boolean", status_code=400)
+
+        token, base = _get_token_and_base_for_me("Mail.ReadWrite")
+        if not token or not base:
+            return func.HttpResponse(
+                "Authentication failed. Delegated token required for mail.",
+                status_code=401,
+            )
+
+        headers = build_json_headers(token)
+        response = requests.patch(
+            f"{GRAPH_API_ENDPOINT}{base}/messages/{message_id}",
+            headers=headers,
+            json={"isRead": is_read},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json",
+            )
+        return func.HttpResponse(
+            f"Error: {response.status_code} - {response.text}",
+            status_code=response.status_code,
         )
     except Exception as e:
         return func.HttpResponse(f"Error: {str(e)}", status_code=500)
@@ -350,12 +516,19 @@ def send_message_http(req: func.HttpRequest) -> func.HttpResponse:
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
 
-        to_email = req_body.get('to')
-        subject = req_body.get('subject')
-        body = req_body.get('body')
-        body_type = req_body.get('bodyType', 'text')
-        if not all([to_email, subject, body]):
-            return func.HttpResponse("Missing required fields: to, subject, body", status_code=400)
+        try:
+            message_payload = _build_mail_message(
+                req_body,
+                require_to=True,
+                require_subject=True,
+                require_body=True,
+            )
+        except ValueError as validation_exc:
+            return func.HttpResponse(str(validation_exc), status_code=400)
+
+        save_to_sent_items = req_body.get("saveToSentItems", True)
+        if not isinstance(save_to_sent_items, bool):
+            return func.HttpResponse("saveToSentItems must be a boolean", status_code=400)
 
         token, path = (None, None)
         delegated, base = _get_token_and_base_for_me("Mail.Send")
@@ -379,15 +552,15 @@ def send_message_http(req: func.HttpRequest) -> func.HttpResponse:
 
         headers = build_json_headers(token)
         data = {
-            "message": {
-                "subject": subject,
-                "body": {"contentType": body_type, "content": body},
-                "toRecipients": [{"emailAddress": {"address": to_email}}],
-            }
+            "message": message_payload,
+            "saveToSentItems": save_to_sent_items,
         }
         response = requests.post(f"{GRAPH_API_ENDPOINT}{path}", headers=headers, json=data, timeout=10)
         if response.status_code == 202:
-            return func.HttpResponse(f"Email sent successfully to {to_email}", status_code=202)
+            return func.HttpResponse(
+                "Email sent successfully",
+                status_code=202,
+            )
         return func.HttpResponse(
             f"Error: {response.status_code} - {response.text}", status_code=response.status_code
         )
@@ -419,9 +592,31 @@ def list_inbox_http(req: func.HttpRequest) -> func.HttpResponse:
             )
 
         headers = build_json_headers(token)
+        params = {
+            "$select": req.params.get("$select") or req.params.get("select") or DEFAULT_INBOX_SELECT,
+            "$top": req.params.get("$top") or req.params.get("top") or "20",
+        }
+        skip = req.params.get("$skip") or req.params.get("skip")
+        if skip:
+            params["$skip"] = skip
+        filter_value = req.params.get("$filter") or req.params.get("filter")
+        if filter_value:
+            params["$filter"] = filter_value
+        search_value = req.params.get("$search") or req.params.get("search")
+        if search_value:
+            params["$search"] = search_value
+        else:
+            # Graph rejects $search with $orderby (SearchWithOrderBy), so
+            # only apply inbox default ordering when search is not requested.
+            params["$orderby"] = (
+                req.params.get("$orderby")
+                or req.params.get("orderby")
+                or "receivedDateTime desc"
+            )
+
         response = requests.get(
             f"{GRAPH_API_ENDPOINT}{path}",
-            params={"$select": "id,subject,from,receivedDateTime,isRead", "$top": "20", "$orderby": "receivedDateTime desc"},
+            params=params,
             headers=headers,
             timeout=10,
         )
@@ -429,6 +624,81 @@ def list_inbox_http(req: func.HttpRequest) -> func.HttpResponse:
             return func.HttpResponse(response.text, status_code=200, mimetype="application/json")
         return func.HttpResponse(
             f"Error: {response.status_code} - {response.text}", status_code=response.status_code
+        )
+    except Exception as e:
+        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
+
+
+def list_inbox_delta_http(req: func.HttpRequest) -> func.HttpResponse:
+    """List inbox message deltas. Supports passing a prior delta URL/token."""
+    try:
+        token, path = (None, None)
+        delegated, base = _get_token_and_base_for_me("User.Read Mail.Read")
+        if delegated and base:
+            token, path = delegated, f"{base}/mailFolders/inbox/messages/delta"
+        else:
+            app_token = get_access_token()
+            user_id = _get_agent_user_id()
+            if app_token and user_id:
+                token, path = app_token, f"/users/{user_id}/mailFolders/inbox/messages/delta"
+
+        if not token or not path:
+            return func.HttpResponse(
+                json.dumps({
+                    "error": "auth_unavailable",
+                    "message": "Delegated token missing and app-only fallback not configured",
+                }),
+                status_code=503,
+                mimetype="application/json",
+            )
+
+        headers = build_json_headers(token)
+        delta_token = req.params.get("deltaToken") or req.params.get("delta_token")
+
+        if delta_token:
+            if delta_token.startswith("http://") or delta_token.startswith("https://"):
+                if not delta_token.startswith(GRAPH_API_ENDPOINT):
+                    return func.HttpResponse(
+                        json.dumps(
+                            {
+                                "error": "invalid_delta_token",
+                                "message": "deltaToken URL must target Microsoft Graph endpoint",
+                            }
+                        ),
+                        status_code=400,
+                        mimetype="application/json",
+                    )
+                response = requests.get(delta_token, headers=headers, timeout=15)
+            else:
+                response = requests.get(
+                    f"{GRAPH_API_ENDPOINT}{path}",
+                    params={"$deltatoken": delta_token},
+                    headers=headers,
+                    timeout=15,
+                )
+        else:
+            params = {
+                "$select": req.params.get("$select")
+                or req.params.get("select")
+                or DEFAULT_INBOX_SELECT,
+                "$top": req.params.get("$top") or req.params.get("top") or "50",
+            }
+            response = requests.get(
+                f"{GRAPH_API_ENDPOINT}{path}",
+                params=params,
+                headers=headers,
+                timeout=15,
+            )
+
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json",
+            )
+        return func.HttpResponse(
+            f"Error: {response.status_code} - {response.text}",
+            status_code=response.status_code,
         )
     except Exception as e:
         return func.HttpResponse(f"Error: {str(e)}", status_code=500)

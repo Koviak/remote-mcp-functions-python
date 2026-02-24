@@ -2015,6 +2015,7 @@ def register_http_endpoints(function_app):
     from endpoints import planner_formats as ep_planner_formats
     from endpoints import mail as ep_mail
     from endpoints import calendar as ep_calendar
+    from endpoints import contacts as ep_contacts
     from endpoints import teams as ep_teams
     from endpoints import files_sites as ep_files
     from endpoints import security_reports as ep_sec
@@ -2076,6 +2077,23 @@ def register_http_endpoints(function_app):
               methods=["GET"])(ep_users.list_group_members_http)
     app.route(route="me/sendMail", methods=["POST"])(ep_mail.send_message_http)
     app.route(route="me/messages", methods=["GET"])(ep_mail.list_inbox_http)
+    app.route(route="me/messages/delta", methods=["GET"])(ep_mail.list_inbox_delta_http)
+    app.route(route="me/contacts", methods=["GET"])(ep_contacts.list_contacts_http)
+    app.route(route="me/contacts", methods=["POST"])(ep_contacts.create_contact_http)
+    app.route(route="me/contacts/delta", methods=["GET"])(ep_contacts.list_contacts_delta_http)
+    app.route(route="me/contacts/{contact_id}", methods=["GET"])(ep_contacts.get_contact_http)
+    app.route(route="me/contacts/{contact_id}", methods=["PATCH"])(
+        ep_contacts.update_contact_http
+    )
+    app.route(route="me/contacts/{contact_id}", methods=["DELETE"])(
+        ep_contacts.delete_contact_http
+    )
+    # Non-ambiguous alias used by Annika local MCP tools.
+    # Azure Functions route resolution can dispatch /me/messages/delta to
+    # /me/messages/{message_id} on some host start orders.
+    @app.route(route="me/mailFolders/inbox/messages/delta", methods=["GET"])
+    def list_inbox_delta_alias_http(req: func.HttpRequest) -> func.HttpResponse:
+        return ep_mail.list_inbox_delta_http(req)
     app.route(route="teams", methods=["GET"])(ep_teams.list_teams_http)
     
     # User & Group Management
@@ -2135,6 +2153,7 @@ def register_http_endpoints(function_app):
     app.route(route="me/messages", methods=["POST"])(ep_mail.create_draft_message_http)
     app.route(route="me/messages/{message_id}/send", methods=["POST"])(ep_mail.send_draft_message_http)
     app.route(route="me/messages/{message_id}", methods=["DELETE"])(ep_mail.delete_message_http)
+    app.route(route="me/messages/{message_id}", methods=["PATCH"])(ep_mail.mark_as_read_http)
     app.route(route="me/messages/{message_id}/move", methods=["POST"])(
         ep_mail.move_message_http)
     app.route(route="me/messages/{message_id}/copy", methods=["POST"])(

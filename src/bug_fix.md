@@ -1,5 +1,103 @@
 Bug Fix Log
 
+## 2026-02-23 17:12:34 -06:00
+
+### Problem
+- Graph subscription renewal loop emitted:
+  - `Graph subscription renewal loop failed: can't subtract offset-naive and offset-aware datetimes`
+- This interrupted renewal processing and produced noisy runtime failures after startup.
+
+### Root Cause
+- `src/graph_subscription_manager.py` `_store_subscription()` parsed Graph `expirationDateTime` as timezone-aware, then subtracted `datetime.utcnow()` (naive).
+- Python disallows arithmetic between aware and naive datetimes, raising the observed exception.
+
+### Solution
+- Updated `src/graph_subscription_manager.py`:
+  - Added `_parse_graph_datetime_utc()` helper for normalized UTC-aware parsing.
+  - Switched TTL math to `datetime.now(timezone.utc)`.
+  - Added guard for missing `expirationDateTime` and skip cache write with warning.
+- Updated `src/Tests/test_webhook_mail_routing.py`:
+  - Added regression test for `_store_subscription()` handling Zulu timestamps.
+  - Added regression test for `renew_subscription()` cache update path.
+  - Added test helper to inject fake Redis manager before `GraphSubscriptionManager` init to avoid environment-dependent Redis connection failures in unit tests.
+
+### Verification
+- Targeted tests:
+  - `C:/Users/JoshuaKoviak/.conda/envs/Annika_2.1/python.exe -m pytest src/Tests/test_webhook_mail_routing.py -q`
+  - Result: `5 passed` (cache warning only).
+- Live startup verification:
+  - `C:/Users/JoshuaKoviak/.conda/envs/Annika_2.1/python.exe start_all_services.py --verbose`
+  - Observed successful renewals (`Renewed subscription: ...` and summary `Renewed 6 subscriptions, 2 failed`).
+  - The naive/aware datetime exception did not reappear in the renewal loop.
+
+### Post-Restart Status
+- Verified after reboot and fresh startup run.
+- Remaining runtime errors are separate Graph `NotFound` renewal responses for stale subscription IDs, not datetime arithmetic failures.
+- Pending user confirmation before marking fully resolved.
+
+## 2026-02-23 16:59:41 -06:00
+
+### Problem
+- Post-reboot startup still showed Core Tools selecting `python3.13` and failing `azure.identity` import, even though startup logs printed the intended worker path.
+
+### Root Cause
+- Core Tools Python resolution checks the exact environment key `languageWorkers:python:defaultExecutablePath`.
+- Startup code only set `languageWorkers__python__defaultExecutablePath`, which did not override interpreter selection for this runtime path.
+
+### Solution
+- Updated `src/start_all_services.py` `build_function_host_env()` to set both:
+  - `languageWorkers:python:defaultExecutablePath`
+  - `languageWorkers__python__defaultExecutablePath`
+- Kept `PYTHONEXECUTABLE` and existing preflight import checks unchanged.
+- Extended `src/Tests/test_start_all_services_runtime.py` assertions to verify the colon-form key is present.
+
+### Verification
+- `C:/Users/JoshuaKoviak/.conda/envs/Annika_2.1/python.exe -m pytest src/Tests/test_start_all_services_runtime.py -q` -> `3 passed`
+- Startup re-test:
+  - `C:/Users/JoshuaKoviak/.conda/envs/Annika_2.1/python.exe start_all_services.py --verbose`
+  - Core Tools output now: `Found Python version 3.11.13 (C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe).`
+  - Worker indexed function app successfully (`Indexed function app and found 117 functions`).
+
+### Post-Restart Status
+- Interpreter selection and import failure are technically verified as fixed after reboot/startup retest.
+- Pending user confirmation before marking fully resolved.
+- New separate runtime issue observed: `Graph subscription renewal loop failed: can't subtract offset-naive and offset-aware datetimes` (not part of the interpreter fix).
+
+## 2026-02-23 16:48:27 -06:00
+
+### Problem
+- `python start_all_services.py --verbose` booted Azure Functions Core Tools with Windows Store `python3.13`, not `Annika_2.1` Python.
+- Function indexing failed with `ModuleNotFoundError: No module named 'azure.identity'`, then readiness probes stayed on `404` and startup aborted.
+
+### Root Cause
+- `start_all_services.py` launched `func start` without pinning the Python worker executable, so Core Tools auto-selected `python3` from PATH.
+- In this environment, `python3` points to Windows Store Python where required Azure packages are not installed.
+
+### Solution
+- Updated `src/start_all_services.py`:
+  - Added `build_function_host_env()` to force:
+    - `languageWorkers__python__defaultExecutablePath=<current interpreter>`
+    - `PYTHONEXECUTABLE=<current interpreter>`
+    - `ASPNETCORE_URLS` binding unchanged (`0.0.0.0:7071`).
+  - Added `python_can_import_modules()` preflight validation and fail-fast error for missing `azure.identity`/`azure.functions` before launching `func`.
+  - Added explicit log line showing which Python worker is used.
+- Added regression coverage in `src/Tests/test_start_all_services_runtime.py` for env construction and dependency preflight helper behavior.
+
+### Verification
+- Interpreter mismatch confirmed:
+  - `python` -> `Annika_2.1` Python 3.11 (imports `azure.identity`)
+  - `python3` -> Windows Store Python 3.13 (fails importing `azure.identity`)
+- Tests:
+  - `C:/Users/JoshuaKoviak/.conda/envs/Annika_2.1/python.exe -m pytest src/Tests/test_start_all_services_runtime.py -q`
+  - Result: `3 passed`
+- Lint diagnostics:
+  - `ReadLints` on edited files reported no remaining issues.
+
+### Post-Restart Status
+- Pending user restart confirmation by rerunning:
+  - `python start_all_services.py --verbose`
+- Expected: no `azure.identity` import error during function indexing and readiness endpoint returns 200.
+
 Date: 2025-11-12 21:30
 
 Issue
@@ -195,6 +293,163 @@ Verification
 
 Impact
 - Azure Functions runtime can consume the canonical Redis manager without manually copying code between repositories.
+
+---
+
+## 2026-02-22 23:40:32 -06:00
+
+### Problem
+- Contact sync service only mirrored webhook state and did not emit canonical ingest events.
+- Microsoft contact delta cursor handling and webhook dedup were missing.
+- Microsoft outbound queue processing was not implemented as a durable worker loop.
+- Service lifecycle wiring did not include a Graph subscription renewal background loop for contact/webhook continuity.
+
+### Solution
+- Updated `src/contact_sync_service.py`:
+  - Added canonical ingest publish contract on `annika:contacts:ingest`.
+  - Added webhook dedup persistence (`annika:contacts:processed:*`).
+  - Added delta cursor storage/read helpers (`annika:contacts:sync:state:microsoft:me:delta`) and delta polling loop.
+  - Added Microsoft outbox worker loop consuming `annika:contacts:outbox:microsoft`, with retry/backoff and DLQ (`annika:contacts:dlq:microsoft`).
+  - Added Microsoft Graph write execution path for create/update/delete and id-map updates on create.
+  - Added health snapshot aggregation in `annika:contacts:sync:health:microsoft`.
+- Updated `src/webhook_handler.py`:
+  - Added contact webhook dedup key flow using Redis TTL keys before publish.
+- Updated `src/start_all_services.py`:
+  - Added `GraphSubscriptionManager` initialization and periodic subscription renewal background task in sync startup path.
+
+### Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_contacts_sync_service_ingest.py D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_contacts_sync_service_delta_cursor.py D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_contacts_sync_service_outbound_ms.py D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_contacts_webhook_dedup.py D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_contacts_webhook_routing.py D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_contacts_delta_or_poll.py D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_contacts_endpoints.py D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_subscription_renewal.py -v`
+- Result: PASS
+
+### Post-Restart Verification
+- Pending user restart confirmation for long-running loops (delta poll, outbox worker, subscription renewal loop) in live service runtime.
+
+## 2026-02-17 - Outlook mail compose/read endpoint hardening
+
+### Problem
+- New Outlook agent workflows needed richer compose contract support (recipients, content types, delivery/read receipts, importance) and explicit read-state updates.
+
+### Solution
+- Updated `src/endpoints/mail.py`:
+  - Added helper normalization/build functions for canonical message payload parsing.
+  - Refactored draft/send endpoints to use canonical message builder.
+  - Added `mark_as_read_http` PATCH handler with strict `isRead` boolean validation.
+- Updated `src/http_endpoints.py`:
+  - Registered `PATCH /api/me/messages/{message_id}` -> `mark_as_read_http`.
+
+### Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest src/Tests/test_mail_contract_endpoints.py -q`
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest src/Tests/test_mail_delta_endpoint.py -q`
+- Result: PASS
+
+### Post-Restart Verification
+- Pending user restart confirmation.
+
+---
+
+## 2026-02-17 - Outlook search compatibility fix for Graph inbox endpoint
+
+### Problem
+- Local MCP `office_mail_search_messages` calls failed through MS-MCP with:
+  - `SearchWithOrderBy` Graph error (when search used with orderby).
+- Endpoint behavior forced default `$orderby` in all cases, including search mode.
+
+### Solution
+- `src/endpoints/mail.py`
+  - In `list_inbox_http`, only apply `$orderby` when no search term is present.
+  - Preserve search/filter/select/top behavior.
+- Added contract tests in `src/Tests/test_mail_contract_endpoints.py`.
+
+### Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest src/Tests/test_mail_contract_endpoints.py -q`
+- Result: PASS
+
+### Runtime Note
+- Live probes during this session show MS-MCP host `192.168.0.35:7071` timing out on health and mail routes, so live verification of this specific fix requires MS-MCP restart/health recovery.
+
+### Post-Restart Verification
+- Pending user restart confirmation.
+
+## 2026-02-17 - Outlook delta route ambiguity fix for Azure Functions
+
+### Problem
+- Annika delta calls to `/api/me/messages/delta` were intermittently dispatched by Azure Functions to `get_message_http` (`/me/messages/{message_id}`) instead of `list_inbox_delta_http`.
+- This caused startup backfill failures in Annika with:
+  - `Outlook delta backfill: status=error ... cursor_advanced=False`
+  - upstream 400 from Graph (`Unsupported request: Change tracking is not supported against 'microsoft.graph.message'.`).
+
+### Solution
+- `src/http_endpoints.py`
+  - Added a non-ambiguous alias route for inbox delta:
+    - `me/mailFolders/inbox/messages/delta` -> `ep_mail.list_inbox_delta_http`
+  - Kept existing route `me/messages/delta` intact.
+
+### Verification
+- Remote regression suite:
+  - `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest src/Tests/test_webhook_mail_routing.py src/Tests/test_mail_delta_endpoint.py src/Tests/test_subscription_renewal.py -v`
+- Result: PASS
+
+### Post-Restart Verification
+- Pending user restart confirmation (remote service must reload route table).
+
+---
+
+## 2026-02-17 - Fix duplicate Azure Function name on inbox delta alias
+
+### Problem
+- Registering `ep_mail.list_inbox_delta_http` on both:
+  - `me/messages/delta`
+  - `me/mailFolders/inbox/messages/delta`
+  caused Azure Functions startup failure:
+  - `ValueError: Function list_inbox_delta_http does not have a unique function name`.
+
+### Solution
+- `src/http_endpoints.py`
+  - Kept primary route binding.
+  - Replaced direct second binding with a uniquely named wrapper:
+    - `list_inbox_delta_alias_http(req)` returning `ep_mail.list_inbox_delta_http(req)`.
+  - This preserves both routes while keeping unique function names for indexing.
+
+### Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest src/Tests/test_webhook_mail_routing.py src/Tests/test_mail_delta_endpoint.py src/Tests/test_subscription_renewal.py -q`
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -c "import function_app; print('function_app_import_ok')"`
+- Result: PASS
+
+### Post-Restart Verification
+- Pending user restart confirmation.
+
+---
+
+## 2026-02-17 - Guard `/me/messages/delta` route collision in message handler
+
+### Problem
+- Azure Functions can still dispatch `/api/me/messages/delta` to
+  `/api/me/messages/{message_id}` in some host states.
+- When this happens, `get_message_http` receives `message_id="delta"` and returns:
+  - `Unsupported request: Change tracking is not supported against 'microsoft.graph.message'.`
+
+### Solution
+- `src/endpoints/mail.py`
+  - Added early guard in `get_message_http`:
+    - If `message_id.lower() == "delta"`, delegate to `list_inbox_delta_http(req)`.
+  - This makes the old path safe even when route matching is ambiguous.
+
+### Test Coverage
+- `src/Tests/test_mail_delta_endpoint.py`
+  - Added `test_get_message_http_delegates_delta_message_id`.
+  - Expanded `_fake_request` helper to support route params.
+
+### Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest src/Tests/test_mail_delta_endpoint.py -q`
+- Result: PASS
+
+### Runtime Notes
+- Current `start_all_services.py` session shows repeated:
+  - `Host unavailable after check. Returning error.`
+- This indicates the active Function host instance is unhealthy and must be restarted to load latest endpoint fixes.
+
+### Post-Restart Verification
+- Pending user restart confirmation.
 
 ---
 
