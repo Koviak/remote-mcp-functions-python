@@ -2010,18 +2010,19 @@ def register_http_endpoints(function_app):
     app = function_app
     # Import modular endpoint handlers (refactored per modular architecture)
     from endpoints import admin as ep_admin
-    from endpoints import planner as ep_planner
-    from endpoints import tasks_buckets as ep_tasks
-    from endpoints import planner_formats as ep_planner_formats
-    from endpoints import mail as ep_mail
+    from endpoints import agent_tools as ep_agent
+    from endpoints import agent_webhook as ep_webhook
     from endpoints import calendar as ep_calendar
     from endpoints import contacts as ep_contacts
-    from endpoints import teams as ep_teams
     from endpoints import files_sites as ep_files
+    from endpoints import mail as ep_mail
+    from endpoints import planner as ep_planner
+    from endpoints import planner_formats as ep_planner_formats
     from endpoints import security_reports as ep_sec
+    from endpoints import tasks_buckets as ep_tasks
+    from endpoints import teams as ep_teams
+    from endpoints import todo as ep_todo
     from endpoints import users_groups as ep_users
-    from endpoints import agent_webhook as ep_webhook
-    from endpoints import agent_tools as ep_agent
     
     # Basic endpoints
     app.route(route="groups", methods=["GET"])(ep_admin.list_groups_http)
@@ -2058,6 +2059,35 @@ def register_http_endpoints(function_app):
     app.route(route="me/tasks", methods=["GET"])(ep_tasks.list_my_tasks_http)
     app.route(route="users/{user_id}/tasks", methods=["GET"])(
         ep_tasks.list_user_tasks_http)
+
+    # Microsoft To Do endpoints (delegated only)
+    app.route(route="me/todo/lists", methods=["GET"])(ep_todo.list_todo_lists_http)
+    app.route(
+        route="me/todo/lists/{todo_list_id}/tasks",
+        methods=["GET"],
+    )(ep_todo.list_todo_tasks_http)
+    app.route(route="me/todo/tasks", methods=["POST"])(ep_todo.create_todo_task_http)
+    
+    def create_todo_task_in_list_http(req: func.HttpRequest) -> func.HttpResponse:
+        """Create a Microsoft To Do task for an explicit list route."""
+        return ep_todo.create_todo_task_http(req)
+
+    app.route(
+        route="me/todo/lists/{todo_list_id}/tasks",
+        methods=["POST"],
+    )(create_todo_task_in_list_http)
+    app.route(
+        route="me/todo/lists/{todo_list_id}/tasks/{todo_task_id}",
+        methods=["GET"],
+    )(ep_todo.get_todo_task_http)
+    app.route(
+        route="me/todo/lists/{todo_list_id}/tasks/{todo_task_id}",
+        methods=["PATCH"],
+    )(ep_todo.update_todo_task_http)
+    app.route(
+        route="me/todo/lists/{todo_list_id}/tasks/{todo_task_id}",
+        methods=["DELETE"],
+    )(ep_todo.delete_todo_task_http)
     
     # Bucket endpoints
     app.route(route="plans/{plan_id}/buckets", methods=["GET"])(
@@ -4442,24 +4472,29 @@ def graph_webhook_http(req: func.HttpRequest) -> func.HttpResponse:
 
         from webhook_handler import handle_graph_webhook
         
-        # Process each notification through our V5 handler
-        for notification in notifications:
-            try:
-                # Run the async webhook handler
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+        # Process all notifications in a single event loop to avoid
+        # cross-loop Future/Lock contamination on the global webhook_handler.
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            for notification in notifications:
                 try:
                     success = loop.run_until_complete(handle_graph_webhook(notification))
                     if success:
                         logger.info(f"Successfully processed webhook notification: {notification.get('changeType')} for {notification.get('resource')}")
                     else:
                         logger.warning(f"Failed to process webhook notification: {notification}")
-                finally:
-                    loop.close()
-                    
-            except Exception as e:
-                logger.error(f"Error processing individual notification: {e}")
-                # Continue processing other notifications
+                except Exception as e:
+                    logger.error(f"Error processing individual notification: {e}")
+
+            # Wait for all pending async tasks to complete before closing
+            pending = asyncio.all_tasks(loop)
+            if pending:
+                loop.run_until_complete(
+                    asyncio.gather(*pending, return_exceptions=True)
+                )
+        finally:
+            loop.close()
         
         return func.HttpResponse("OK", status_code=200)
         
@@ -4837,6 +4872,3 @@ def trigger_planner_poll_http(req: func.HttpRequest) -> func.HttpResponse:
             status_code=500,
             mimetype="application/json"
         )
-
-
-

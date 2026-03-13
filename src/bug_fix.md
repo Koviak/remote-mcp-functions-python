@@ -1,5 +1,126 @@
 Bug Fix Log
 
+## 2026-03-13 - FIX: Asyncio event loop cross-contamination in webhook handler (ROOT-005)
+
+**File Modified:** `src/http_endpoints.py` — webhook notification processing loop
+
+**Problem:** Each webhook notification created a NEW `asyncio.new_event_loop()`, called the global `webhook_handler` singleton, then closed the loop. The global handler's Redis client (Futures, Locks) were bound to the first loop. Subsequent loops got `RuntimeError: got Future attached to a different loop` and `RuntimeError: asyncio.locks.Lock is bound to a different event loop`. Mail notifications silently dropped. 9 errors in logs.
+
+**Fix:** Changed to process ALL notifications in a SINGLE event loop (matching the pattern already used in `agent_webhook.py`). Loop is created once, all notifications processed, pending tasks drained, then loop closed.
+
+**Status:** Applied
+
+---
+
+## 2026-03-09 14:05:00 -06:00
+
+### Problem
+- Mail endpoints only operated on the configured Annika mailbox (`AGENT_USER_ID` / `/me`).
+- Even with Exchange delegate permissions, Annika could not explicitly read or send as `joshua@koviakbuilt.com` through the existing HTTP contract.
+
+### Root Cause
+- `src/endpoints/mail.py` always resolved delegated mail calls against `/me` and app-only fallback against the single configured agent mailbox.
+- The local `office_mail` tools had no mailbox override field to pass a target mailbox through the request contract.
+
+### Solution
+- Updated `src/endpoints/mail.py`:
+  - Added mailbox override parsing from `userId` / `mailboxUser`.
+  - Added shared-mailbox scope routing for delegated requests:
+    - `User.Read Mail.ReadWrite.Shared`
+    - `User.Read Mail.Send.Shared`
+  - Added `/users/{target_mailbox}` routing for inbox, delta, send, draft, reply, move, copy, attachment, folder, and message mutation flows.
+  - Added `from` stamping when explicitly sending from another mailbox.
+- Added regression tests:
+  - `src/Tests/test_mail_contract_endpoints.py`
+  - `src/Tests/test_mail_delta_endpoint.py`
+
+### Verification
+- Pending targeted pytest run and live delegated mailbox verification after patch application.
+
+## 2026-02-27 10:51:03 -06:00
+
+### Problem
+- Graph webhook processing emitted repeated runtime errors:
+  - `Unhandled resource type: chats('...')/messages('...') with client state: chat_global`
+  - `Error logging webhook notification: Event loop is closed`
+  - `Error logging webhook notification: <asyncio.locks.Lock ...> is bound to a different event loop`
+- Single Teams chat messages were delivered multiple times (6-7 duplicate notifications) due to duplicate active `/me/chats/getAllMessages` subscriptions.
+
+### Root Cause
+- `src/webhook_handler.py` only matched resources containing `"/chats"` or `"/teams"`, missing parenthesized Graph formats like `chats('id')/messages('id')`.
+- `src/function_app.py` eagerly initialized global async clients on short-lived background loops; later webhook invocations used different loops, causing redis async lock/loop binding errors.
+- Duplicate global chat message subscriptions accumulated and were not deduped before runtime use.
+- `src/planner_sync_service_v5.py` compared timezone-aware Graph expiration values against a naive `datetime.utcnow()` in webhook discovery logic.
+
+### Solution
+- Updated `src/webhook_handler.py`:
+  - Added loop-aware Redis client rebinding (`_ensure_redis_client`) before handling/logging/health calls.
+  - Added routing support for parenthesized Graph resources:
+    - `chats('...')/messages('...')`
+    - `teams('...')/channels('...')/messages('...')`
+  - Added explicit `chat_global` routing to Teams chat handler.
+  - Added resource ID extraction fallbacks for chat/channel message IDs from parenthesized paths.
+- Updated `src/function_app.py`:
+  - Removed eager background-loop initialization for webhook/chat managers; switched to lazy-init behavior to avoid cross-loop async client reuse.
+- Updated `src/chat_subscription_manager.py`:
+  - Added `/me/chats/getAllMessages` dedupe flow to keep one active subscription and delete extras.
+  - Added `ensure_single_global_chat_subscription()` helper and integrated it into `subscribe_to_all_existing_chats()`.
+- Updated `src/planner_sync_service_v5.py`:
+  - Fixed timezone-aware expiration comparisons in `_find_existing_webhook()`.
+- Added operational utility:
+  - `src/scripts/dedupe_chat_global_subscriptions.py`
+- Added regression tests:
+  - `src/Tests/test_webhook_teams_chat_routing.py`
+  - `src/Tests/test_planner_webhook_matching.py`
+  - `src/Tests/test_chat_subscription_dedupe.py`
+  - Updated webhook/contact tests for loop-aware handler initialization.
+
+### Verification
+- Tests:
+  - `python -m pytest src/Tests/test_webhook_mail_routing.py src/Tests/test_contacts_webhook_routing.py src/Tests/test_contacts_webhook_dedup.py src/Tests/test_webhook_teams_chat_routing.py src/Tests/test_planner_webhook_matching.py src/Tests/test_chat_subscription_dedupe.py -q`
+  - Result: `13 passed`.
+- Live subscription dedupe:
+  - `python src/scripts/dedupe_chat_global_subscriptions.py`
+  - Result: deleted 5 duplicate `/me/chats/getAllMessages` subscriptions, retained `4ba20974-3963-41e7-bee9-226e9b99a07e`, and confirmed active global subscription health.
+
+## 2026-02-24 13:29:35 -06:00
+
+### Problem
+- Graph renewal loop repeatedly logged stale subscription failures:
+  - `No subscription found for tenantId ... and subscriptionId: e6626024-2f1f-4b5b-b840-779449c4ca21`
+  - `No subscription found for tenantId ... and subscriptionId: d3e6722c-e295-481f-9d06-29b978686355`
+- Local startup paths could schedule overlapping renewal monitors, creating duplicate renewal noise.
+
+### Root Cause
+- `src/graph_subscription_manager.py` handled non-200 renewal responses as terminal failures with no stale-ID recovery path.
+- Startup code had multiple potential renewal owners (`start_all_services.py` and `startup_local_services.py`) with no explicit owner guard.
+
+### Solution
+- Updated `src/graph_subscription_manager.py`:
+  - Added structured renewal path via `renew_subscription_detailed()`.
+  - Added targeted 404 self-heal flow:
+    - load cached subscription context,
+    - retire stale cache key,
+    - recreate by same `resource`/`clientState`/`changeType` intent,
+    - log `RETIRED_STALE_SUBSCRIPTION old_id -> new_id`.
+  - Added reusable `create_subscription(...)` helper for intent-based recreation.
+  - Extended renewal summary return/log to include `recovered_not_found`.
+- Updated startup ownership controls:
+  - `src/start_all_services.py` now sets default `GRAPH_RENEW_LOOP_OWNER=start_all_services` and only starts renewal loop when owner matches.
+  - `src/startup_local_services.py` skips monitor loop when owner is not `startup_local_services`.
+  - `src/function_app.py` skips `startup_local_services` bootstrap when owner is `start_all_services`.
+- Added/updated tests:
+  - `src/Tests/test_webhook_mail_routing.py` now covers 404 targeted recovery and renewal summary counters.
+  - `src/Tests/test_start_all_services_runtime.py` now asserts `GRAPH_RENEW_LOOP_OWNER` propagation in child env.
+
+### Verification
+- `C:/Users/JoshuaKoviak/.conda/envs/Annika_2.1/python.exe -m pytest src/Tests/test_webhook_mail_routing.py src/Tests/test_start_all_services_runtime.py -q`
+- Result: `10 passed`.
+
+### Post-Restart Status
+- Runtime verification pending service restart and next renewal cycle.
+- Expected: no repeated stale-ID renewal errors, summary includes `recovered_not_found` when stale IDs are encountered.
+
 ## 2026-02-23 17:12:34 -06:00
 
 ### Problem
@@ -892,3 +1013,137 @@ Next Steps
 
 ---
 
+## 2026-03-09 - Outlook webhook subscriptions follow configured sync mailbox
+
+Problem
+- `graph_subscription_manager.py` defaulted mail subscriptions to `/me/messages`, which bound Outlook webhook sync to Annika's mailbox even when Joshua's mailbox should be monitored.
+
+Changes
+- Added `OUTLOOK_SYNC_MAILBOX_USER_ID` support.
+- `create_mail_subscription()` now defaults to `/users/{mailbox}/messages` when that env var is configured.
+- Expanded mail-resource detection so `/users/{mailbox}/messages` still receives `GRAPH_WEBHOOK_MAIL_CLIENT_STATE`.
+- Added regression coverage in `src/Tests/test_webhook_mail_routing.py`.
+
+Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest ..\remote-mcp-functions-python\src\Tests\test_webhook_mail_routing.py -q`
+- Result: `8 passed, 1 warning in 0.24s`
+
+---
+
+## 2026-03-09 20:02:48 -05:00 - Pin Functions Python worker for manual `func start`
+
+Problem
+- Annika mailbox ingest was still failing after contact repair because the configured Office Functions process on port `7071` was listening but not reaching host readiness. Direct delta requests returned `503 Function host is not running`, while direct Graph delta for Annika returned `HTTP 200` immediately.
+- The live process was launched as bare `func start --port 7071`, which can bind the port without selecting the correct Python worker for this Conda environment.
+
+Changes
+- Updated `src/local.settings.json`:
+  - Added `languageWorkers__python__defaultExecutablePath`
+  - Added `languageWorkers:python:defaultExecutablePath`
+  - Added `PYTHONEXECUTABLE`
+  - All three are pinned to `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe`
+- Updated `src/.env`:
+  - Added `FUNCTIONS_PYTHON_EXE=C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe` so `start_all_services.py` and related launchers stay pinned to the same worker path.
+- Updated `src/Tests/test_start_all_services_runtime.py`:
+  - Added regression coverage that `local.settings.json` pins the worker path consistently.
+
+Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_start_all_services_runtime.py -q`
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m py_compile D:\Git-Hub_Local\remote-mcp-functions-python\src\start_all_services.py D:\Git-Hub_Local\remote-mcp-functions-python\src\function_app.py`
+- Live diagnostics:
+  - Direct Graph delta: `GET /users/annika@reddypros.com/mailFolders/inbox/messages/delta` returned `200` in `0.68s`
+  - Office Functions endpoint before restart still showed host-readiness failure, confirming restart is required to pick up the worker-pin fix
+
+---
+
+## 2026-03-10 00:58:08 -05:00 - Post-reboot Office Functions readiness verified for Annika mail
+
+Problem
+- The worker-pin fix needed post-reboot verification to prove the live Functions host on port `7071` was no longer stuck in the `Function host is not running` state.
+
+Changes
+- No additional code changes in this pass.
+- Verified the live rebooted Functions host and Annika mail endpoint behavior.
+
+Verification
+- `GET http://127.0.0.1:7071/api/health/ready` returned `200`
+- `office_mail_get_inbox_delta(userId='annika@reddypros.com')` returned `status=success`
+- The response included live Annika inbox messages and a valid `@odata.nextLink`, confirming the Office Functions mail proxy is healthy after reboot
+
+---
+
+
+## 2026-02-24 14:11:01-06:00 - Planner payload hardening (targeted log fixes)
+
+- `src/annika_task_adapter.py`
+  - Hardened `_normalize_datetime_field` to sanitize Unicode dash variants, validate ISO payloads, normalize to UTC `Z`, and drop irrecoverably invalid values before Graph requests.
+  - Added explicit observability markers: `datetime_sanitized`, `datetime_dropped_invalid`.
+  - Updated checklist conversion to cap Planner checklist titles at 100 chars with `checklist_title_truncated` log markers.
+- `src/planner_sync_service_v5.py`
+  - Added `_self_heal_stale_bucket_fields(...)` to clear stale `planner_bucket_id` / `bucket_id` from source Annika task docs and stamp `updated_at`.
+  - Wired self-heal into create/update/batch-create flows when bucket validation definitively detects invalid bucket IDs.
+  - Added explicit observability marker: `bucket_self_healed`.
+- Tests
+  - Expanded planner safety/normalization tests to cover datetime sanitize+drop behavior, checklist 100-char enforcement, and bucket self-heal paths.
+  - Validation run: `python -m pytest Tests\\test_planner_schedule_safety.py Tests\\test_planner_sync_normalization.py -q` (15 passed).
+
+---
+
+## 2026-03-10 - Register delegated Microsoft To Do HTTP routes
+
+Problem
+- `src/http_endpoints.py` registered Planner, Mail, Calendar, Teams, Files, and Contacts routes, but it did not expose the delegated Microsoft To Do list/task HTTP surface needed by the remote MCP.
+
+Changes
+- Imported the new `endpoints.todo` module in `register_http_endpoints(...)`.
+- Registered delegated routes for:
+  - `GET /api/me/todo/lists`
+  - `GET /api/me/todo/lists/{todo_list_id}/tasks`
+  - `POST /api/me/todo/tasks`
+  - `POST /api/me/todo/lists/{todo_list_id}/tasks`
+  - `GET|PATCH|DELETE /api/me/todo/lists/{todo_list_id}/tasks/{todo_task_id}`
+- Added To Do-only delegated-user routing so the remote MCP can use Joshua credentials for To Do while leaving the global Annika delegated identity unchanged elsewhere.
+
+Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest ..\remote-mcp-functions-python\src\Tests\test_todo_http_endpoints.py -q -p no:cacheprovider`
+
+Post-Restart Verification
+- Pending user restart confirmation for live Azure Functions route availability.
+
+---
+
+## 2026-03-12 12:21 CT - Add env-driven Planner sync direction gates while preserving other Microsoft services
+
+Problem
+- The V5 Planner sync service did not have an env-driven way to disable automated Planner task sync in one or both directions.
+- Existing Redis config could suppress Planner task webhook subscriptions, but it did not disable outbound Annika -> Planner uploads, initial sync behavior, or Planner polling/import loops.
+- The goal was to isolate Planner task sync only, without disabling Teams, chats, channels, shared Graph auth, or direct/manual Planner capabilities elsewhere in the stack.
+
+Changes
+- `src/planner_sync_service_v5.py`
+  - Added env parsing for:
+    - `PLANNER_SYNC_ENABLED`
+    - `PLANNER_SYNC_FROM_PLANNER_ENABLED`
+    - `PLANNER_SYNC_TO_PLANNER_ENABLED`
+  - Added effective runtime flags:
+    - `planner_sync_master_enabled`
+    - `from_planner_sync_enabled`
+    - `to_planner_sync_enabled`
+    - `planner_sync_enabled`
+  - Logged the effective Planner sync mode at startup.
+  - Kept non-Planner webhook setup intact while forcing Planner task webhook setup off when inbound sync is disabled.
+  - Skipped only the Planner-specific service loops when disabled:
+    - inbound: webhook notification processing, Planner polling
+    - outbound: Annika change monitoring, upload batching
+  - Made initial sync directional:
+    - outbound recent-task scan only when Annika -> Planner sync is enabled
+    - inbound Planner poll only when Planner -> Annika sync is enabled
+  - Added safety no-ops for queueing uploads, upload batches, quick polls, and direct Planner polling when the matching direction is disabled.
+  - Exposed the effective Planner sync flags in health metrics.
+- `src/Tests/test_planner_sync_env_gates.py`
+  - Added targeted regressions for master-switch precedence, outbound-only disable, initial-sync skip, upload-queue no-op, and inbound poll disable behavior.
+
+Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m py_compile src\planner_sync_service_v5.py src\Tests\test_planner_sync_env_gates.py`
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest src\Tests\test_planner_sync_env_gates.py src\Tests\test_planner_write_tokens.py src\Tests\test_planner_webhook_matching.py -q`
+- Result: PASS
