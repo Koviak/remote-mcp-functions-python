@@ -10,6 +10,8 @@
     "user_id": "REPLACE_WITH_VALID_USER_ID",
     "team_id": "REPLACE_WITH_VALID_TEAM_ID",
     "message_id": "REPLACE_WITH_VALID_MESSAGE_ID",
+    "todo_list_id": "REPLACE_WITH_VALID_TODO_LIST_ID",
+    "todo_task_id": "REPLACE_WITH_VALID_TODO_TASK_ID",
     "drive_id": "REPLACE_WITH_VALID_DRIVE_ID",
     "item_id": "REPLACE_WITH_VALID_ITEM_ID",
     "event_id": "REPLACE_WITH_VALID_EVENT_ID"

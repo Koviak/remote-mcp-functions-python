@@ -40,3 +40,26 @@
 
 ### Post-Restart Verification
 - Pending user restart confirmation for live endpoint behavior in running MS-MCP service.
+
+---
+
+## 2026-03-10 - Delegated Microsoft To Do endpoint module
+
+### Problem
+- The remote MCP HTTP surface exposed Planner task routes but not delegated Microsoft To Do task-list/task CRUD endpoints.
+- Agents had a delegated MCP tool for creating a To Do task, but there was no matching HTTP route family for list discovery, task reads, task updates, or deletes.
+
+### Solution
+- Added `src/endpoints/todo.py` with delegated handlers for:
+  - listing To Do lists
+  - listing tasks inside a list
+  - creating a task in an explicit list or the detected default list
+  - getting, updating, and deleting a task inside a list
+- Added To Do-only delegated-user selection (`joshua`, `annika`) with Joshua as the default.
+- Updated `src/endpoints/agents.md` to document the new module and its focused test command.
+
+### Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest ..\remote-mcp-functions-python\src\Tests\test_todo_http_endpoints.py -q -p no:cacheprovider`
+
+### Post-Restart Verification
+- Pending user restart confirmation for live `me/todo/*` HTTP behavior.

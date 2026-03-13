@@ -132,30 +132,30 @@ class LocalServicesManager:
             )
             logger.info(f"Found {len(existing)} existing subscriptions")
             
-            # Create user and event subscriptions
-            created = 0
-            
-            user_sub_id = await asyncio.to_thread(
-                self.subscription_manager.create_user_subscription
-            )
-            if user_sub_id:
-                logger.info("✅ Created user message subscription")
-                created += 1
-            
-            event_sub_id = await asyncio.to_thread(
-                self.subscription_manager.create_event_subscription
-            )
-            if event_sub_id:
-                logger.info("✅ Created calendar event subscription")
-                created += 1
-            
-            # Set up group subscriptions
-            logger.info("👥 Setting up group subscriptions...")
+            before_ids = {
+                str(sub.get("id"))
+                for sub in existing
+                if isinstance(sub, dict) and sub.get("id")
+            }
+
+            logger.info("👥 Setting up Graph subscriptions...")
             await asyncio.to_thread(
                 self.subscription_manager.setup_annika_subscriptions
             )
-            
-            logger.info(f"✅ Webhook setup complete ({created}+ subscriptions)")
+
+            after = await asyncio.to_thread(
+                self.subscription_manager.list_active_subscriptions
+            )
+            after_ids = {
+                str(sub.get("id"))
+                for sub in after
+                if isinstance(sub, dict) and sub.get("id")
+            }
+
+            logger.info(
+                "✅ Webhook setup complete (%s new subscriptions)",
+                len(after_ids - before_ids),
+            )
             return True
             
         except Exception as e:
@@ -251,8 +251,13 @@ class LocalServicesManager:
         if not await self.setup_webhooks():
             logger.warning("Webhook setup failed - continuing anyway")
         
-        # Start subscription monitoring
-        asyncio.create_task(self.monitor_subscriptions())
+        renew_owner = os.getenv("GRAPH_RENEW_LOOP_OWNER", "startup_local_services")
+        if renew_owner == "startup_local_services":
+            logger.info("Graph renewal loop owner=%s (startup_local_services monitor enabled)", renew_owner)
+            # Start subscription monitoring
+            asyncio.create_task(self.monitor_subscriptions())
+        else:
+            logger.info("Graph renewal loop owner=%s (startup_local_services monitor skipped)", renew_owner)
         
         logger.info("✅ All services started successfully!")
         logger.info(f"📡 Webhook URL: {self.webhook_url}")

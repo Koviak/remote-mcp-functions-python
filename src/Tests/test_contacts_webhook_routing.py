@@ -1,6 +1,7 @@
 import json as json_lib
 import os
 import sys
+import asyncio
 
 import pytest
 
@@ -37,6 +38,7 @@ class _FakeAsyncRedis:
 async def test_contacts_notification_publishes_to_contacts_channel():
     handler = GraphWebhookHandler()
     handler.redis_client = _FakeAsyncRedis()
+    handler._redis_client_loop = asyncio.get_running_loop()
 
     notification = {
         "changeType": "created",

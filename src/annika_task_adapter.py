@@ -23,6 +23,19 @@ except ModuleNotFoundError:  # pragma: no cover - local execution fallback
 
 logger = logging.getLogger(__name__)
 
+DATETIME_DASH_TRANSLATION = str.maketrans(
+    {
+        "\u2010": "-",  # Hyphen
+        "\u2011": "-",  # Non-breaking hyphen
+        "\u2012": "-",  # Figure dash
+        "\u2013": "-",  # En dash
+        "\u2014": "-",  # Em dash
+        "\u2015": "-",  # Horizontal bar
+        "\u2212": "-",  # Minus sign
+        "\uff0d": "-",  # Full-width hyphen-minus
+    }
+)
+
 # Field mappings
 PLANNER_TO_ANNIKA_FIELDS = {
     "percentComplete": "percent_complete",
@@ -122,14 +135,41 @@ class AnnikaTaskAdapter:
     def _normalize_datetime_field(value: Optional[str]) -> Optional[str]:
         if not value or not isinstance(value, str):
             return None
+        original = value
         candidate = value.strip()
         if not candidate:
             return None
+        candidate = candidate.translate(DATETIME_DASH_TRANSLATION)
+        if " " in candidate and "T" not in candidate:
+            candidate = candidate.replace(" ", "T", 1)
         if "T" not in candidate:
             candidate = f"{candidate}T00:00:00Z"
-        elif candidate.endswith("Z") is False and "+" not in candidate:
+        elif (
+            not candidate.endswith("Z")
+            and "+" not in candidate[10:]
+            and "-" not in candidate[10:]
+        ):
             candidate = f"{candidate}Z"
-        return candidate
+        parse_candidate = candidate[:-1] + "+00:00" if candidate.endswith("Z") else candidate
+        try:
+            parsed = datetime.fromisoformat(parse_candidate)
+        except ValueError:
+            logger.warning(
+                "datetime_dropped_invalid value=%r sanitized_candidate=%r",
+                original,
+                candidate,
+            )
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        normalized = parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        if normalized != original.strip():
+            logger.info(
+                "datetime_sanitized original=%r normalized=%r",
+                original,
+                normalized,
+            )
+        return normalized
 
     @staticmethod
     def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
@@ -572,7 +612,15 @@ class AnnikaTaskAdapter:
                 or source.get("description")
                 or f"Checklist item {fallback_index}"
             )
-            return str(raw_title)[:256]
+            text = str(raw_title)
+            if len(text) > 100:
+                logger.info(
+                    "checklist_title_truncated task_id=%s item_index=%s original_len=%s",
+                    task_id,
+                    fallback_index,
+                    len(text),
+                )
+            return text[:100]
 
         def _derive_state(source: Dict[str, Any]) -> bool:
             if "isChecked" in source:
@@ -647,3 +695,4 @@ class AnnikaTaskAdapter:
             subtask_ids.append(subtask_id)
         
         return subtask_ids
+

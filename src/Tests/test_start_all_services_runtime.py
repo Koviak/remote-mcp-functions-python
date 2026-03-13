@@ -1,6 +1,8 @@
 import os
 import sys
 import importlib
+import json
+from pathlib import Path
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -15,6 +17,7 @@ def test_build_function_host_env_defaults_to_current_interpreter() -> None:
 
     assert env["EXISTING_KEY"] == "existing-value"
     assert env["ASPNETCORE_URLS"] == "http://0.0.0.0:7071"
+    assert env["GRAPH_RENEW_LOOP_OWNER"] == "start_all_services"
     assert (
         env["languageWorkers__python__defaultExecutablePath"]
         == sys.executable
@@ -24,6 +27,7 @@ def test_build_function_host_env_defaults_to_current_interpreter() -> None:
         == sys.executable
     )
     assert env["PYTHONEXECUTABLE"] == sys.executable
+    assert env["GRAPH_RENEW_LOOP_OWNER"] == "start_all_services"
 
 
 def test_build_function_host_env_honors_explicit_override() -> None:
@@ -56,3 +60,14 @@ def test_python_can_import_modules_reports_missing_module() -> None:
     )
     assert ok is False
     assert "No module named" in details or "ModuleNotFoundError" in details
+
+
+def test_local_settings_pins_python_worker_path() -> None:
+    settings_path = Path(__file__).resolve().parents[1] / "local.settings.json"
+    with settings_path.open(encoding="utf-8") as handle:
+        values = json.load(handle)["Values"]
+
+    pinned_path = values["languageWorkers__python__defaultExecutablePath"]
+    assert pinned_path.lower().endswith("python.exe")
+    assert values["languageWorkers:python:defaultExecutablePath"] == pinned_path
+    assert values["PYTHONEXECUTABLE"] == pinned_path

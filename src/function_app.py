@@ -114,37 +114,19 @@ try:
 except Exception as e:
     logger.error(f"Failed to start token refresh service: {e}")
 
-# Initialize webhook handler for V5 sync service (skipped if disabled)
+# Initialize webhook handler for V5 sync service (skipped if disabled).
+# Webhook handler now initializes lazily per request loop to avoid
+# cross-loop redis.asyncio binding issues.
 DISABLE_LOCAL = os.getenv("DISABLE_LOCAL_SERVICES", "0") == "1"
 
 try:
     if DISABLE_LOCAL:
         logger.info("Local services disabled via DISABLE_LOCAL_SERVICES=1; skipping webhook handler init")
         raise RuntimeError("Local services disabled")
-    from chat_subscription_manager import (
-        chat_subscription_manager,
-        initialize_chat_subscription_manager,
+    from chat_subscription_manager import chat_subscription_manager
+    logger.info(
+        "Webhook handler lazy-init enabled; skipping eager background init"
     )
-    from webhook_handler import initialize_webhook_handler
-
-    def init_webhook_handler():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(initialize_webhook_handler())
-            logger.info("✅ Webhook handler initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize webhook handler: {e}")
-        finally:
-            loop.close()
-    
-    # Initialize in background thread
-    webhook_thread = threading.Thread(
-        target=init_webhook_handler,
-        daemon=True,
-        name="WebhookInit"
-    )
-    webhook_thread.start()
 
 except Exception as e:
     if not DISABLE_LOCAL:
@@ -155,26 +137,9 @@ try:
     if DISABLE_LOCAL:
         logger.info("Local services disabled; skipping chat subscription manager init")
         raise RuntimeError("Local services disabled")
-    def init_chat_sub_manager():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(initialize_chat_subscription_manager())
-            loop.run_until_complete(
-                chat_subscription_manager.subscribe_to_all_existing_chats()
-            )
-            logger.info("✅ Chat subscription manager initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize chat subscriptions: {e}")
-        finally:
-            loop.close()
-
-    chat_thread = threading.Thread(
-        target=init_chat_sub_manager,
-        daemon=True,
-        name="ChatSubsInit",
+    logger.info(
+        "Chat subscription manager lazy-init enabled; skipping eager background init"
     )
-    chat_thread.start()
 
 except Exception as e:
     if not DISABLE_LOCAL:
@@ -182,7 +147,12 @@ except Exception as e:
 
 
 # Start Enhanced Local Development Services (includes everything) unless disabled
-if os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None and not DISABLE_LOCAL:
+renew_owner = os.getenv("GRAPH_RENEW_LOOP_OWNER", "startup_local_services")
+if (
+    os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None
+    and not DISABLE_LOCAL
+    and renew_owner != "start_all_services"
+):
     # Only start in local development
     try:
         from startup_local_services import start_local_services
@@ -263,6 +233,12 @@ if os.environ.get("FUNCTIONS_WORKER_RUNTIME_VERSION") is None and not DISABLE_LO
         logger.error(
             "You may need to manually start services"
         )
+
+if renew_owner == "start_all_services":
+    logger.info(
+        "Skipping startup_local_services in function_app (owner=%s)",
+        renew_owner,
+    )
 
 
 # Constants for the Azure Blob Storage container, file, and blob path

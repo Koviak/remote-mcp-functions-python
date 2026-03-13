@@ -1,6 +1,7 @@
 import json as json_lib
 import os
 import sys
+import asyncio
 
 import pytest
 
@@ -59,6 +60,7 @@ class _FakeAsyncRedis:
 async def test_mail_notification_publishes_to_mail_channel_and_history():
     handler = GraphWebhookHandler()
     handler.redis_client = _FakeAsyncRedis()
+    handler._redis_client_loop = asyncio.get_running_loop()
 
     notification = {
         "changeType": "created",
@@ -86,6 +88,7 @@ async def test_mail_notification_publishes_to_mail_channel_and_history():
 async def test_mail_notification_extracts_message_id_from_resource_path():
     handler = GraphWebhookHandler()
     handler.redis_client = _FakeAsyncRedis()
+    handler._redis_client_loop = asyncio.get_running_loop()
 
     notification = {
         "changeType": "updated",
@@ -107,10 +110,21 @@ async def test_mail_notification_extracts_message_id_from_resource_path():
 class _FakeSyncRedis:
     def __init__(self):
         self.calls = []
+        self.store = {}
+        self.deleted = []
 
     def setex(self, key, ttl, value):
         self.calls.append((key, ttl, value))
+        self.store[key] = value
         return True
+
+    def get(self, key):
+        return self.store.get(key)
+
+    def delete(self, key):
+        self.deleted.append(key)
+        self.store.pop(key, None)
+        return 1
 
 
 class _FakeResponse:
@@ -142,6 +156,8 @@ def test_create_mail_subscription_uses_mail_client_state(monkeypatch):
 
     monkeypatch.setattr(gsm, "get_agent_token", lambda: "test-token")
     monkeypatch.setattr(gsm.requests, "post", _fake_post)
+    monkeypatch.delenv("OUTLOOK_SYNC_MAILBOX_USER_ID", raising=False)
+    monkeypatch.delenv("OUTLOOK_SYNC_MAILBOX_USER_IDS", raising=False)
 
     mgr, fake_redis = _build_manager_with_fake_redis(monkeypatch)
 
@@ -150,6 +166,104 @@ def test_create_mail_subscription_uses_mail_client_state(monkeypatch):
     assert sub_id == "sub-mail-1"
     assert captured["json"]["resource"] == "/me/messages"
     assert captured["json"]["clientState"] == gsm.MAIL_CLIENT_STATE
+    assert len(fake_redis.calls) == 1
+
+
+def test_create_mail_subscription_targets_configured_mailbox(monkeypatch):
+    captured = {}
+
+    def _fake_post(url, headers=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        return _FakeResponse()
+
+    monkeypatch.setenv("OUTLOOK_SYNC_MAILBOX_USER_ID", "joshua@koviakbuilt.com")
+    monkeypatch.delenv("OUTLOOK_SYNC_MAILBOX_USER_IDS", raising=False)
+    monkeypatch.setattr(gsm, "get_agent_token", lambda: "test-token")
+    monkeypatch.setattr(gsm.requests, "post", _fake_post)
+
+    mgr, fake_redis = _build_manager_with_fake_redis(monkeypatch)
+
+    sub_id = mgr.create_mail_subscription()
+
+    assert sub_id == "sub-mail-1"
+    assert captured["json"]["resource"] == "/users/joshua@koviakbuilt.com/messages"
+    assert captured["json"]["clientState"] == gsm.MAIL_CLIENT_STATE
+    assert len(fake_redis.calls) == 1
+
+
+def test_configured_mail_subscription_resources_include_all_mailboxes(monkeypatch):
+    monkeypatch.setenv(
+        "OUTLOOK_SYNC_MAILBOX_USER_IDS",
+        "annika@reddypros.com,joshua@koviakbuilt.com",
+    )
+    monkeypatch.delenv("OUTLOOK_SYNC_MAILBOX_USER_ID", raising=False)
+
+    resources = GraphSubscriptionManager._configured_mail_subscription_resources()
+
+    assert resources == [
+        "/users/annika@reddypros.com/messages",
+        "/users/joshua@koviakbuilt.com/messages",
+    ]
+
+
+def test_create_mail_subscriptions_creates_each_configured_resource(monkeypatch):
+    monkeypatch.setenv(
+        "OUTLOOK_SYNC_MAILBOX_USER_IDS",
+        "annika@reddypros.com,joshua@koviakbuilt.com",
+    )
+    monkeypatch.setattr(gsm, "get_agent_token", lambda: "test-token")
+    captured_resources = []
+
+    def _fake_post(url, headers=None, json=None, timeout=None):
+        captured_resources.append(json["resource"])
+        return _FakeResponse()
+
+    monkeypatch.setattr(gsm.requests, "post", _fake_post)
+
+    mgr, fake_redis = _build_manager_with_fake_redis(monkeypatch)
+
+    created = mgr.create_mail_subscriptions()
+
+    assert created == {
+        "/users/annika@reddypros.com/messages": "sub-mail-1",
+        "/users/joshua@koviakbuilt.com/messages": "sub-mail-1",
+    }
+    assert captured_resources == [
+        "/users/annika@reddypros.com/messages",
+        "/users/joshua@koviakbuilt.com/messages",
+    ]
+    assert len(fake_redis.calls) == 2
+
+
+def test_create_mail_subscription_reuses_existing_matching_subscription(monkeypatch):
+    monkeypatch.setenv("OUTLOOK_SYNC_MAILBOX_USER_ID", "joshua@koviakbuilt.com")
+    monkeypatch.delenv("OUTLOOK_SYNC_MAILBOX_USER_IDS", raising=False)
+
+    mgr, fake_redis = _build_manager_with_fake_redis(monkeypatch)
+    monkeypatch.setattr(
+        mgr,
+        "list_active_subscriptions",
+        lambda: [
+            {
+                "id": "sub-existing-1",
+                "resource": "/users/joshua@koviakbuilt.com/messages",
+                "clientState": gsm.MAIL_CLIENT_STATE,
+                "expirationDateTime": "2099-01-01T00:00:00Z",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        gsm.requests,
+        "post",
+        lambda *args, **kwargs: pytest.fail("requests.post should not be called"),
+    )
+
+    subscription_id = mgr.create_mail_subscription()
+
+    assert subscription_id == "sub-existing-1"
     assert len(fake_redis.calls) == 1
 
 
@@ -197,3 +311,68 @@ def test_renew_subscription_updates_cache_with_timezone_aware_expiry(monkeypatch
 
     assert ok is True
     assert len(fake_redis.calls) == 1
+
+
+
+def test_renew_subscription_recovers_not_found_by_recreating_intent(monkeypatch):
+    class _NotFoundResponse:
+        status_code = 404
+        text = (
+            '{"error":{"code":"ExtensionError","message":"Status Code: NotFound; '
+            'Reason: No subscription found"}}'
+        )
+
+    monkeypatch.setattr(gsm, "get_agent_token", lambda: "test-token")
+    monkeypatch.setattr(gsm.requests, "patch", lambda *args, **kwargs: _NotFoundResponse())
+
+    mgr, fake_redis = _build_manager_with_fake_redis(monkeypatch)
+    stale_key = "annika:subscriptions:sub-stale-1"
+    fake_redis.store[stale_key] = json_lib.dumps(
+        {
+            "id": "sub-stale-1",
+            "resource": "/me/contacts",
+            "clientState": gsm.CONTACTS_CLIENT_STATE,
+            "changeType": "created,updated,deleted",
+        }
+    )
+
+    recreated = {
+        "id": "sub-new-1",
+        "resource": "/me/contacts",
+        "clientState": gsm.CONTACTS_CLIENT_STATE,
+        "expirationDateTime": "2099-01-01T00:00:00Z",
+    }
+    monkeypatch.setattr(mgr, "create_subscription", lambda **kwargs: recreated)
+
+    result = mgr.renew_subscription_detailed("sub-stale-1")
+
+    assert result["status"] == "recovered_not_found"
+    assert result["new_id"] == "sub-new-1"
+    assert stale_key in fake_redis.deleted
+
+
+def test_renew_all_subscriptions_counts_recovered_not_found(monkeypatch):
+    mgr, _ = _build_manager_with_fake_redis(monkeypatch)
+
+    monkeypatch.setattr(
+        mgr,
+        "list_active_subscriptions",
+        lambda: [{"id": "sub-ok"}, {"id": "sub-stale"}, {"id": "sub-fail"}],
+    )
+
+    def _fake_detailed(subscription_id, known_subscription=None):
+        if subscription_id == "sub-ok":
+            return {"status": "renewed"}
+        if subscription_id == "sub-stale":
+            return {"status": "recovered_not_found", "new_id": "sub-new-2"}
+        return {"status": "failed"}
+
+    monkeypatch.setattr(mgr, "renew_subscription_detailed", _fake_detailed)
+
+    result = mgr.renew_all_subscriptions()
+
+    assert result == {
+        "renewed": 1,
+        "recovered_not_found": 1,
+        "failed": 1,
+    }

@@ -83,6 +83,34 @@ def test_list_inbox_delta_follow_up_with_graph_url(monkeypatch):
     assert captured["params"] is None
 
 
+def test_list_inbox_delta_targets_shared_mailbox(monkeypatch):
+    captured = {}
+    scope_calls = []
+
+    def _fake_get_token(scope):
+        scope_calls.append(scope)
+        return "delegated-token", "/me"
+
+    def _fake_get(url, params=None, headers=None, timeout=None):
+        captured["url"] = url
+        captured["params"] = params
+        return _FakeResponse()
+
+    monkeypatch.setattr(ep_mail, "_get_token_and_base_for_me", _fake_get_token)
+    monkeypatch.setattr(ep_mail.requests, "get", _fake_get)
+
+    response = ep_mail.list_inbox_delta_http(
+        _fake_request(params={"userId": "joshua@koviakbuilt.com"})
+    )
+
+    assert response.status_code == 200
+    assert scope_calls == ["User.Read Mail.ReadWrite.Shared"]
+    assert (
+        captured["url"]
+        == "https://graph.microsoft.com/v1.0/users/joshua@koviakbuilt.com/mailFolders/inbox/messages/delta"
+    )
+
+
 def test_list_inbox_delta_rejects_non_graph_delta_url(monkeypatch):
     monkeypatch.setattr(
         ep_mail,

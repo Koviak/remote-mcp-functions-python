@@ -8,7 +8,7 @@ import os
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 import requests
 from agent_auth_manager import get_agent_token
 from mcp_redis_config import get_redis_token_manager
@@ -31,6 +31,17 @@ CONTACTS_CLIENT_STATE = os.environ.get(
 )
 
 
+def _normalize_mailbox_user_id(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    candidate = str(value).strip().strip("'\"")
+    if not candidate:
+        return ""
+    if "@" in candidate:
+        return candidate.lower()
+    return candidate
+
+
 def _parse_graph_datetime_utc(value: str) -> datetime:
     """Parse Graph datetime string as timezone-aware UTC."""
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -45,60 +56,85 @@ class GraphSubscriptionManager:
     def __init__(self):
         self.redis_manager = get_redis_token_manager()
         self.subscriptions = {}
+
+    @staticmethod
+    def _configured_mailbox_user_ids() -> List[str]:
+        configured: List[str] = []
+        seen: set[str] = set()
+
+        def _append(value: Optional[str]) -> None:
+            normalized = _normalize_mailbox_user_id(value)
+            if not normalized:
+                return
+            if normalized in seen:
+                return
+            seen.add(normalized)
+            configured.append(normalized)
+
+        for item in os.environ.get("OUTLOOK_SYNC_MAILBOX_USER_IDS", "").split(","):
+            _append(item)
+        _append(os.environ.get("OUTLOOK_SYNC_MAILBOX_USER_ID"))
+        return configured
+
+    @classmethod
+    def _configured_mail_subscription_resources(cls) -> List[str]:
+        mailbox_user_ids = cls._configured_mailbox_user_ids()
+        if mailbox_user_ids:
+            return [f"/users/{mailbox_user_id}/messages" for mailbox_user_id in mailbox_user_ids]
+        return ["/me/messages"]
+
+    @classmethod
+    def _default_mail_subscription_resource(cls) -> str:
+        return cls._configured_mail_subscription_resources()[0]
+
+    @staticmethod
+    def _is_outlook_mail_resource(resource: str) -> bool:
+        resource_lower = resource.lower()
+        if (
+            "/chats" in resource_lower
+            or "chats(" in resource_lower
+            or "/teams" in resource_lower
+            or "teams(" in resource_lower
+        ):
+            return False
+        return (
+            resource_lower == "/me/messages"
+            or ("/users/" in resource_lower and "/messages" in resource_lower)
+            or ("/mailfolders/" in resource_lower and "/messages" in resource_lower)
+            or ("users(" in resource_lower and "/messages" in resource_lower)
+            or ("mailfolders(" in resource_lower and "/messages" in resource_lower)
+        )
     
     def create_mail_subscription(
         self,
-        resource: str = "/me/messages",
+        resource: Optional[str] = None,
         client_state: Optional[str] = None,
     ) -> Optional[str]:
         """Create subscription for Outlook mail message changes."""
-        token = get_agent_token()
-        if not token:
-            logger.error("Failed to get agent token")
-            return None
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        subscription = {
-            "changeType": "created,updated,deleted",
-            "notificationUrl": WEBHOOK_URL,
-            "resource": resource,
-            "expirationDateTime": (
-                datetime.utcnow() + timedelta(days=2)
-            ).isoformat() + "Z",
-            "clientState": client_state or MAIL_CLIENT_STATE,
-        }
-        
-        response = requests.post(
-            f"{GRAPH_API_ENDPOINT}/subscriptions",
-            headers=headers,
-            json=subscription,
-            timeout=10
+        resource = resource or self._default_mail_subscription_resource()
+        sub = self.create_subscription(
+            resource=resource,
+            client_state=client_state or MAIL_CLIENT_STATE,
         )
-        
-        if response.status_code == 201:
-            sub = response.json()
-            subscription_id = sub["id"]
-            
-            # Store subscription info in Redis
-            self.redis_manager._client.setex(
-                f"annika:subscriptions:{subscription_id}",
-                int(timedelta(days=2).total_seconds()),
-                json.dumps(sub)
-            )
-            
-            logger.info(
-                "Created mail subscription: %s (%s)",
-                subscription_id,
-                resource,
-            )
-            return subscription_id
-        else:
-            logger.error(f"Failed to create subscription: {response.text}")
+        if not sub:
             return None
+        return str(sub.get("id") or "")
+
+    def create_mail_subscriptions(
+        self,
+        resources: Optional[List[str]] = None,
+        client_state: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """Create subscriptions for all configured Outlook mailbox message resources."""
+        created: Dict[str, str] = {}
+        for resource in resources or self._configured_mail_subscription_resources():
+            subscription_id = self.create_mail_subscription(
+                resource=resource,
+                client_state=client_state,
+            )
+            if subscription_id:
+                created[resource] = subscription_id
+        return created
 
     def create_user_subscription(self) -> Optional[str]:
         """Backward-compatible alias for mail message subscription."""
@@ -110,93 +146,23 @@ class GraphSubscriptionManager:
         client_state: Optional[str] = None,
     ) -> Optional[str]:
         """Create subscription for Outlook contact changes."""
-        token = get_agent_token()
-        if not token:
-            logger.error("Failed to get agent token")
-            return None
-
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        }
-        subscription = {
-            "changeType": "created,updated,deleted",
-            "notificationUrl": WEBHOOK_URL,
-            "resource": resource,
-            "expirationDateTime": (
-                datetime.utcnow() + timedelta(days=2)
-            ).isoformat() + "Z",
-            "clientState": client_state or CONTACTS_CLIENT_STATE,
-        }
-
-        response = requests.post(
-            f"{GRAPH_API_ENDPOINT}/subscriptions",
-            headers=headers,
-            json=subscription,
-            timeout=10,
+        sub = self.create_subscription(
+            resource=resource,
+            client_state=client_state or CONTACTS_CLIENT_STATE,
         )
-        if response.status_code == 201:
-            sub = response.json()
-            subscription_id = sub["id"]
-            self.redis_manager._client.setex(
-                f"annika:subscriptions:{subscription_id}",
-                int(timedelta(days=2).total_seconds()),
-                json.dumps(sub),
-            )
-            logger.info(
-                "Created contacts subscription: %s (%s)",
-                subscription_id,
-                resource,
-            )
-            return subscription_id
-        logger.error("Failed to create contacts subscription: %s", response.text)
-        return None
+        if not sub:
+            return None
+        return str(sub.get("id") or "")
     
     def create_event_subscription(self) -> Optional[str]:
         """Create subscription for Annika's calendar events"""
-        token = get_agent_token()
-        if not token:
-            return None
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        subscription = {
-            "changeType": "created,updated,deleted",
-            "notificationUrl": WEBHOOK_URL,
-            "resource": "/me/events",
-            "expirationDateTime": (
-                datetime.utcnow() + timedelta(days=2)
-            ).isoformat() + "Z",
-            "clientState": CLIENT_STATE
-        }
-        
-        response = requests.post(
-            f"{GRAPH_API_ENDPOINT}/subscriptions",
-            headers=headers,
-            json=subscription,
-            timeout=10
+        sub = self.create_subscription(
+            resource="/me/events",
+            client_state=CLIENT_STATE,
         )
-        
-        if response.status_code == 201:
-            sub = response.json()
-            subscription_id = sub["id"]
-            
-            self.redis_manager._client.setex(
-                f"annika:subscriptions:{subscription_id}",
-                int(timedelta(days=2).total_seconds()),
-                json.dumps(sub)
-            )
-            
-            logger.info(f"Created event subscription: {subscription_id}")
-            return subscription_id
-        else:
-            logger.error(
-                f"Failed to create event subscription: {response.text}"
-            )
+        if not sub:
             return None
+        return str(sub.get("id") or "")
     
     def create_group_subscriptions(self, group_ids: List[str]) -> Dict[str, str]:
         """Create subscriptions for groups Annika is member of"""
@@ -334,40 +300,268 @@ class GraphSubscriptionManager:
                 ttl,
                 json.dumps(subscription)
             )
-    
-    def renew_subscription(self, subscription_id: str) -> bool:
-        """Renew an existing subscription"""
+
+    def _load_cached_subscription(
+        self,
+        subscription_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Load cached subscription payload from Redis."""
+        try:
+            raw_value = self.redis_manager._client.get(
+                f"annika:subscriptions:{subscription_id}"
+            )
+            if not raw_value:
+                return None
+            if isinstance(raw_value, bytes):
+                raw_value = raw_value.decode("utf-8")
+            return json.loads(raw_value)
+        except Exception as exc:
+            logger.warning(
+                "Failed to load cached subscription %s: %s",
+                subscription_id,
+                exc,
+            )
+            return None
+
+    def _retire_cached_subscription(self, subscription_id: str) -> None:
+        """Delete stale cached subscription entry."""
+        try:
+            self.redis_manager._client.delete(
+                f"annika:subscriptions:{subscription_id}"
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to retire cached subscription %s: %s",
+                subscription_id,
+                exc,
+            )
+
+    @staticmethod
+    def _is_message_resource(resource: str) -> bool:
+        resource_lower = resource.lower()
+        return "messages" in resource_lower and (
+            "/chats" in resource_lower
+            or "/teams" in resource_lower
+            or "getallmessages" in resource_lower
+        )
+
+    @staticmethod
+    def _expiration_for_resource(resource: str) -> str:
+        if GraphSubscriptionManager._is_message_resource(resource):
+            # Chat and channel message subscriptions are short-lived.
+            return (datetime.utcnow() + timedelta(hours=23)).isoformat() + "Z"
+        return (datetime.utcnow() + timedelta(days=2)).isoformat() + "Z"
+
+    @staticmethod
+    def _default_client_state_for_resource(resource: str) -> str:
+        resource_lower = resource.lower()
+        if GraphSubscriptionManager._is_outlook_mail_resource(resource):
+            return MAIL_CLIENT_STATE
+        if resource_lower == "/me/contacts":
+            return CONTACTS_CLIENT_STATE
+        return CLIENT_STATE
+
+    @staticmethod
+    def _default_change_type_for_resource(resource: str) -> str:
+        resource_lower = resource.lower()
+        if GraphSubscriptionManager._is_message_resource(resource_lower):
+            return "created,updated"
+        if "/groups/" in resource_lower:
+            return "updated"
+        return "created,updated,deleted"
+
+    def _find_existing_subscription(
+        self,
+        *,
+        resource: str,
+        client_state: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        desired_resource = str(resource or "").strip().lower()
+        desired_client_state = str(client_state or "").strip().lower()
+        for subscription in self.list_active_subscriptions():
+            subscription_resource = str(subscription.get("resource") or "").strip().lower()
+            subscription_client_state = str(subscription.get("clientState") or "").strip().lower()
+            if subscription_resource != desired_resource:
+                continue
+            if desired_client_state and subscription_client_state != desired_client_state:
+                continue
+            return subscription
+        return None
+
+    def create_subscription(
+        self,
+        resource: str,
+        *,
+        client_state: Optional[str] = None,
+        change_type: Optional[str] = None,
+        lifecycle_notification_url: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Create a subscription for an arbitrary Graph resource intent."""
+        desired_client_state = client_state or self._default_client_state_for_resource(resource)
+        existing_subscription = self._find_existing_subscription(
+            resource=resource,
+            client_state=desired_client_state,
+        )
+        if existing_subscription:
+            self._store_subscription(existing_subscription)
+            logger.info(
+                "Reusing existing subscription: %s (%s)",
+                existing_subscription.get("id"),
+                resource,
+            )
+            return existing_subscription
+
         token = get_agent_token()
         if not token:
-            return False
-        
+            logger.error("Failed to get agent token")
+            return None
+
+        payload: Dict[str, Any] = {
+            "changeType": change_type or self._default_change_type_for_resource(resource),
+            "notificationUrl": WEBHOOK_URL,
+            "resource": resource,
+            "expirationDateTime": self._expiration_for_resource(resource),
+            "clientState": desired_client_state,
+        }
+        if lifecycle_notification_url:
+            payload["lifecycleNotificationUrl"] = lifecycle_notification_url
+
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-        
+        response = requests.post(
+            f"{GRAPH_API_ENDPOINT}/subscriptions",
+            headers=headers,
+            json=payload,
+            timeout=10,
+        )
+        if response.status_code != 201:
+            logger.error(
+                "Failed to create subscription for resource %s: %s",
+                resource,
+                response.text,
+            )
+            return None
+
+        sub = response.json()
+        self._store_subscription(sub)
+        logger.info(
+            "Created subscription: %s (%s)",
+            sub.get("id"),
+            resource,
+        )
+        return sub
+
+    def _recover_not_found_subscription(
+        self,
+        subscription_id: str,
+        known_subscription: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Retire stale subscription and recreate same intent."""
+        cached_subscription = self._load_cached_subscription(subscription_id)
+        source = known_subscription or cached_subscription or {}
+        resource = source.get("resource")
+        if not resource:
+            self._retire_cached_subscription(subscription_id)
+            return {
+                "status": "failed",
+                "reason": "missing_recovery_context",
+            }
+
+        recreated_subscription = self.create_subscription(
+            resource=resource,
+            client_state=source.get("clientState"),
+            change_type=source.get("changeType"),
+            lifecycle_notification_url=source.get("lifecycleNotificationUrl"),
+        )
+        self._retire_cached_subscription(subscription_id)
+        if not recreated_subscription:
+            return {
+                "status": "failed",
+                "reason": "recreate_failed",
+                "resource": resource,
+            }
+
+        logger.info(
+            "RETIRED_STALE_SUBSCRIPTION old_id=%s new_id=%s resource=%s client_state=%s",
+            subscription_id,
+            recreated_subscription.get("id"),
+            resource,
+            source.get("clientState"),
+        )
+        return {
+            "status": "recovered_not_found",
+            "old_id": subscription_id,
+            "new_id": recreated_subscription.get("id"),
+            "resource": resource,
+        }
+
+    def renew_subscription_detailed(
+        self,
+        subscription_id: str,
+        known_subscription: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Renew an existing subscription with detailed status."""
+        token = get_agent_token()
+        if not token:
+            return {"status": "failed", "reason": "missing_token"}
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
         update_data = {
             "expirationDateTime": (
                 datetime.utcnow() + timedelta(days=2)
             ).isoformat() + "Z"
         }
-        
         response = requests.patch(
             f"{GRAPH_API_ENDPOINT}/subscriptions/{subscription_id}",
             headers=headers,
             json=update_data,
-            timeout=10
+            timeout=10,
         )
-        
+
         if response.status_code == 200:
-            # Update Redis
             sub = response.json()
             self._store_subscription(sub)
-            logger.info(f"Renewed subscription: {subscription_id}")
-            return True
-        else:
-            logger.error(f"Failed to renew subscription: {response.text}")
-            return False
+            logger.info(
+                "Renewed subscription: %s resource=%s client_state=%s",
+                subscription_id,
+                sub.get("resource"),
+                sub.get("clientState"),
+            )
+            return {"status": "renewed"}
+
+        response_text = response.text
+        logger.error(
+            "Failed to renew subscription: id=%s status=%s body=%s",
+            subscription_id,
+            response.status_code,
+            response_text,
+        )
+
+        if (
+            response.status_code == 404
+            or "No subscription found" in response_text
+            or "Status Code: NotFound" in response_text
+        ):
+            return self._recover_not_found_subscription(
+                subscription_id,
+                known_subscription=known_subscription,
+            )
+
+        return {
+            "status": "failed",
+            "status_code": response.status_code,
+        }
+
+
+    def renew_subscription(self, subscription_id: str) -> bool:
+        """Renew an existing subscription"""
+        result = self.renew_subscription_detailed(subscription_id)
+        return result.get("status") in {"renewed", "recovered_not_found"}
     
     def delete_subscription(self, subscription_id: str) -> bool:
         """Delete a subscription"""
@@ -695,7 +889,7 @@ class GraphSubscriptionManager:
         logger.info("Setting up Annika's webhook subscriptions...")
         
         # 1. Subscribe to Annika's user resources
-        self.create_mail_subscription()
+        self.create_mail_subscriptions()
         self.create_contacts_subscription()
         self.create_event_subscription()
         
@@ -745,16 +939,32 @@ class GraphSubscriptionManager:
     def renew_all_subscriptions(self):
         """Renew all active subscriptions"""
         logger.info("Renewing all subscriptions...")
-        
+
         subscriptions = self.list_active_subscriptions()
         renewed = 0
+        recovered_not_found = 0
         failed = 0
-        
+
         for sub in subscriptions:
-            if self.renew_subscription(sub["id"]):
+            result = self.renew_subscription_detailed(
+                sub["id"],
+                known_subscription=sub,
+            )
+            if result.get("status") == "renewed":
                 renewed += 1
+            elif result.get("status") == "recovered_not_found":
+                recovered_not_found += 1
             else:
                 failed += 1
-        
-        logger.info(f"Renewed {renewed} subscriptions, {failed} failed")
-        return {"renewed": renewed, "failed": failed} 
+
+        logger.info(
+            "Renewed %s subscriptions, %s recovered_not_found, %s failed",
+            renewed,
+            recovered_not_found,
+            failed,
+        )
+        return {
+            "renewed": renewed,
+            "recovered_not_found": recovered_not_found,
+            "failed": failed,
+        } 

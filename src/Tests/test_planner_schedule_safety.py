@@ -45,3 +45,49 @@ def test_planner_schedule_bounds_uses_current_task_start_when_missing():
     )
 
     assert payload["dueDateTime"] == "2025-11-05T12:00:00Z"
+
+
+def test_annika_adapter_sanitizes_unicode_dash_datetime():
+    adapter = AnnikaTaskAdapter(redis_client=None)
+    adapter.metadata_manager = None
+
+    payload = adapter.annika_to_planner(
+        {
+            "id": "Task-unicode-datetime",
+            "title": "Unicode datetime",
+            "start_date": "2026\u201102\u201124 18:56:29",
+        }
+    )
+
+    assert payload["startDateTime"] == "2026-02-24T18:56:29Z"
+
+
+def test_annika_adapter_drops_invalid_datetime_fields():
+    adapter = AnnikaTaskAdapter(redis_client=None)
+    adapter.metadata_manager = None
+
+    payload = adapter.annika_to_planner(
+        {
+            "id": "Task-invalid-datetime",
+            "title": "Invalid datetime",
+            "start_date": "2026-02-24",
+            "due_date": "2026-99-99",
+        }
+    )
+
+    assert payload["startDateTime"] == "2026-02-24T00:00:00Z"
+    assert "dueDateTime" not in payload
+
+
+@pytest.mark.asyncio
+async def test_annika_checklist_titles_trim_to_graph_limit():
+    adapter = AnnikaTaskAdapter(redis_client=None)
+
+    checklist = await adapter.annika_subtasks_to_planner_checklist(
+        "Task-parent",
+        inline_subtasks=[{"id": "s1", "title": "A" * 140}],
+    )
+
+    first_item = next(iter(checklist.values()))
+    assert len(first_item["title"]) == 100
+

@@ -1,6 +1,7 @@
 import json as json_lib
 import os
 import sys
+import asyncio
 
 import pytest
 
@@ -49,6 +50,7 @@ class _FakeAsyncRedis:
 async def test_duplicate_contact_notification_is_ignored():
     handler = GraphWebhookHandler()
     handler.redis_client = _FakeAsyncRedis()
+    handler._redis_client_loop = asyncio.get_running_loop()
 
     notification = {
         "changeType": "updated",

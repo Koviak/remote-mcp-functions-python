@@ -32,8 +32,20 @@ def update_task_http(req: func.HttpRequest) -> func.HttpResponse:
         token = get_access_token()
         if not token:
             return func.HttpResponse("Authentication failed. Check Azure AD credentials.", status_code=401)
+        # MS Graph requires the real ETag for Planner PATCH (rejects wildcard *)
+        get_headers = build_json_headers(token)
+        get_resp = requests.get(
+            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
+            headers=get_headers, timeout=10,
+        )
+        if get_resp.status_code != 200:
+            return func.HttpResponse(
+                f"Error fetching task for ETag: {get_resp.status_code} - {get_resp.text}",
+                status_code=get_resp.status_code,
+            )
+        etag = get_resp.json().get("@odata.etag", "")
         headers = build_json_headers(token)
-        headers["If-Match"] = "*"
+        headers["If-Match"] = etag or "*"
         data = {}
         if "title" in req_body:
             data["title"] = req_body["title"]
@@ -66,8 +78,27 @@ def delete_task_http(req: func.HttpRequest) -> func.HttpResponse:
         token = get_access_token()
         if not token:
             return func.HttpResponse("Authentication failed. Check Azure AD credentials.", status_code=401)
-        headers = {"Authorization": f"Bearer {token}", "If-Match": "*"}
-        response = requests.delete(f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}", headers=headers, timeout=10)
+        # MS Graph requires the real ETag for Planner DELETE (rejects wildcard *)
+        get_headers = build_json_headers(token)
+        get_resp = requests.get(
+            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
+            headers=get_headers, timeout=10,
+        )
+        if get_resp.status_code == 404:
+            return func.HttpResponse("Task not found", status_code=404)
+        if get_resp.status_code != 200:
+            return func.HttpResponse(
+                f"Error fetching task for ETag: {get_resp.status_code} - {get_resp.text}",
+                status_code=get_resp.status_code,
+            )
+        etag = get_resp.json().get("@odata.etag", "")
+        if not etag:
+            return func.HttpResponse("Could not retrieve ETag from task", status_code=500)
+        delete_headers = {"Authorization": f"Bearer {token}", "If-Match": etag}
+        response = requests.delete(
+            f"{GRAPH_API_ENDPOINT}/planner/tasks/{task_id}",
+            headers=delete_headers, timeout=10,
+        )
         if response.status_code == 204:
             return func.HttpResponse("Task deleted successfully", status_code=204)
         return func.HttpResponse(f"Error: {response.status_code} - {response.text}", status_code=response.status_code)
@@ -199,8 +230,20 @@ def update_bucket_http(req: func.HttpRequest) -> func.HttpResponse:
         token = get_access_token()
         if not token:
             return func.HttpResponse("Authentication failed. Check Azure AD credentials.", status_code=401)
+        # MS Graph requires the real ETag for Planner PATCH (rejects wildcard *)
+        get_headers = build_json_headers(token)
+        get_resp = requests.get(
+            f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}",
+            headers=get_headers, timeout=10,
+        )
+        if get_resp.status_code != 200:
+            return func.HttpResponse(
+                f"Error fetching bucket for ETag: {get_resp.status_code} - {get_resp.text}",
+                status_code=get_resp.status_code,
+            )
+        etag = get_resp.json().get("@odata.etag", "")
         headers = build_json_headers(token)
-        headers["If-Match"] = "*"
+        headers["If-Match"] = etag or "*"
         data = {"name": name}
         response = requests.patch(
             f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}", headers=headers, json=data, timeout=10
@@ -220,9 +263,26 @@ def delete_bucket_http(req: func.HttpRequest) -> func.HttpResponse:
         token = get_access_token()
         if not token:
             return func.HttpResponse("Authentication failed. Check Azure AD credentials.", status_code=401)
-        headers = {"Authorization": f"Bearer {token}", "If-Match": "*"}
+        # MS Graph requires the real ETag for Planner DELETE (rejects wildcard *)
+        get_headers = build_json_headers(token)
+        get_resp = requests.get(
+            f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}",
+            headers=get_headers, timeout=10,
+        )
+        if get_resp.status_code == 404:
+            return func.HttpResponse("Bucket not found", status_code=404)
+        if get_resp.status_code != 200:
+            return func.HttpResponse(
+                f"Error fetching bucket for ETag: {get_resp.status_code} - {get_resp.text}",
+                status_code=get_resp.status_code,
+            )
+        etag = get_resp.json().get("@odata.etag", "")
+        if not etag:
+            return func.HttpResponse("Could not retrieve ETag from bucket", status_code=500)
+        delete_headers = {"Authorization": f"Bearer {token}", "If-Match": etag}
         response = requests.delete(
-            f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}", headers=headers, timeout=10
+            f"{GRAPH_API_ENDPOINT}/planner/buckets/{bucket_id}",
+            headers=delete_headers, timeout=10,
         )
         if response.status_code == 204:
             return func.HttpResponse("Bucket deleted successfully", status_code=204)

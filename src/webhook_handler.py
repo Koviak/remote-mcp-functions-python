@@ -8,6 +8,7 @@ and routes them to the appropriate sync services via Redis pub/sub.
 import json
 import logging
 import re
+import asyncio
 from datetime import datetime
 from typing import Dict, List
 
@@ -30,13 +31,28 @@ class GraphWebhookHandler:
     
     def __init__(self):
         self.redis_client = None
+        self._redis_client_loop = None
         
-    async def initialize(self):
+    async def initialize(self, force_reconnect: bool = False):
         """Initialize Redis connection bound to the current event loop."""
-        self.redis_client = await get_async_redis_client()
+        self.redis_client = await get_async_redis_client(
+            force_reconnect=force_reconnect
+        )
         if self.redis_client is None:
             raise RuntimeError("Redis client unavailable for webhook handler")
         await self.redis_client.ping()
+        self._redis_client_loop = asyncio.get_running_loop()
+
+    async def _ensure_redis_client(self):
+        """Ensure Redis client is present and bound to the current loop."""
+        current_loop = asyncio.get_running_loop()
+        stale_loop = (
+            self._redis_client_loop is None
+            or self._redis_client_loop is not current_loop
+            or self._redis_client_loop.is_closed()
+        )
+        if self.redis_client is None or stale_loop:
+            await self.initialize(force_reconnect=self.redis_client is not None)
     
     async def handle_webhook_notification(self, notification: Dict) -> bool:
         """
@@ -49,6 +65,8 @@ class GraphWebhookHandler:
             bool: True if handled successfully, False otherwise
         """
         try:
+            await self._ensure_redis_client()
+
             # Validate notification
             if not self._validate_notification(notification):
                 logger.warning("Invalid webhook notification received")
@@ -68,6 +86,8 @@ class GraphWebhookHandler:
             change_type = notification.get("changeType")
             resource = notification.get("resource", "")
             client_state = notification.get("clientState", "")
+            resource_l = resource.lower()
+            client_state_l = client_state.lower()
             
             logger.info(
                 f"📨 Webhook received: {change_type} for {resource} "
@@ -75,19 +95,28 @@ class GraphWebhookHandler:
             )
             
             # Route to appropriate handler based on resource type and client state
-            if "/planner/tasks" in resource:
+            if "/planner/tasks" in resource_l:
                 await self._handle_planner_task_notification(notification)
-            elif "/planner/plans" in resource:
+            elif "/planner/plans" in resource_l:
                 await self._handle_planner_plan_notification(notification)
-            elif "/groups" in resource or "groups" in client_state:
+            elif "/groups" in resource_l or "groups" in client_state_l:
                 await self._handle_groups_notification(notification)
-            elif self._is_mail_message_resource(resource) or "mail_messages" in client_state:
+            elif self._is_mail_message_resource(resource_l) or "mail_messages" in client_state_l:
                 await self._handle_mail_notification(notification)
-            elif self._is_contact_resource(resource) or "contacts" in client_state:
+            elif self._is_contact_resource(resource_l) or "contacts" in client_state_l:
                 await self._handle_contacts_notification(notification)
-            elif "/chats" in resource or "teams_chats" in client_state:
+            elif (
+                "/chats" in resource_l
+                or resource_l.startswith("chats(")
+                or "teams_chats" in client_state_l
+                or "chat_global" in client_state_l
+            ):
                 await self._handle_teams_chats_notification(notification)
-            elif "/teams" in resource or "teams_channels" in client_state:
+            elif (
+                "/teams" in resource_l
+                or resource_l.startswith("teams(")
+                or "teams_channels" in client_state_l
+            ):
                 await self._handle_teams_channels_notification(notification)
             else:
                 logger.warning(
@@ -140,7 +169,12 @@ class GraphWebhookHandler:
         resource_l = resource.lower()
 
         # Exclude Teams chat/channel message resources.
-        if "/chats" in resource_l or "/teams" in resource_l:
+        if (
+            "/chats" in resource_l
+            or "chats(" in resource_l
+            or "/teams" in resource_l
+            or "teams(" in resource_l
+        ):
             return False
 
         return (
@@ -417,12 +451,32 @@ class GraphWebhookHandler:
             chat_id = "unknown"
             message_id = resource_data.get("id", "unknown")
             
-            if "/chats/" in resource:
-                # Extract chat ID from resource path
-                import re
-                chat_match = re.search(r"/chats/([^/]+)", resource)
-                if chat_match:
-                    chat_id = chat_match.group(1).strip("'\"()")
+            # Extract chat ID from resource path
+            chat_match = re.search(r"/chats/([^/]+)", resource, flags=re.IGNORECASE)
+            if not chat_match:
+                chat_match = re.search(
+                    r"chats\('([^']+)'\)",
+                    resource,
+                    flags=re.IGNORECASE,
+                )
+            if chat_match:
+                chat_id = chat_match.group(1).strip("'\"()")
+
+            # Extract message ID from resource path if resourceData.id is absent.
+            if message_id == "unknown":
+                message_match = re.search(
+                    r"/messages/([^/]+)",
+                    resource,
+                    flags=re.IGNORECASE,
+                )
+                if not message_match:
+                    message_match = re.search(
+                        r"messages\('([^']+)'\)",
+                        resource,
+                        flags=re.IGNORECASE,
+                    )
+                if message_match:
+                    message_id = message_match.group(1).strip("'\"()")
             
             # Create message notification for Annika
             message_notification = {
@@ -552,15 +606,45 @@ class GraphWebhookHandler:
             channel_id = "unknown"
             message_id = resource_data.get("id", "unknown")
             
-            if "/teams/" in resource and "/channels/" in resource:
-                import re
-                team_match = re.search(r"/teams/([^/]+)", resource)
-                channel_match = re.search(r"/channels/([^/]+)", resource)
-                
-                if team_match:
-                    team_id = team_match.group(1).strip("'\"()")
-                if channel_match:
-                    channel_id = channel_match.group(1).strip("'\"()")
+            team_match = re.search(r"/teams/([^/]+)", resource, flags=re.IGNORECASE)
+            channel_match = re.search(
+                r"/channels/([^/]+)",
+                resource,
+                flags=re.IGNORECASE,
+            )
+            if not team_match:
+                team_match = re.search(
+                    r"teams\('([^']+)'\)",
+                    resource,
+                    flags=re.IGNORECASE,
+                )
+            if not channel_match:
+                channel_match = re.search(
+                    r"channels\('([^']+)'\)",
+                    resource,
+                    flags=re.IGNORECASE,
+                )
+
+            if team_match:
+                team_id = team_match.group(1).strip("'\"()")
+            if channel_match:
+                channel_id = channel_match.group(1).strip("'\"()")
+
+            # Extract message ID from resource path if resourceData.id is absent.
+            if message_id == "unknown":
+                message_match = re.search(
+                    r"/messages/([^/]+)",
+                    resource,
+                    flags=re.IGNORECASE,
+                )
+                if not message_match:
+                    message_match = re.search(
+                        r"messages\('([^']+)'\)",
+                        resource,
+                        flags=re.IGNORECASE,
+                    )
+                if message_match:
+                    message_id = message_match.group(1).strip("'\"()")
             
             # Create message notification for Annika
             message_notification = {
@@ -645,10 +729,8 @@ class GraphWebhookHandler:
     async def _log_webhook_notification(self, notification: Dict):
         """Log webhook notification for debugging."""
         try:
-            # If Redis client was created on a different loop/thread (e.g., during
-            # startup), recreate it on-demand to avoid "Event loop is closed".
-            if self.redis_client is None:
-                await self.initialize()
+            # Ensure Redis client is valid for the current event loop.
+            await self._ensure_redis_client()
             log_entry = {
                 "timestamp": datetime.utcnow().isoformat(),
                 "change_type": notification.get("changeType"),
@@ -718,6 +800,7 @@ class GraphWebhookHandler:
     async def get_webhook_health(self) -> Dict:
         """Get webhook handler health metrics."""
         try:
+            await self._ensure_redis_client()
             # Get recent webhook logs
             recent_logs = await self.redis_client.lrange("annika:webhook:log", 0, 9)
             
@@ -735,9 +818,9 @@ class GraphWebhookHandler:
                     # Categorize resource types
                     if "/groups" in resource:
                         resource_type = "groups"
-                    elif "/chats" in resource:
+                    elif "/chats" in resource or "chats(" in resource:
                         resource_type = "teams_chats"
-                    elif "/teams" in resource:
+                    elif "/teams" in resource or "teams(" in resource:
                         resource_type = "teams_channels"
                     elif "/planner" in resource:
                         resource_type = "planner"
@@ -773,6 +856,8 @@ class GraphWebhookHandler:
         """Close Redis connection."""
         if self.redis_client:
             await self.redis_client.close()
+            self.redis_client = None
+            self._redis_client_loop = None
 
 
 # Global webhook handler instance

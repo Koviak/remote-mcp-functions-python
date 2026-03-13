@@ -29,6 +29,8 @@ from graph_subscription_manager import GraphSubscriptionManager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+GRAPH_RENEW_LOOP_OWNER_DEFAULT = "start_all_services"
+
 
 def python_can_import_modules(
     python_executable: str,
@@ -74,6 +76,7 @@ def build_function_host_env(
     env["languageWorkers:python:defaultExecutablePath"] = resolved_python
     env["languageWorkers__python__defaultExecutablePath"] = resolved_python
     env["PYTHONEXECUTABLE"] = resolved_python
+    env.setdefault("GRAPH_RENEW_LOOP_OWNER", GRAPH_RENEW_LOOP_OWNER_DEFAULT)
     return env
 
 
@@ -485,21 +488,38 @@ class ServiceManager:
         except Exception as exc:
             logger.error("Failed to start contact sync service: %s", exc)
 
-        async def renew_graph_subscriptions_loop():
-            while True:
-                try:
-                    await asyncio.to_thread(
-                        self.graph_subscription_manager.renew_all_subscriptions
-                    )
-                except Exception as exc:
-                    logger.error(
-                        "Graph subscription renewal loop failed: %s",
-                        exc,
-                    )
-                await asyncio.sleep(1800)
+        renew_owner = os.getenv(
+            "GRAPH_RENEW_LOOP_OWNER",
+            GRAPH_RENEW_LOOP_OWNER_DEFAULT,
+        )
+        if renew_owner == "start_all_services":
+            logger.info(
+                "Graph renewal loop owner=%s (loop enabled in start_all_services)",
+                renew_owner,
+            )
 
-        graph_renew_task = asyncio.create_task(renew_graph_subscriptions_loop())
-        self.background_tasks.append(graph_renew_task)
+            async def renew_graph_subscriptions_loop():
+                while True:
+                    try:
+                        await asyncio.to_thread(
+                            self.graph_subscription_manager.renew_all_subscriptions
+                        )
+                    except Exception as exc:
+                        logger.error(
+                            "Graph subscription renewal loop failed: %s",
+                            exc,
+                        )
+                    await asyncio.sleep(1800)
+
+            graph_renew_task = asyncio.create_task(
+                renew_graph_subscriptions_loop()
+            )
+            self.background_tasks.append(graph_renew_task)
+        else:
+            logger.info(
+                "Graph renewal loop owner=%s (start_all_services loop skipped)",
+                renew_owner,
+            )
 
         logger.info("Planner sync service V5 started")
 

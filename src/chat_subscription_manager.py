@@ -41,6 +41,108 @@ class ChatSubscriptionManager:
             await self.redis_client.ping()
             logger.info("ChatSubscriptionManager connected to Redis")
 
+    @staticmethod
+    def _parse_graph_expiration(expiration: str | None) -> datetime:
+        """Parse Graph expirationDateTime into UTC datetime."""
+        if not expiration:
+            return datetime.min.replace(tzinfo=UTC)
+        parsed = datetime.fromisoformat(expiration.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
+
+    async def _list_subscriptions(self, headers: dict[str, str]) -> list[dict]:
+        """Return active Graph subscriptions for the current token."""
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"{GRAPH_API_ENDPOINT}/subscriptions",
+                    headers=headers,
+                    timeout=10,
+                )
+            if resp.status_code == 200:
+                return resp.json().get("value", [])
+            logger.warning(
+                "Failed to list subscriptions for dedupe: %s",
+                resp.status_code,
+            )
+        except Exception as exc:
+            logger.error("Error listing subscriptions for dedupe: %s", exc)
+        return []
+
+    async def _dedupe_global_chat_subscriptions(
+        self,
+        headers: dict[str, str],
+    ) -> dict | None:
+        """Keep one /me/chats/getAllMessages subscription and delete extras."""
+        subscriptions = await self._list_subscriptions(headers)
+        chat_global_subs = [
+            sub
+            for sub in subscriptions
+            if (sub.get("resource") or "").lower() == "/me/chats/getallmessages"
+        ]
+        if not chat_global_subs:
+            return None
+
+        # Prefer chat_global clientState and longest remaining expiration.
+        chat_global_subs.sort(
+            key=lambda sub: (
+                (sub.get("clientState") or "").lower() == "chat_global",
+                self._parse_graph_expiration(sub.get("expirationDateTime")),
+            ),
+            reverse=True,
+        )
+        keep = chat_global_subs[0]
+        delete_candidates = chat_global_subs[1:]
+        if delete_candidates:
+            logger.warning(
+                "Found %d duplicate /me/chats/getAllMessages subscriptions; deleting extras",
+                len(delete_candidates),
+            )
+        for duplicate in delete_candidates:
+            duplicate_id = duplicate.get("id")
+            if not duplicate_id:
+                continue
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.delete(
+                        f"{GRAPH_API_ENDPOINT}/subscriptions/{duplicate_id}",
+                        headers=headers,
+                        timeout=10,
+                    )
+                if resp.status_code == 204:
+                    logger.info(
+                        "Deleted duplicate chat_global subscription: %s",
+                        duplicate_id,
+                    )
+                else:
+                    logger.warning(
+                        "Failed deleting duplicate subscription %s: %s",
+                        duplicate_id,
+                        resp.status_code,
+                    )
+            except Exception as exc:
+                logger.error(
+                    "Error deleting duplicate subscription %s: %s",
+                    duplicate_id,
+                    exc,
+                )
+        return keep
+
+    async def ensure_single_global_chat_subscription(self) -> dict | None:
+        """Ensure there is at most one /me/chats/getAllMessages subscription."""
+        token = get_agent_token("Chat.Read Chat.ReadWrite")
+        if not token:
+            logger.warning(
+                "Cannot dedupe global chat subscriptions without token"
+            )
+            return None
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        return await self._dedupe_global_chat_subscriptions(headers)
+
     async def discover_all_chats(self) -> list[str]:
         """Return all chat ids for the agent user."""
         # Explicitly request delegated chat read scopes to ensure /me/chats works
@@ -125,17 +227,29 @@ class ChatSubscriptionManager:
         if not self.redis_client:
             await self.initialize()
 
-        existing = await self.redis_client.hgetall(f"{REDIS_PREFIX}global")
-        if existing.get("subscription_id") and existing.get("expires_at"):
-            try:
-                exp = datetime.fromisoformat(
-                    existing["expires_at"].replace("Z", "+00:00")
+        # Dedupe orphaned/duplicate global subscriptions first.
+        existing_subscription = await self.ensure_single_global_chat_subscription()
+        if existing_subscription:
+            expires_at = existing_subscription.get("expirationDateTime")
+            if self._parse_graph_expiration(expires_at) > datetime.now(UTC) - timedelta(minutes=5):
+                sub_id = existing_subscription.get("id")
+                now_iso = datetime.now(UTC).isoformat()
+                await self.redis_client.hset(
+                    f"{REDIS_PREFIX}global",
+                    mapping={
+                        "subscription_id": sub_id or "",
+                        "created_at": now_iso,
+                        "updated_at": now_iso,
+                        "expires_at": expires_at or "",
+                        "status": "active",
+                        "mode": "global",
+                    },
                 )
-                if exp > datetime.now(UTC) - timedelta(minutes=5):
-                    logger.info("Global chat subscription already exists")
-                    return 1
-            except Exception:
-                pass
+                logger.info(
+                    "Global chat subscription already exists (id=%s)",
+                    sub_id,
+                )
+                return 1
 
         # Use delegated chat read scopes for global subscription covering /me/chats
         token = get_agent_token("Chat.Read Chat.ReadWrite")
@@ -188,7 +302,8 @@ class ChatSubscriptionManager:
             if resp.status_code == 403:
                 snippet = resp.text[:200] if hasattr(resp, "text") else ""
                 logger.error(
-                    "Failed to create global chat subscription: 403. Falling back to per-chat subscriptions. Response: %s",
+                    "Failed to create global chat subscription: 403. "
+                    "Falling back to per-chat subscriptions. Response: %s",
                     snippet,
                 )
                 # Mark global key as failed_permission (do not retry aggressively)

@@ -22,6 +22,35 @@
 
 ---
 
+## 2026-03-10 - Delegated Microsoft To Do endpoint regression coverage
+
+### Problem
+- New `me/todo/*` HTTP routes needed focused regression coverage so route wiring and default-list task creation would not drift.
+
+### Solution
+- Added `src/Tests/test_todo_http_endpoints.py` covering:
+  - route registration for delegated Microsoft To Do endpoints
+  - Joshua-default delegated user selection
+  - explicit Annika override
+  - invalid delegated-user rejection
+  - default-list lookup during task creation
+  - explicit-list task creation without default lookup
+  - task PATCH routing
+- Added `src/Tests/test_agent_auth_delegated_users.py` covering:
+  - Joshua credential selection and user-scoped token storage
+  - token refresh using the matching delegated-user alias
+- Updated `src/Tests/integration/endpoints_manifest.json` with `todo_list_id` and `todo_task_id` placeholders for live route verification.
+
+### Verification
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_todo_http_endpoints.py -q -p no:cacheprovider`
+- `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest D:\Git-Hub_Local\remote-mcp-functions-python\src\Tests\test_agent_auth_delegated_users.py -q -p no:cacheprovider`
+- Result: `7 passed in 0.42s`
+
+### Post-Restart Verification
+- Not required for unit-only coverage; live endpoint verification remains pending user restart/function-host run.
+
+---
+
 ## 2026-02-22 23:40:32 -06:00 - Contact sync hardening regression coverage
 
 ### Problem

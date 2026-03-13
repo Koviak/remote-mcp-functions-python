@@ -1,4 +1,6 @@
 import json
+from typing import Any, Optional
+
 import requests
 import azure.functions as func
 
@@ -15,6 +17,84 @@ DEFAULT_INBOX_SELECT = (
     "internetMessageId,changeKey,conversationId,lastModifiedDateTime,"
     "createdDateTime,toRecipients,ccRecipients,bccRecipients,replyTo,hasAttachments"
 )
+SHARED_MAIL_READWRITE_SCOPE = "User.Read Mail.ReadWrite.Shared"
+SHARED_MAIL_SEND_SCOPE = "User.Read Mail.Send.Shared"
+TARGET_MAILBOX_KEYS = ("userId", "mailboxUser")
+
+
+def _normalize_target_user(value: object) -> Optional[str]:
+    """Normalize an optional mailbox override to a trimmed string."""
+    if isinstance(value, str):
+        normalized = value.strip()
+        if normalized:
+            return normalized
+    return None
+
+
+def _safe_get_json(req: func.HttpRequest) -> dict[str, Any]:
+    """Return a JSON object body or an empty dict when no body is supplied."""
+    try:
+        raw = req.get_json()
+    except ValueError:
+        return {}
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("Request body must be a JSON object")
+    return dict(raw)
+
+
+def _extract_target_user(
+    req: func.HttpRequest,
+    req_body: Optional[dict[str, Any]] = None,
+) -> Optional[str]:
+    """Resolve mailbox override from JSON body first, then query parameters."""
+    for key in TARGET_MAILBOX_KEYS:
+        if req_body is not None:
+            target = _normalize_target_user(req_body.get(key))
+            if target:
+                return target
+        target = _normalize_target_user(req.params.get(key))
+        if target:
+            return target
+    return None
+
+
+def _resolve_mail_context(
+    delegated_scope: str,
+    *,
+    target_user_id: Optional[str] = None,
+    shared_scope: Optional[str] = None,
+) -> tuple[Optional[str], Optional[str]]:
+    """Resolve Graph auth token plus mailbox base path.
+
+    When a target mailbox is supplied, prefer delegated shared-mailbox scopes
+    and target the mailbox explicitly via `/users/{target}`.
+    """
+    if target_user_id:
+        delegated, _ = _get_token_and_base_for_me(shared_scope or delegated_scope)
+        if delegated:
+            return delegated, f"/users/{target_user_id}"
+    else:
+        delegated, base = _get_token_and_base_for_me(delegated_scope)
+        if delegated and base:
+            return delegated, base
+
+    app_token = get_access_token()
+    fallback_user_id = target_user_id or _get_agent_user_id()
+    if app_token and fallback_user_id:
+        return app_token, f"/users/{fallback_user_id}"
+    return None, None
+
+
+def _apply_target_mailbox_from(
+    message_payload: dict[str, Any],
+    target_user_id: Optional[str],
+) -> None:
+    """Set the Graph `from` field when explicitly sending from another mailbox."""
+    if not target_user_id or "from" in message_payload:
+        return
+    message_payload["from"] = {"emailAddress": {"address": target_user_id}}
 
 
 def _normalize_content_type(value: object) -> str:
@@ -185,16 +265,21 @@ def get_mail_folder_http(req: func.HttpRequest) -> func.HttpResponse:
 def create_mail_folder_http(req: func.HttpRequest) -> func.HttpResponse:
     """Create a new mail folder for the signed-in user. Delegated token required."""
     try:
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
 
         display_name = req_body.get('displayName')
         parent_folder_id = req_body.get('parentFolderId')
+        target_user_id = _extract_target_user(req, req_body)
         if not display_name:
             return func.HttpResponse("Missing required field: displayName", status_code=400)
 
-        token, base = _get_token_and_base_for_me("Mail.ReadWrite")
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -228,15 +313,13 @@ def get_message_http(req: func.HttpRequest) -> func.HttpResponse:
             # to /me/messages/{message_id}. Delegate explicitly.
             return list_inbox_delta_http(req)
 
-        token, path = (None, None)
-        delegated, base = _get_token_and_base_for_me("Mail.ReadWrite")
-        if delegated and base:
-            token, path = delegated, f"{base}/messages/{message_id}"
-        else:
-            app_token = get_access_token()
-            user_id = _get_agent_user_id()
-            if app_token and user_id:
-                token, path = app_token, f"/users/{user_id}/messages/{message_id}"
+        target_user_id = _extract_target_user(req)
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
+        path = f"{base}/messages/{message_id}" if base else None
 
         if not token or not path:
             return func.HttpResponse(
@@ -262,9 +345,10 @@ def get_message_http(req: func.HttpRequest) -> func.HttpResponse:
 def create_draft_message_http(req: func.HttpRequest) -> func.HttpResponse:
     """Create a draft message for the signed-in user. Delegated token required."""
     try:
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
+        target_user_id = _extract_target_user(req, req_body)
 
         try:
             data = _build_mail_message(
@@ -275,8 +359,13 @@ def create_draft_message_http(req: func.HttpRequest) -> func.HttpResponse:
             )
         except ValueError as validation_exc:
             return func.HttpResponse(str(validation_exc), status_code=400)
+        _apply_target_mailbox_from(data, target_user_id)
 
-        token, base = _get_token_and_base_for_me("Mail.ReadWrite")
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -305,8 +394,14 @@ def send_draft_message_http(req: func.HttpRequest) -> func.HttpResponse:
         message_id = req.route_params.get('message_id')
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
+        req_body = _safe_get_json(req)
+        target_user_id = _extract_target_user(req, req_body)
 
-        token, base = _get_token_and_base_for_me("Mail.ReadWrite Mail.Send")
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite Mail.Send",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_SEND_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -334,8 +429,14 @@ def delete_message_http(req: func.HttpRequest) -> func.HttpResponse:
         message_id = req.route_params.get('message_id')
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
+        req_body = _safe_get_json(req)
+        target_user_id = _extract_target_user(req, req_body)
 
-        token, base = _get_token_and_base_for_me("Mail.ReadWrite")
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -362,17 +463,22 @@ def mark_as_read_http(req: func.HttpRequest) -> func.HttpResponse:
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
 
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
         if "isRead" not in req_body:
             return func.HttpResponse("Missing required field: isRead", status_code=400)
+        target_user_id = _extract_target_user(req, req_body)
 
         is_read = req_body.get("isRead")
         if not isinstance(is_read, bool):
             return func.HttpResponse("isRead must be a boolean", status_code=400)
 
-        token, base = _get_token_and_base_for_me("Mail.ReadWrite")
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -406,8 +512,13 @@ def list_attachments_http(req: func.HttpRequest) -> func.HttpResponse:
         message_id = req.route_params.get('message_id')
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
+        target_user_id = _extract_target_user(req)
 
-        token, base = _get_token_and_base_for_me("Mail.ReadWrite")
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -436,9 +547,10 @@ def add_attachment_http(req: func.HttpRequest) -> func.HttpResponse:
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
 
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
+        target_user_id = _extract_target_user(req, req_body)
 
         name = req_body.get('name')
         content_bytes = req_body.get('contentBytes')
@@ -446,7 +558,11 @@ def add_attachment_http(req: func.HttpRequest) -> func.HttpResponse:
         if not name or not content_bytes:
             return func.HttpResponse("Missing required fields: name, contentBytes", status_code=400)
 
-        token, base = _get_token_and_base_for_me("Mail.ReadWrite")
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -478,15 +594,13 @@ def add_attachment_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_mail_folders_http(req: func.HttpRequest) -> func.HttpResponse:
     """List mail folders for the signed-in user. Delegated preferred with app-only fallback."""
     try:
-        token, path = (None, None)
-        delegated, base = _get_token_and_base_for_me("Mail.ReadWrite")
-        if delegated and base:
-            token, path = delegated, f"{base}/mailFolders"
-        else:
-            app_token = get_access_token()
-            user_id = _get_agent_user_id()
-            if app_token and user_id:
-                token, path = app_token, f"/users/{user_id}/mailFolders"
+        target_user_id = _extract_target_user(req)
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
+        path = f"{base}/mailFolders" if base else None
 
         if not token or not path:
             return func.HttpResponse(
@@ -512,9 +626,10 @@ def list_mail_folders_http(req: func.HttpRequest) -> func.HttpResponse:
 def send_message_http(req: func.HttpRequest) -> func.HttpResponse:
     """Send an email. Delegated preferred; app-only fallback via /users/{id}/sendMail."""
     try:
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
+        target_user_id = _extract_target_user(req, req_body)
 
         try:
             message_payload = _build_mail_message(
@@ -525,20 +640,18 @@ def send_message_http(req: func.HttpRequest) -> func.HttpResponse:
             )
         except ValueError as validation_exc:
             return func.HttpResponse(str(validation_exc), status_code=400)
+        _apply_target_mailbox_from(message_payload, target_user_id)
 
         save_to_sent_items = req_body.get("saveToSentItems", True)
         if not isinstance(save_to_sent_items, bool):
             return func.HttpResponse("saveToSentItems must be a boolean", status_code=400)
 
-        token, path = (None, None)
-        delegated, base = _get_token_and_base_for_me("Mail.Send")
-        if delegated and base:
-            token, path = delegated, "/me/sendMail"
-        else:
-            app_token = get_access_token()
-            user_id = _get_agent_user_id()
-            if app_token and user_id:
-                token, path = app_token, f"/users/{user_id}/sendMail"
+        token, base = _resolve_mail_context(
+            "Mail.Send",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_SEND_SCOPE,
+        )
+        path = f"{base}/sendMail" if base else None
 
         if not token or not path:
             return func.HttpResponse(
@@ -571,15 +684,13 @@ def send_message_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_inbox_http(req: func.HttpRequest) -> func.HttpResponse:
     """List inbox messages. Delegated preferred; app-only fallback via /users/{id}."""
     try:
-        token, path = (None, None)
-        delegated, base = _get_token_and_base_for_me("User.Read Mail.Read")
-        if delegated and base:
-            token, path = delegated, f"{base}/mailFolders/inbox/messages"
-        else:
-            app_token = get_access_token()
-            user_id = _get_agent_user_id()
-            if app_token and user_id:
-                token, path = app_token, f"/users/{user_id}/mailFolders/inbox/messages"
+        target_user_id = _extract_target_user(req)
+        token, base = _resolve_mail_context(
+            "User.Read Mail.Read",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
+        path = f"{base}/mailFolders/inbox/messages" if base else None
 
         if not token or not path:
             return func.HttpResponse(
@@ -632,15 +743,13 @@ def list_inbox_http(req: func.HttpRequest) -> func.HttpResponse:
 def list_inbox_delta_http(req: func.HttpRequest) -> func.HttpResponse:
     """List inbox message deltas. Supports passing a prior delta URL/token."""
     try:
-        token, path = (None, None)
-        delegated, base = _get_token_and_base_for_me("User.Read Mail.Read")
-        if delegated and base:
-            token, path = delegated, f"{base}/mailFolders/inbox/messages/delta"
-        else:
-            app_token = get_access_token()
-            user_id = _get_agent_user_id()
-            if app_token and user_id:
-                token, path = app_token, f"/users/{user_id}/mailFolders/inbox/messages/delta"
+        target_user_id = _extract_target_user(req)
+        token, base = _resolve_mail_context(
+            "User.Read Mail.Read",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
+        path = f"{base}/mailFolders/inbox/messages/delta" if base else None
 
         if not token or not path:
             return func.HttpResponse(
@@ -711,14 +820,19 @@ def move_message_http(req: func.HttpRequest) -> func.HttpResponse:
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
 
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
         destination_id = req_body.get('destinationId')
+        target_user_id = _extract_target_user(req, req_body)
         if not destination_id:
             return func.HttpResponse("Missing required field: destinationId", status_code=400)
 
-        token, base = _get_token_and_base_for_me("Mail.ReadWrite")
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -749,14 +863,19 @@ def copy_message_http(req: func.HttpRequest) -> func.HttpResponse:
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
 
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
         destination_id = req_body.get('destinationId')
+        target_user_id = _extract_target_user(req, req_body)
         if not destination_id:
             return func.HttpResponse("Missing required field: destinationId", status_code=400)
 
-        token, base = _get_token_and_base_for_me("Mail.ReadWrite")
+        token, base = _resolve_mail_context(
+            "Mail.ReadWrite",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_READWRITE_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -787,12 +906,17 @@ def reply_message_http(req: func.HttpRequest) -> func.HttpResponse:
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
 
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
         comment = req_body.get('comment', '')
+        target_user_id = _extract_target_user(req, req_body)
 
-        token, base = _get_token_and_base_for_me("Mail.Send")
+        token, base = _resolve_mail_context(
+            "Mail.Send",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_SEND_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -823,12 +947,17 @@ def reply_all_message_http(req: func.HttpRequest) -> func.HttpResponse:
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
 
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
         comment = req_body.get('comment', '')
+        target_user_id = _extract_target_user(req, req_body)
 
-        token, base = _get_token_and_base_for_me("Mail.Send")
+        token, base = _resolve_mail_context(
+            "Mail.Send",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_SEND_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -859,15 +988,20 @@ def forward_message_http(req: func.HttpRequest) -> func.HttpResponse:
         if not message_id:
             return func.HttpResponse("Missing message_id in URL path", status_code=400)
 
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
         to_recipients = req_body.get('toRecipients', [])
         comment = req_body.get('comment', '')
+        target_user_id = _extract_target_user(req, req_body)
         if not to_recipients:
             return func.HttpResponse("Missing required field: toRecipients", status_code=400)
 
-        token, base = _get_token_and_base_for_me("Mail.Send")
+        token, base = _resolve_mail_context(
+            "Mail.Send",
+            target_user_id=target_user_id,
+            shared_scope=SHARED_MAIL_SEND_SCOPE,
+        )
         if not token or not base:
             return func.HttpResponse(
                 "Authentication failed. Delegated token required for mail.",
@@ -892,5 +1026,4 @@ def forward_message_http(req: func.HttpRequest) -> func.HttpResponse:
         )
     except Exception as e:
         return func.HttpResponse(f"Error: {str(e)}", status_code=500)
-
 

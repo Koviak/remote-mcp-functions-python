@@ -76,6 +76,44 @@ def test_send_message_http_accepts_canonical_payload(monkeypatch):
     assert message["isReadReceiptRequested"] is False
 
 
+def test_send_message_http_targets_shared_mailbox(monkeypatch):
+    captured = {}
+    scope_calls = []
+
+    def _fake_get_token(scope):
+        scope_calls.append(scope)
+        return "delegated-token", "/me"
+
+    def _fake_post(url, headers=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["json"] = json
+        return _FakeResponse(status_code=202, text="")
+
+    monkeypatch.setattr(ep_mail, "_get_token_and_base_for_me", _fake_get_token)
+    monkeypatch.setattr(ep_mail.requests, "post", _fake_post)
+
+    response = ep_mail.send_message_http(
+        _fake_request(
+            body={
+                "userId": "joshua@koviakbuilt.com",
+                "toRecipients": ["annika@reddypros.com"],
+                "subject": "Shared mailbox send",
+                "bodyContent": "Testing shared mailbox routing.",
+            }
+        )
+    )
+
+    assert response.status_code == 202
+    assert scope_calls == ["User.Read Mail.Send.Shared"]
+    assert (
+        captured["url"]
+        == "https://graph.microsoft.com/v1.0/users/joshua@koviakbuilt.com/sendMail"
+    )
+    assert captured["json"]["message"]["from"]["emailAddress"]["address"] == (
+        "joshua@koviakbuilt.com"
+    )
+
+
 def test_create_draft_message_http_accepts_canonical_payload(monkeypatch):
     captured = {}
 
@@ -179,6 +217,40 @@ def test_list_inbox_http_defaults_orderby_without_search(monkeypatch):
     assert captured["params"]["$orderby"] == "receivedDateTime desc"
 
 
+def test_list_inbox_http_targets_shared_mailbox(monkeypatch):
+    captured = {}
+    scope_calls = []
+
+    def _fake_get_token(scope):
+        scope_calls.append(scope)
+        return "delegated-token", "/me"
+
+    def _fake_get(url, params=None, headers=None, timeout=None):
+        captured["url"] = url
+        captured["params"] = params
+        return _FakeResponse(status_code=200, text='{"value":[]}')
+
+    monkeypatch.setattr(ep_mail, "_get_token_and_base_for_me", _fake_get_token)
+    monkeypatch.setattr(ep_mail.requests, "get", _fake_get)
+
+    response = ep_mail.list_inbox_http(
+        _fake_request(
+            params={
+                "userId": "joshua@koviakbuilt.com",
+                "top": "3",
+            }
+        )
+    )
+
+    assert response.status_code == 200
+    assert scope_calls == ["User.Read Mail.ReadWrite.Shared"]
+    assert (
+        captured["url"]
+        == "https://graph.microsoft.com/v1.0/users/joshua@koviakbuilt.com/mailFolders/inbox/messages"
+    )
+    assert captured["params"]["$top"] == "3"
+
+
 def test_mark_as_read_http_patches_message(monkeypatch):
     captured = {}
 
@@ -228,3 +300,41 @@ def test_mark_as_read_http_rejects_non_boolean(monkeypatch):
     )
 
     assert response.status_code == 400
+
+
+def test_mark_as_read_http_targets_shared_mailbox(monkeypatch):
+    captured = {}
+    scope_calls = []
+
+    def _fake_get_token(scope):
+        scope_calls.append(scope)
+        return "delegated-token", "/me"
+
+    def _fake_patch(url, headers=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["json"] = json
+        return _FakeResponse(
+            status_code=200,
+            text='{"id":"msg-1","isRead":false}',
+        )
+
+    monkeypatch.setattr(ep_mail, "_get_token_and_base_for_me", _fake_get_token)
+    monkeypatch.setattr(ep_mail.requests, "patch", _fake_patch)
+
+    response = ep_mail.mark_as_read_http(
+        _fake_request(
+            body={
+                "userId": "joshua@koviakbuilt.com",
+                "isRead": False,
+            },
+            route_params={"message_id": "msg-1"},
+        )
+    )
+
+    assert response.status_code == 200
+    assert scope_calls == ["User.Read Mail.ReadWrite.Shared"]
+    assert (
+        captured["url"]
+        == "https://graph.microsoft.com/v1.0/users/joshua@koviakbuilt.com/messages/msg-1"
+    )
+    assert captured["json"] == {"isRead": False}

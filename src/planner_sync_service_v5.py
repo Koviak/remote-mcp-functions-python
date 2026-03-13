@@ -94,6 +94,18 @@ FAILED_OPS_KEY = "annika:sync:failed"
 WEBHOOK_STATUS_KEY = "annika:sync:webhook_status"
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"Environment variable {name} must be boolean, got {value!r}")
+
+
 class SyncOperation(Enum):
     CREATE = "create"
     UPDATE = "update"
@@ -209,6 +221,12 @@ class WebhookDrivenPlannerSync:
         # Quick-poll scheduling to tighten feedback after local edits
         self.quick_poll_task = None
         self.initialize_runtime_state()
+
+    def _planner_sync_from_enabled(self) -> bool:
+        return bool(getattr(self, "from_planner_sync_enabled", True))
+
+    def _planner_sync_to_enabled(self) -> bool:
+        return bool(getattr(self, "to_planner_sync_enabled", True))
 
     @staticmethod
     def _parse_json_result(raw: Any) -> Any:
@@ -411,6 +429,17 @@ class WebhookDrivenPlannerSync:
     def initialize_runtime_state(self) -> None:
         """Initialize runtime fields after Redis client setup."""
         self.last_quick_poll_at: float = 0.0
+        self.planner_sync_master_enabled = _env_bool("PLANNER_SYNC_ENABLED", True)
+        self.from_planner_sync_enabled = self.planner_sync_master_enabled and _env_bool(
+            "PLANNER_SYNC_FROM_PLANNER_ENABLED", True
+        )
+        self.to_planner_sync_enabled = self.planner_sync_master_enabled and _env_bool(
+            "PLANNER_SYNC_TO_PLANNER_ENABLED", True
+        )
+        self.planner_sync_enabled = (
+            self.from_planner_sync_enabled or self.to_planner_sync_enabled
+        )
+
         try:
             self.quick_poll_min_interval = int(
                 os.environ.get("MIN_QUICK_POLL_INTERVAL_SECONDS", "300")
@@ -434,7 +463,9 @@ class WebhookDrivenPlannerSync:
             self.webhook_poll_interval = 21600
 
         self.poll_interval = self.default_poll_interval
-        self.polling_enabled = self.poll_interval > 0
+        self.polling_enabled = (
+            self._planner_sync_from_enabled() and self.poll_interval > 0
+        )
         self.planner_webhooks_requested = False
 
         try:
@@ -507,6 +538,12 @@ class WebhookDrivenPlannerSync:
     async def start(self):
         """Start the webhook-driven sync service."""
         logger.info("🚀 Starting Webhook-Driven Planner Sync Service V5...")
+        logger.info(
+            "Planner sync mode: master=%s from_planner=%s to_planner=%s",
+            self.planner_sync_master_enabled,
+            self.from_planner_sync_enabled,
+            self.to_planner_sync_enabled,
+        )
 
         # Initialize Redis
         self.redis_client = redis.Redis(
@@ -548,18 +585,39 @@ class WebhookDrivenPlannerSync:
         await self._initial_sync()
 
         # Start all service loops
-        await asyncio.gather(
-            self._monitor_annika_changes(),      # Upload to Planner
-            self._process_webhook_notifications(), # Handle Planner webhooks
-            self._batch_processor(),             # Batch upload operations
+        loop_tasks = [
             self._health_monitor(),              # Health checks
             self._webhook_renewal_loop(),        # Keep webhooks alive
-            self._planner_polling_loop(),        # Planner polling loop
             self._pending_queue_worker(),        # Process pending Redis queue
             self._housekeeping_loop(),           # Redis housekeeping
             self._metadata_refresh_loop(),       # Periodic metadata refresh
-            return_exceptions=True
-        )
+        ]
+
+        if self._planner_sync_to_enabled():
+            loop_tasks.extend(
+                [
+                    self._monitor_annika_changes(),  # Upload to Planner
+                    self._batch_processor(),         # Batch upload operations
+                ]
+            )
+        else:
+            logger.info(
+                "Annika -> Planner sync disabled by env; skipping upload monitor and batch processor"
+            )
+
+        if self._planner_sync_from_enabled():
+            loop_tasks.extend(
+                [
+                    self._process_webhook_notifications(),  # Handle Planner webhooks
+                    self._planner_polling_loop(),           # Planner polling loop
+                ]
+            )
+        else:
+            logger.info(
+                "Planner -> Annika sync disabled by env; skipping Planner webhook and polling loops"
+            )
+
+        await asyncio.gather(*loop_tasks, return_exceptions=True)
 
     async def _housekeeping_loop(self) -> None:
         """Low-priority Redis housekeeping per spec; dry-run unless enabled."""
@@ -967,6 +1025,12 @@ class WebhookDrivenPlannerSync:
         except Exception:
             enable_planner_webhooks = False
 
+        if not self._planner_sync_from_enabled():
+            logger.info(
+                "Planner -> Annika sync disabled by env; skipping Planner task webhook subscriptions"
+            )
+            enable_planner_webhooks = False
+
         self.planner_webhooks_requested = enable_planner_webhooks
 
         # Setup multiple webhook subscriptions with appropriate tokens
@@ -1042,7 +1106,9 @@ class WebhookDrivenPlannerSync:
                 }
             })
         else:
-            logger.info("Planner webhooks disabled by config; skipping /planner/tasks subscriptions")
+            logger.info(
+                "Planner webhooks disabled by config/env; skipping /planner/tasks subscriptions"
+            )
 
         # Optionally subscribe to specific Planner plan task changes if enabled
         if enable_planner_webhooks:
@@ -1116,7 +1182,9 @@ class WebhookDrivenPlannerSync:
                 # Non-fatal: proceed without plan-scoped webhooks
                 logger.debug("Planner plan-scoped webhook configuration skipped due to error")
         else:
-            logger.info("Planner plan-scoped webhooks disabled by config; skipping per-plan subscriptions")
+            logger.info(
+                "Planner plan-scoped webhooks disabled by config/env; skipping per-plan subscriptions"
+            )
 
         # Store configs for renewal/recreation
         self.webhook_configs = {
@@ -1229,6 +1297,13 @@ class WebhookDrivenPlannerSync:
         return None
 
     def _apply_polling_strategy(self) -> None:
+        if not self._planner_sync_from_enabled():
+            if self.polling_enabled:
+                logger.info("Planner -> Annika sync disabled by env; Planner polling disabled")
+            self.polling_enabled = False
+            self.poll_interval = 0
+            return
+
         interval = self.default_poll_interval
         if self.planner_webhooks_requested:
             has_planner = any(name.startswith('planner') for name in self.webhook_subscriptions)
@@ -1449,7 +1524,7 @@ class WebhookDrivenPlannerSync:
             desired_url = config.get("notificationUrl")
             desired_state = config.get("clientState")
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             # Pass 1: strict match
             for sub in items:
@@ -1458,6 +1533,8 @@ class WebhookDrivenPlannerSync:
                     if not exp:
                         continue
                     exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                    if exp_dt.tzinfo is None:
+                        exp_dt = exp_dt.replace(tzinfo=timezone.utc)
                     if exp_dt <= now + timedelta(minutes=5):
                         continue
                     if sub.get("resource") != desired_resource:
@@ -1477,6 +1554,8 @@ class WebhookDrivenPlannerSync:
                     if not exp:
                         continue
                     exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                    if exp_dt.tzinfo is None:
+                        exp_dt = exp_dt.replace(tzinfo=timezone.utc)
                     if exp_dt <= now + timedelta(minutes=5):
                         continue
                     if sub.get("resource") != desired_resource:
@@ -1668,6 +1747,12 @@ class WebhookDrivenPlannerSync:
 
     async def _process_webhook_notifications(self):
         """Process incoming webhook notifications from Microsoft Graph."""
+        if not self._planner_sync_from_enabled():
+            logger.info(
+                "Planner -> Annika sync disabled by env; skipping Planner webhook notification processing"
+            )
+            return
+
         logger.info("📥 Monitoring webhook notifications...")
 
         async for message in self.pubsub_webhook.listen():
@@ -2151,6 +2236,12 @@ class WebhookDrivenPlannerSync:
 
     async def _monitor_annika_changes(self):
         """Monitor Annika changes and queue for upload."""
+        if not self._planner_sync_to_enabled():
+            logger.info(
+                "Annika -> Planner sync disabled by env; skipping Annika change monitor"
+            )
+            return
+
         logger.info("📤 Monitoring Annika changes for upload...")
 
         last_state_hash = await self._get_state_hash()
@@ -2344,6 +2435,12 @@ class WebhookDrivenPlannerSync:
 
     async def _queue_upload(self, annika_task: Dict):
         """Queue a task for batch upload, filtering out subtask entries."""
+        if not self._planner_sync_to_enabled():
+            logger.debug(
+                "Skipping Planner upload queue because Annika -> Planner sync is disabled"
+            )
+            return
+
         annika_id = annika_task.get("id") or annika_task.get("task_id")
 
         # Subtasks/prerequisites should sync as checklist items on the parent task
@@ -2391,6 +2488,12 @@ class WebhookDrivenPlannerSync:
 
     async def _batch_processor(self):
         """Process upload batches periodically."""
+        if not self._planner_sync_to_enabled():
+            logger.info(
+                "Annika -> Planner sync disabled by env; skipping batch processor"
+            )
+            return
+
         while self.running:
             await asyncio.sleep(self.batch_timeout)
 
@@ -2399,6 +2502,12 @@ class WebhookDrivenPlannerSync:
 
     async def _process_upload_batch(self):
         """Process a batch of uploads to Planner."""
+        if not self._planner_sync_to_enabled():
+            logger.debug(
+                "Skipping Planner upload batch because Annika -> Planner sync is disabled"
+            )
+            return
+
         if not self.pending_uploads:
             return
 
@@ -2511,6 +2620,12 @@ class WebhookDrivenPlannerSync:
                     ids = cached.get("ids", set()) if cached and (time.time() - cached.get("ts", 0)) < 300 else set()
                     if ids and bucket_id not in ids:
                         body.pop("bucketId", None)
+                        await self._self_heal_stale_bucket_fields(
+                            annika_task,
+                            bucket_id=bucket_id,
+                            plan_id=plan_id,
+                            reason="batch_create_invalid_bucket",
+                        )
                     elif not ids:
                         body.pop("bucketId", None)
             except Exception:
@@ -2596,6 +2711,48 @@ class WebhookDrivenPlannerSync:
             )
         except Exception as e:
             logger.warning(f"Failed to update sync_status for {annika_id}: {e}")
+
+    async def _self_heal_stale_bucket_fields(
+        self,
+        annika_task: Dict[str, Any],
+        *,
+        bucket_id: Optional[str],
+        plan_id: Optional[str],
+        reason: str,
+    ) -> None:
+        """Remove stale bucket references on source task after Graph bucket validation failures."""
+        annika_id = annika_task.get("id")
+        if not annika_id:
+            return
+
+        task_key = f"annika:tasks:{annika_id}"
+        healed_source = await self._redis_json_get(task_key)
+        if not isinstance(healed_source, dict):
+            healed_source = dict(annika_task)
+
+        removed = False
+        for key in ("planner_bucket_id", "bucket_id"):
+            if healed_source.get(key):
+                healed_source.pop(key, None)
+                removed = True
+            if annika_task.get(key):
+                annika_task.pop(key, None)
+
+        if not removed:
+            return
+
+        updated_at = datetime.utcnow().isoformat() + "Z"
+        healed_source["updated_at"] = updated_at
+        annika_task["updated_at"] = annika_task.get("updated_at") or updated_at
+
+        await self._redis_json_set(task_key, healed_source)
+        logger.warning(
+            "bucket_self_healed annika_id=%s plan_id=%s bucket_id=%s reason=%s",
+            annika_id,
+            plan_id,
+            bucket_id,
+            reason,
+        )
 
     async def _get_state_hash(self) -> Optional[str]:
         """Get hash of conscious_state for change detection."""
@@ -2720,61 +2877,75 @@ class WebhookDrivenPlannerSync:
             "failed_operations": await self.redis_client.llen(FAILED_OPS_KEY),
             "rate_limit_status": "limited" if self.rate_limiter.is_rate_limited() else "ok",
             "webhook_status": len(self.webhook_subscriptions) + (1 if (notif_len or 0) > 0 else 0),
-            "consecutive_failures": self.rate_limiter.consecutive_failures
+            "consecutive_failures": self.rate_limiter.consecutive_failures,
+            "planner_sync_master_enabled": self.planner_sync_master_enabled,
+            "from_planner_enabled": self.from_planner_sync_enabled,
+            "to_planner_enabled": self.to_planner_sync_enabled,
+            "planner_sync_enabled": self.planner_sync_enabled,
         }
 
     # ========== INITIAL SYNC ==========
 
     async def _initial_sync(self):
         """Perform minimal initial sync - only check for critical gaps."""
+        if not self.planner_sync_enabled:
+            logger.info("Planner sync disabled by env; skipping initial sync")
+            return
+
         logger.info("🔄 Performing minimal initial sync...")
 
         try:
             synced_anything = False
 
-            # Only sync tasks that have been modified in the last 24 hours
-            # This catches any gaps without overwhelming the API
-            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            if self._planner_sync_to_enabled():
+                # Only sync tasks that have been modified in the last 24 hours
+                # This catches any gaps without overwhelming the API
+                cutoff_time = datetime.utcnow() - timedelta(hours=24)
 
-            recent_count = 0
-            cursor = 0
-            pattern = "annika:tasks:*"
-            while True:
-                cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=200)
-                for task_key in keys:
-                    task = await self._redis_json_get(task_key)
-                    if not isinstance(task, dict):
-                        continue
-                    modified_at = (
-                        task.get("last_modified_at")
-                        or task.get("updated_at")
-                        or task.get("modified_at")
-                    )
-                    include = True
-                    if modified_at:
-                        try:
-                            mod_time = datetime.fromisoformat(modified_at.replace('Z', '+00:00'))
-                            include = mod_time > cutoff_time
-                        except Exception:
-                            include = True
-                    if include and await self._task_needs_upload(task):
-                        await self._queue_upload(task)
-                        synced_anything = True
-                        recent_count += 1
-                if cursor == 0:
-                    break
+                recent_count = 0
+                cursor = 0
+                pattern = "annika:tasks:*"
+                while True:
+                    cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=200)
+                    for task_key in keys:
+                        task = await self._redis_json_get(task_key)
+                        if not isinstance(task, dict):
+                            continue
+                        modified_at = (
+                            task.get("last_modified_at")
+                            or task.get("updated_at")
+                            or task.get("modified_at")
+                        )
+                        include = True
+                        if modified_at:
+                            try:
+                                mod_time = datetime.fromisoformat(modified_at.replace('Z', '+00:00'))
+                                include = mod_time > cutoff_time
+                            except Exception:
+                                include = True
+                        if include and await self._task_needs_upload(task):
+                            await self._queue_upload(task)
+                            synced_anything = True
+                            recent_count += 1
+                    if cursor == 0:
+                        break
 
-            logger.info(f"Found {recent_count} recently modified tasks to sync")
+                logger.info(f"Found {recent_count} recently modified tasks to sync")
+            else:
+                logger.info("Annika -> Planner sync disabled by env; skipping outbound initial sync scan")
 
-            # Also do an immediate Planner poll to catch any recent changes
-            logger.info("🔍 Performing immediate Planner poll as part of initial sync...")
-            poll_result = await self._poll_all_planner_tasks()
-            if isinstance(poll_result, dict) and (
-                (poll_result.get("created", 0) > 0) or (poll_result.get("updated", 0) > 0)
-            ):
-                synced_anything = True
+            if self._planner_sync_from_enabled():
+                # Also do an immediate Planner poll to catch any recent changes
+                logger.info("🔍 Performing immediate Planner poll as part of initial sync...")
+                poll_result = await self._poll_all_planner_tasks()
+                if isinstance(poll_result, dict) and (
+                    (poll_result.get("created", 0) > 0) or (poll_result.get("updated", 0) > 0)
+                ):
+                    synced_anything = True
+            else:
+                logger.info("Planner -> Annika sync disabled by env; skipping inbound initial sync poll")
 
-            if not synced_anything:
+            if self._planner_sync_from_enabled() and not synced_anything:
                 logger.warning(
                     "Initial sync detected no task changes. Planner may be empty or the agent lacks access; forcing immediate polling loop."
                 )
@@ -3455,6 +3626,12 @@ class WebhookDrivenPlannerSync:
                             plan_id,
                         )
                         planner_data.pop("bucketId", None)
+                        await self._self_heal_stale_bucket_fields(
+                            annika_task,
+                            bucket_id=bucket_id,
+                            plan_id=plan_id,
+                            reason="create_invalid_bucket",
+                        )
                     elif not bucket_ids:
                         logger.debug(
                             "Bucket set unknown for plan %s; removing bucketId to avoid 404",
@@ -3769,6 +3946,12 @@ class WebhookDrivenPlannerSync:
                                 plan_id,
                             )
                             update_data.pop("bucketId", None)
+                            await self._self_heal_stale_bucket_fields(
+                                annika_task,
+                                bucket_id=bucket_id,
+                                plan_id=plan_id,
+                                reason="update_invalid_bucket",
+                            )
                     else:
                         logger.debug(
                             "Bucket list fetch failed (%s) for plan %s during update; removing bucketId",
@@ -4070,6 +4253,12 @@ class WebhookDrivenPlannerSync:
 
     async def _planner_polling_loop(self):
         """Poll all known Planner plans for task changes; interval is config-driven."""
+        if not self._planner_sync_from_enabled():
+            logger.info(
+                "Planner -> Annika sync disabled by env; skipping Planner polling loop"
+            )
+            return
+
         logger.info(f"⏰ Starting Planner polling loop (every {self.poll_interval}s)")
 
         while self.running:
@@ -4096,6 +4285,9 @@ class WebhookDrivenPlannerSync:
 
     async def _schedule_quick_poll(self, delay_seconds: int) -> None:
         """Schedule a one-off quick poll after local edits to reconcile Planner."""
+        if not self._planner_sync_from_enabled():
+            return
+
         try:
             # Cancel any pending quick poll to coalesce bursts
             if self.quick_poll_task and not self.quick_poll_task.done():
@@ -4121,6 +4313,17 @@ class WebhookDrivenPlannerSync:
 
     async def _poll_all_planner_tasks(self):
         """Poll all accessible Planner plans for task changes."""
+        if not self._planner_sync_from_enabled():
+            logger.info(
+                "Planner -> Annika sync disabled by env; skipping Planner poll"
+            )
+            return {
+                "checked": 0,
+                "created": 0,
+                "updated": 0,
+                "disabled": True,
+            }
+
         try:
             token, token_type = self._get_preferred_read_token()
             if not token:

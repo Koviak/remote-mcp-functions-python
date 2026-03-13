@@ -6,16 +6,16 @@ tokens stored in Redis before they expire, ensuring other applications
 always have access to valid tokens.
 """
 
+import asyncio
 import logging
 import os
-import asyncio
-from datetime import datetime
-from typing import Optional
 import threading
 import time
+from datetime import datetime
+from typing import Optional
 
-from mcp_redis_config import get_redis_token_manager, RedisTokenManager
-from agent_auth_manager import get_auth_manager, AgentAuthManager
+from agent_auth_manager import AgentAuthManager, get_auth_manager
+from mcp_redis_config import RedisTokenManager, get_redis_token_manager
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -138,18 +138,33 @@ class TokenRefreshService:
         """Refresh a single token"""
         try:
             # Get a new token using the auth manager
-            # For now, we'll use the agent's credentials
-            new_token = self.auth_manager.get_agent_user_token(scope)
+            new_token = self.auth_manager.get_agent_user_token(
+                scope,
+                delegated_user=user_id,
+            )
             
             if new_token:
                 # The auth manager will automatically store it in Redis
                 self.redis_manager.update_refresh_count(scope, user_id)
-                logger.info(f"Successfully refreshed token for scope: {scope}")
+                logger.info(
+                    "Successfully refreshed token for scope: %s (delegated_user=%s)",
+                    scope,
+                    user_id or "annika",
+                )
             else:
-                logger.error(f"Failed to refresh token for scope: {scope}")
+                logger.error(
+                    "Failed to refresh token for scope: %s (delegated_user=%s)",
+                    scope,
+                    user_id or "annika",
+                )
                 
         except Exception as e:
-            logger.error(f"Error refreshing token for scope '{scope}': {e}")
+            logger.error(
+                "Error refreshing token for scope '%s' (delegated_user=%s): %s",
+                scope,
+                user_id or "annika",
+                e,
+            )
 
 
 class AsyncTokenRefreshService:
