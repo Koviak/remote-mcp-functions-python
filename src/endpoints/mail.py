@@ -716,6 +716,8 @@ def list_inbox_http(req: func.HttpRequest) -> func.HttpResponse:
         search_value = req.params.get("$search") or req.params.get("search")
         if search_value:
             params["$search"] = search_value
+            # Graph rejects $skip with $search — strip it if present
+            params.pop("$skip", None)
         else:
             # Graph rejects $search with $orderby (SearchWithOrderBy), so
             # only apply inbox default ordering when search is not requested.
