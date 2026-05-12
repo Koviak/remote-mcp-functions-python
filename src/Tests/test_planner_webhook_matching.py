@@ -71,3 +71,29 @@ async def test_find_existing_webhook_prefers_strict_match_with_timezone_aware_ex
 
     assert found is not None
     assert found["id"] == "sub-correct-url"
+
+
+def test_resolve_webhook_name_accepts_chat_global_and_getallmessages_resources():
+    sync = planner_sync_module.WebhookDrivenPlannerSync()
+
+    assert (
+        sync._resolve_webhook_name(
+            "chat_global",
+            "chats('abc')/messages('123')",
+        )
+        == "teams_chats"
+    )
+    assert (
+        sync._resolve_webhook_name(
+            "",
+            "/users/5ac3e02f-825f-49f1-a2e2-8fe619020b60/chats/getAllMessages",
+        )
+        == "teams_chats"
+    )
+    assert (
+        sync._resolve_webhook_name(
+            "",
+            "/teams/getAllMessages",
+        )
+        == "teams_channels"
+    )

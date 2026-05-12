@@ -1,9 +1,11 @@
 import logging
 import os
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
-import redis.asyncio as redis
+
+from Redis_Master_Manager_Client import get_async_redis_client
 
 try:
     # When running as a package (python -m src.start_all_services)
@@ -18,9 +20,6 @@ GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
 WEBHOOK_URL = os.environ.get(
     "GRAPH_WEBHOOK_URL", "https://agency-swarm.ngrok.app/api/graph_webhook"
 )
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
-REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", "password")
 REDIS_PREFIX = "annika:chat_subscriptions:"
 
 
@@ -28,16 +27,13 @@ class ChatSubscriptionManager:
     """Manage Microsoft Teams chat message subscriptions."""
 
     def __init__(self) -> None:
-        self.redis_client: redis.Redis | None = None
+        self.redis_client: Any | None = None
 
     async def initialize(self) -> None:
         if self.redis_client is None:
-            self.redis_client = redis.Redis(
-                host=REDIS_HOST,
-                port=REDIS_PORT,
-                password=REDIS_PASSWORD,
-                decode_responses=True,
-            )
+            self.redis_client = await get_async_redis_client()
+            if self.redis_client is None:
+                raise RuntimeError("Redis client unavailable for chat subscriptions")
             await self.redis_client.ping()
             logger.info("ChatSubscriptionManager connected to Redis")
 

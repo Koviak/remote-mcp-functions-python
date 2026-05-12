@@ -20,6 +20,19 @@
 ### Post-Restart Verification
 - Pending user restart confirmation.
 
+## 2026-03-31 - Added Linux `func` resolver regression for remote startup
+
+### Problem
+- The runtime test suite did not guard against Linux preferring a bundled Windows `func.exe` over a valid native `func` on `PATH`.
+
+### Solution
+- Extended `src/Tests/test_start_all_services_runtime.py` with:
+  - an env-isolated default-interpreter test for `build_function_host_env()`,
+  - a non-Windows regression that forces `_resolve_func()` to prefer the native `func` path over repository-local `func.exe`.
+
+### Verification
+- `conda run -n Annika_2.1 python -m pytest src/Tests/test_start_all_services_runtime.py -q`
+
 ---
 
 ## 2026-03-10 - Delegated Microsoft To Do endpoint regression coverage

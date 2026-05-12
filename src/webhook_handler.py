@@ -9,10 +9,11 @@ import json
 import logging
 import re
 import asyncio
+import hashlib
 from datetime import datetime
 from typing import Dict, List
 
-from Redis_Master_Manager_Client import get_async_redis_client
+from Redis_Master_Manager_Client import get_async_redis_client, set_json_async
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,13 @@ CONTACTS_HISTORY_KEY = "annika:contacts:webhook:history"
 CONTACTS_HISTORY_MAX = 200
 CONTACTS_DEDUP_PREFIX = "annika:contacts:webhook:dedup:"
 CONTACTS_DEDUP_TTL_SECONDS = 24 * 60 * 60
+TEAMS_REVERSE_MAP_PREFIX = "annika:conversation_to_teams_chat:"
+TEAMS_REVERSE_MAP_TTL_SECONDS = 30 * 24 * 60 * 60
+
+
+def _deterministic_teams_conversation_id(chat_id: str) -> str:
+    digest = hashlib.sha256(chat_id.encode("utf-8")).hexdigest()
+    return f"CVteams_{digest[:16]}"
 
 
 class GraphWebhookHandler:
@@ -53,6 +61,32 @@ class GraphWebhookHandler:
         )
         if self.redis_client is None or stale_loop:
             await self.initialize(force_reconnect=self.redis_client is not None)
+
+    async def _ensure_teams_reverse_map(self, chat_id: str) -> str:
+        """Create/update the reverse map used by AETP for Teams delivery."""
+        normalized_chat_id = str(chat_id or "").strip()
+        if not normalized_chat_id or normalized_chat_id == "unknown":
+            return ""
+
+        conversation_id = _deterministic_teams_conversation_id(normalized_chat_id)
+        try:
+            await set_json_async(
+                self.redis_client,
+                f"{TEAMS_REVERSE_MAP_PREFIX}{conversation_id}",
+                {
+                    "teams_chat_id": normalized_chat_id,
+                    "last_used": datetime.utcnow().isoformat(),
+                    "message_mode": "send",
+                },
+                expire_seconds=TEAMS_REVERSE_MAP_TTL_SECONDS,
+            )
+        except Exception as exc:
+            logger.debug(
+                "Failed to sync Teams reverse map for chat %s: %s",
+                normalized_chat_id,
+                exc,
+            )
+        return conversation_id
     
     async def handle_webhook_notification(self, notification: Dict) -> bool:
         """
@@ -478,6 +512,8 @@ class GraphWebhookHandler:
                 if message_match:
                     message_id = message_match.group(1).strip("'\"()")
             
+            conversation_id = await self._ensure_teams_reverse_map(chat_id)
+
             # Create message notification for Annika
             message_notification = {
                 "timestamp": datetime.utcnow().isoformat(),
@@ -485,6 +521,7 @@ class GraphWebhookHandler:
                 "change_type": change_type,
                 "chat_id": chat_id,
                 "message_id": message_id,
+                "conversation_id": conversation_id or None,
                 "client_state": client_state,
                 "resource": resource,
                 "notification_id": notification.get("subscriptionId"),
@@ -522,12 +559,15 @@ class GraphWebhookHandler:
             chat_id = resource_data.get("id", "unknown")
             client_state = notification.get("clientState", "")
             
+            conversation_id = await self._ensure_teams_reverse_map(chat_id)
+
             # Create chat notification for Annika
             chat_notification = {
                 "timestamp": datetime.utcnow().isoformat(),
                 "type": "teams_chat",
                 "change_type": change_type,
                 "chat_id": chat_id,
+                "conversation_id": conversation_id or None,
                 "client_state": client_state,
                 "notification_id": notification.get("subscriptionId"),
                 "raw_notification": notification

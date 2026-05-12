@@ -25,8 +25,9 @@ from chat_subscription_manager import (
     initialize_chat_subscription_manager,
 )
 from graph_subscription_manager import GraphSubscriptionManager
+from logging_setup import setup_logging
 
-logging.basicConfig(level=logging.INFO)
+setup_logging(add_console=True)
 logger = logging.getLogger(__name__)
 
 GRAPH_RENEW_LOOP_OWNER_DEFAULT = "start_all_services"
@@ -59,6 +60,34 @@ def python_can_import_modules(
     return False, details
 
 
+def resolve_functions_python_executable(
+    configured_python: Optional[str],
+) -> str:
+    """Return a usable Functions worker interpreter for this host."""
+    if not configured_python:
+        return sys.executable
+
+    candidate = configured_python.strip()
+    if not candidate:
+        return sys.executable
+
+    candidate_path = Path(candidate)
+    if candidate_path.exists():
+        return str(candidate_path)
+
+    resolved_command = shutil.which(candidate)
+    if resolved_command:
+        return resolved_command
+
+    logger.warning(
+        "Ignoring unusable FUNCTIONS_PYTHON_EXE=%s; "
+        "falling back to current interpreter %s",
+        configured_python,
+        sys.executable,
+    )
+    return sys.executable
+
+
 def build_function_host_env(
     base_env: Optional[dict[str, str]] = None,
     python_executable: Optional[str] = None,
@@ -67,15 +96,19 @@ def build_function_host_env(
     env = dict(base_env or os.environ)
     resolved_python = (
         python_executable
-        or os.environ.get("FUNCTIONS_PYTHON_EXE")
-        or sys.executable
+        or resolve_functions_python_executable(
+            env.get("FUNCTIONS_PYTHON_EXE")
+        )
     )
     env.setdefault("ASPNETCORE_URLS", "http://0.0.0.0:7071")
     # Core Tools resolves Python using this exact key name first.
     # Keep both forms for compatibility across config readers.
+    env["FUNCTIONS_PYTHON_EXE"] = resolved_python
     env["languageWorkers:python:defaultExecutablePath"] = resolved_python
     env["languageWorkers__python__defaultExecutablePath"] = resolved_python
     env["PYTHONEXECUTABLE"] = resolved_python
+    if not str(env.get("AzureWebJobsStorage", "")).strip():
+        env["AzureWebJobsStorage"] = "UseDevelopmentStorage=true"
     env.setdefault("GRAPH_RENEW_LOOP_OWNER", GRAPH_RENEW_LOOP_OWNER_DEFAULT)
     return env
 
@@ -160,6 +193,8 @@ class ServiceManager:
         Returns full path or command name if discoverable,
         else None.
         """
+        binary_names = ("func.cmd", "func.exe", "func") if sys.platform == "win32" else ("func",)
+
         # 1) Environment-driven hints (explicit override)
         env_vars = [
             "FUNC_PATH",
@@ -173,7 +208,7 @@ class ServiceManager:
             candidate = Path(val)
             if candidate.is_dir():
                 # Common filenames
-                for name in ("func.exe", "func.cmd", "func"):
+                for name in binary_names:
                     inner = candidate / name
                     if inner.exists():
                         self._append_dir_to_path(candidate)
@@ -234,23 +269,25 @@ class ServiceManager:
                 self._append_dir_to_path(found.parent)
                 return str(found)
 
-        # 3) Repository-local tools folder
-        # Prefer nested portable layout: tools/func/func.exe
-        nested_portable = self.base_dir / "tools" / "func" / "func.exe"
-        if nested_portable.exists():
-            self._append_dir_to_path(nested_portable.parent)
-            return str(nested_portable)
-        for name in ("func.exe", "func.cmd", "func"):
-            local = self.base_dir / "tools" / name
-            if local.exists():
-                self._append_dir_to_path(local.parent)
-                return str(local)
-
-        # 4) System PATH last
+        # 3) On non-Windows, prefer a native func already on PATH over any
+        # bundled Windows portable artifacts that may exist in the repository.
         which_path = shutil.which("func")
         if which_path:
             self._append_dir_to_path(Path(which_path).parent)
             return which_path
+
+        # 4) Repository-local tools folder
+        if sys.platform == "win32":
+            # Prefer nested portable layout: tools/func/func.exe
+            nested_portable = self.base_dir / "tools" / "func" / "func.exe"
+            if nested_portable.exists():
+                self._append_dir_to_path(nested_portable.parent)
+                return str(nested_portable)
+        for name in binary_names:
+            local = self.base_dir / "tools" / name
+            if local.exists():
+                self._append_dir_to_path(local.parent)
+                return str(local)
 
         return None
 
@@ -836,10 +873,11 @@ class ServiceManager:
         logger.info("All services stopped.")
 
 
-async def main():
+async def main() -> int:
     """Main entry point."""
     manager = ServiceManager()
     shutdown_event = asyncio.Event()
+    exit_code = 0
     
     # Set up signal handlers for graceful shutdown
     def signal_handler(signum, frame):
@@ -874,7 +912,7 @@ async def main():
 
         else:
             logger.error("Failed to start all services")
-            sys.exit(1)
+            exit_code = 1
 
     except KeyboardInterrupt:
         # This might not be reached due to signal handlers, but just in case
@@ -883,6 +921,7 @@ async def main():
         logger.error("Unexpected error: %s", e)
         import traceback
         traceback.print_exc()
+        exit_code = 1
     finally:
         # Always try to clean up
         logger.info("\nCleaning up...")
@@ -892,6 +931,7 @@ async def main():
         await asyncio.sleep(0.5)
 
         logger.info("\nGoodbye!")
+    return exit_code
 
 
 if __name__ == "__main__":
@@ -901,7 +941,7 @@ if __name__ == "__main__":
         os.environ['PYTHONUNBUFFERED'] = '1'
     
     try:
-        asyncio.run(main())
+        raise SystemExit(asyncio.run(main()))
     except KeyboardInterrupt:
         # Handle any final keyboard interrupt
         print("\nExiting...")

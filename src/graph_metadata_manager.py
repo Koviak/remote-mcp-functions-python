@@ -225,7 +225,7 @@ class GraphMetadataManager:
             f"https://graph.microsoft.com/v1.0/users/{user_id}"
             "?$select=id,displayName,mail,userPrincipalName,"
             "jobTitle,department,officeLocation,mobilePhone,businessPhones,"
-            "aboutMe,givenName,surname"
+            "aboutMe,givenName,surname,accountEnabled,userType"
         )
         response = requests.get(url, headers=headers, timeout=10)
         

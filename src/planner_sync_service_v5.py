@@ -1033,7 +1033,13 @@ class WebhookDrivenPlannerSync:
 
         self.planner_webhooks_requested = enable_planner_webhooks
 
-        # Setup multiple webhook subscriptions with appropriate tokens
+        logger.info(
+            "Teams chat message subscriptions are managed by "
+            "chat_subscription_manager; planner sync skips Teams "
+            "chat/channel subscription ownership"
+        )
+
+        # Setup only the webhook subscriptions owned by planner sync.
         webhook_configs = [
             {
                 "name": "groups",
@@ -1048,42 +1054,6 @@ class WebhookDrivenPlannerSync:
                         datetime.utcnow() + timedelta(hours=24)
                     ).isoformat() + "Z",
                     "clientState": "annika_groups_webhook_v5"
-                }
-            },
-            {
-                "name": "teams_chats",
-                "token": app_token,  # Teams require application token
-                "config": {
-                    "changeType": "created,updated,deleted",
-                    "notificationUrl": (
-                        "https://agency-swarm.ngrok.app/api/graph_webhook"
-                    ),
-                    "lifecycleNotificationUrl": (
-                        "https://agency-swarm.ngrok.app/api/graph_webhook"
-                    ),
-                    "resource": "/chats",
-                    "expirationDateTime": (
-                        datetime.utcnow() + timedelta(hours=24)
-                    ).isoformat() + "Z",
-                    "clientState": "annika_teams_chats_v5"
-                }
-            },
-            {
-                "name": "teams_channels",
-                "token": app_token,  # Teams require application token
-                "config": {
-                    "changeType": "created,updated,deleted",
-                    "notificationUrl": (
-                        "https://agency-swarm.ngrok.app/api/graph_webhook"
-                    ),
-                    "lifecycleNotificationUrl": (
-                        "https://agency-swarm.ngrok.app/api/graph_webhook"
-                    ),
-                    "resource": "/teams/getAllChannels",
-                    "expirationDateTime": (
-                        datetime.utcnow() + timedelta(hours=24)
-                    ).isoformat() + "Z",
-                    "clientState": "annika_teams_channels_v5"
                 }
             }
         ]
@@ -1290,9 +1260,20 @@ class WebhookDrivenPlannerSync:
             return 'planner_tasks'
         if 'groups' in client_state_l:
             return 'groups'
-        if 'teams_chats' in client_state_l or '/chats' in resource_l:
+        if (
+            'teams_chats' in client_state_l
+            or 'chat_global' in client_state_l
+            or '/chats' in resource_l
+            or '/me/chats/getallmessages' in resource_l
+            or '/users/' in resource_l and '/chats/getallmessages' in resource_l
+        ):
             return 'teams_chats'
-        if 'teams_channels' in client_state_l or ('/teams' in resource_l and '/channels' in resource_l) or '/teams/getallchannels' in resource_l:
+        if (
+            'teams_channels' in client_state_l
+            or ('/teams' in resource_l and '/channels' in resource_l)
+            or '/teams/getallchannels' in resource_l
+            or '/teams/getallmessages' in resource_l
+        ):
             return 'teams_channels'
         return None
 

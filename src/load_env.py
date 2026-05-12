@@ -45,6 +45,12 @@ if env_file:
                 key, value = line.split('=', 1)
                 key = key.strip()
                 value = value.strip().strip('"').strip("'")
+                if key in os.environ and str(os.environ.get(key, "")).strip():
+                    if 'PASSWORD' in key or 'SECRET' in key:
+                        print(f"Preserved existing {key}: {'*' * 10}")
+                    else:
+                        print(f"Preserved existing {key}: {os.environ.get(key, '')[:30]}...")
+                    continue
                 os.environ[key] = value
                 if 'PASSWORD' in key or 'SECRET' in key:
                     print(f"Loaded {key}: {'*' * 10}")

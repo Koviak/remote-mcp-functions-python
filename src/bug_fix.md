@@ -1,5 +1,89 @@
 Bug Fix Log
 
+## 2026-03-31 21:20:28 -05:00
+
+### Problem
+- Teams chat messages were being received through the dedicated `chat_subscription_manager`, but `planner_sync_service_v5` still tried to create its own Teams chat/channel webhook subscriptions during startup.
+- That produced misleading Graph `403` quota errors even though the real `chat_global` subscription was already active and delivering notifications.
+
+### Root Cause
+- Ownership of Teams notifications was split across two services:
+  - `chat_subscription_manager` owned the live `/me/chats/getAllMessages` subscription used for message delivery.
+  - `planner_sync_service_v5` still attempted legacy Teams webhook ownership for chat/channel resources it did not need to own.
+- Planner sync’s webhook-name resolution also did not explicitly recognize `chat_global` and `getAllMessages` resources as Teams message notifications.
+
+### Solution
+- Updated `src/planner_sync_service_v5.py`:
+  - Removed planner sync ownership of Teams chat/channel subscription creation.
+  - Added an explicit startup log that Teams chat message subscriptions are managed by `chat_subscription_manager`.
+  - Expanded webhook-name resolution so `chat_global`, `/users/{user-id}/chats/getAllMessages`, and `/teams/getAllMessages` classify correctly.
+- Updated `src/Tests/test_planner_webhook_matching.py`:
+  - Added regression coverage for `chat_global` and `getAllMessages` resource classification.
+
+### Verification
+- `conda run -n Annika_2.1 python -m pytest Tests/test_planner_webhook_matching.py Tests/test_start_all_services_runtime.py -q`
+- Result: `9 passed in 0.15s`
+- Live startup verification:
+  - `env PYTHONUNBUFFERED=1 /home/joshua-koviak/miniforge3/envs/Annika_2.1/bin/python start_all_services.py --verbose`
+  - Confirmed startup log contains:
+    - `Teams chat message subscriptions are managed by chat_subscription_manager; planner sync skips Teams chat/channel subscription ownership`
+  - Confirmed old Teams webhook `403` quota errors do not appear during startup.
+- Live Teams chat delivery verification:
+  - Sent a real test message from Annika to Joshua’s existing one-on-one Teams chat via Graph.
+  - Confirmed webhook delivery in Redis history:
+    - `annika:teams:chat_messages:history` entry for message id `1775010019422`
+    - `client_state=chat_global`
+    - `conversation_id=CVteams_f645be6fb138bb80`
+
+## 2026-03-31 21:12:48 -05:00
+
+### Problem
+- The Remote MCP stack could start, but Azure Functions host health kept reporting:
+  - `azure.functions.webjobs.storage: Unable to create client for AzureWebJobsStorage`
+- `src/local.settings.json` pinned `AzureWebJobsStorage` to an empty string, so the Functions host never got a usable storage connection even though local Azurite was running.
+
+### Root Cause
+- `build_function_host_env()` only normalized the Python worker executable and left `AzureWebJobsStorage` blank when the environment/local settings did not supply a real value.
+- Azure Functions host health treats blank `AzureWebJobsStorage` as unhealthy for blob-backed bindings in `function_app.py`.
+
+### Solution
+- Updated `src/start_all_services.py`:
+  - `build_function_host_env()` now defaults `AzureWebJobsStorage` to `UseDevelopmentStorage=true` when the setting is blank.
+- Updated `src/Tests/test_start_all_services_runtime.py`:
+  - Added regression coverage asserting the startup env defaults to Azurite storage when no storage connection string is provided.
+
+### Verification
+- `conda run -n Annika_2.1 python -m pytest Tests/test_start_all_services_runtime.py -q`
+- Result: `7 passed in 0.13s`
+- Live runtime verification:
+  - `env PYTHONUNBUFFERED=1 /home/joshua-koviak/miniforge3/envs/Annika_2.1/bin/python start_all_services.py --verbose`
+  - `curl -sS http://127.0.0.1:7071/api/health/ready`
+  - `curl -sS http://127.0.0.1:7071/api/hello`
+  - `curl -sS http://127.0.0.1:7071/api/tokens/health`
+- Result: stack starts cleanly and all three endpoints return 200.
+
+## 2026-03-31 21:05:22 -05:00
+
+### Problem
+- `python start_all_services.py --verbose` failed immediately on Linux/WSL when `.env` still contained `FUNCTIONS_PYTHON_EXE=C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe`.
+- `start_all_services.py` preflighted that Windows path literally, raised `[Errno 2] No such file or directory`, and aborted before Azure Functions Core Tools could start.
+
+### Root Cause
+- `build_function_host_env()` unconditionally preferred `FUNCTIONS_PYTHON_EXE` from the environment over the current runtime interpreter.
+- The child environment also preserved the unusable `FUNCTIONS_PYTHON_EXE` value instead of normalizing it to a host-valid executable.
+
+### Solution
+- Updated `src/start_all_services.py`:
+  - Added `resolve_functions_python_executable()` to validate `FUNCTIONS_PYTHON_EXE` against the current host.
+  - Falls back to `sys.executable` when the configured value does not exist and is not discoverable on `PATH`.
+  - Normalizes the child process environment by overwriting `FUNCTIONS_PYTHON_EXE`, `languageWorkers:python:defaultExecutablePath`, `languageWorkers__python__defaultExecutablePath`, and `PYTHONEXECUTABLE` with the resolved interpreter.
+- Updated `src/Tests/test_start_all_services_runtime.py`:
+  - Added regression coverage for an unusable configured interpreter path.
+
+### Verification
+- `conda run -n Annika_2.1 python -m pytest Tests/test_start_all_services_runtime.py -q`
+- Result: `6 passed in 0.14s`
+
 ## 2026-03-13 - FIX: Asyncio event loop cross-contamination in webhook handler (ROOT-005)
 
 **File Modified:** `src/http_endpoints.py` — webhook notification processing loop
@@ -465,6 +549,24 @@ Impact
 
 ### Post-Restart Verification
 - Pending user restart confirmation.
+
+## 2026-03-31 14:00 CT - Prefer native Azure Functions Core Tools on Linux startup
+
+### Problem
+- The Linux startup path for `src/start_all_services.py` still preferred repository-local Windows Azure Functions binaries (`tools/func/func.exe`) ahead of a valid native `func` already on `PATH`.
+- This left the Remote MCP stack dead on Linux with `Exec format error`, which kept the local Functions host down on `7071` and cascaded into Outlook delta backfill failures in Annika.
+
+### Solution
+- Updated `ServiceManager._resolve_func()` in `src/start_all_services.py` to:
+  - use platform-aware function binary names,
+  - prefer `shutil.which("func")` on non-Windows hosts before probing repository-local portable artifacts,
+  - avoid selecting Windows-only `.exe` payloads on Linux.
+
+### Verification
+- `env FUNCTIONS_PYTHON_EXE=/home/joshua-koviak/miniforge3/envs/Annika_2.1/bin/python conda run -n Annika_2.1 python -m py_compile start_all_services.py`
+- Live runtime validation:
+  - `env FUNCTIONS_PYTHON_EXE=/home/joshua-koviak/miniforge3/envs/Annika_2.1/bin/python conda run -n Annika_2.1 python start_all_services.py --verbose`
+  - `curl -fsS http://127.0.0.1:7071/api/health/ready`
 
 ---
 
@@ -1147,3 +1249,96 @@ Verification
 - `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m py_compile src\planner_sync_service_v5.py src\Tests\test_planner_sync_env_gates.py`
 - `C:\Users\JoshuaKoviak\.conda\envs\Annika_2.1\python.exe -m pytest src\Tests\test_planner_sync_env_gates.py src\Tests\test_planner_write_tokens.py src\Tests\test_planner_webhook_matching.py -q`
 - Result: PASS
+
+## 2026-03-30 15:35 CDT - Linux systemd startup fixed for Remote MCP host
+
+Problem
+- `src/start_all_services.py` failed under Linux systemd because the repo `.env` loaded a Windows-only `FUNCTIONS_PYTHON_EXE`, and the startup path was allowed to overwrite service-provided Linux overrides.
+- On unexpected startup errors, `start_all_services.py` could still exit `0`, which prevented `systemd` from treating boot failures as actual failures.
+
+Changes
+- `src/load_env.py`
+  - Preserves already-set environment variables instead of overwriting them from `.env`.
+  - This lets Linux service-level overrides win for values like `FUNCTIONS_PYTHON_EXE`.
+- `src/start_all_services.py`
+  - `main()` now returns an exit code.
+  - Unexpected startup failures and unsuccessful `start_all()` runs now return `1`.
+  - `__main__` now exits with `SystemExit(asyncio.run(main()))` so `systemd` gets a real failure code.
+- Linux host/runtime
+  - Installed Azure Functions Core Tools v4 into the user Node toolchain.
+  - Started the service under systemd with Linux overrides for:
+    - `FUNCTIONS_PYTHON_EXE`
+    - `FUNC_PATH`
+
+Verification
+- `/home/joshua-koviak/miniforge3/envs/Annika_2.1/bin/python -m py_compile src/load_env.py src/start_all_services.py`
+- `func --version` -> `4.9.0`
+- `systemctl status annika-remote-mcp.service --no-pager -l`
+- `curl -sf http://127.0.0.1:7071/api/health/ready`
+- Result: service active, Azure Functions host bound on `7071`, readiness endpoint passing
+
+## 2026-03-30 15:35 CDT - Remote MCP Linux startup completed with ngrok + Azurite
+
+Problem
+- After the initial Linux service conversion, the Remote MCP unit still ran in degraded mode because:
+  - `ngrok` was not installed, so public webhook validation could not succeed
+  - `AzureWebJobsStorage` was unset locally, so the Functions host health reported storage unhealthy
+
+Changes
+- Linux host/runtime
+  - Installed `ngrok` into the user Node toolchain.
+  - Started Azurite as Docker container `annika-azurite` with restart policy `unless-stopped`.
+- `../Annika_2.0/scripts/systemd/annika-remote-mcp.service`
+  - Added:
+    - `NGROK_EXE=/home/joshua-koviak/.nvm/versions/node/v24.14.1/bin/ngrok`
+    - `AzureWebJobsStorage=UseDevelopmentStorage=true`
+- Reinstalled the unit, reloaded `systemd`, and restarted the Remote MCP service.
+
+Verification
+- `systemctl status annika-remote-mcp.service --no-pager -l`
+  - service active with `python`, `ngrok`, `func`, and Azure worker subprocesses
+- `ss -ltnp | rg ':7071|:4040'`
+  - `7071` bound by `func`
+  - `4040` bound by `ngrok`
+- `curl -sf http://127.0.0.1:7071/api/health/ready`
+- `journalctl -u annika-remote-mcp.service -n 120 --no-pager`
+  - webhook URL configured
+  - chat/global Graph subscription created
+  - planner/contact sync services started
+
+## 2026-03-31 18:50 CDT - Fixed Teams webhook/send contract drift blocking Annika notification routing
+
+Problem
+- The Teams webhook path published chat events without `conversation_id`, so AITP could not reliably route follow-up notifications back to the originating Teams thread.
+- The Teams send endpoint collapsed rich chat payloads down to plain text body content, which dropped HTML, reference attachments, mentions, and message importance before the request reached Microsoft Graph.
+- `chat_subscription_manager.py` still bypassed the centralized Redis manager and created its own direct `redis.asyncio` client.
+
+Changes
+- `src/webhook_handler.py`
+  - Added deterministic Teams `conversation_id` generation for inbound chat events.
+  - Added reverse-map synchronization to `annika:conversation_to_teams_chat:{conversation_id}` so AETP can resolve the originating chat ID for outbound Teams delivery.
+  - Published `conversation_id` on Teams chat message/chat notifications.
+- `src/endpoints/teams.py`
+  - Added canonical JSON-body parsing and validation helpers for Teams chat sends.
+  - Preserved `contentType`, `importance`, `mentions`, and `attachments` when posting chat messages to Microsoft Graph.
+- `src/chat_subscription_manager.py`
+  - Replaced direct `redis.asyncio` construction with the centralized `get_async_redis_client()` manager path.
+- `src/Tests/test_webhook_teams_chat_routing.py`
+  - Added regression coverage for deterministic `conversation_id` emission on Teams chat message notifications.
+- `src/Tests/test_teams_contract_endpoints.py`
+  - Added regression coverage proving the Teams send endpoint preserves HTML + attachment/mention payload fields.
+
+Verification
+- `conda run -n Annika_2.1 python -m pytest Tests/test_webhook_teams_chat_routing.py Tests/test_teams_contract_endpoints.py Tests/test_chat_subscription_dedupe.py -q`
+## 2026-04-01 - Bootstrap Remote MCP supervisor through the repo logging setup
+
+**Files Modified:** `src/start_all_services.py`
+
+**Problem:**
+The main local Remote MCP orchestrator still used `logging.basicConfig(level=logging.INFO)`, which meant the supervisor path was not guaranteed to participate in the repo's file-backed Remote MCP logging contract. That weakened overnight error visibility for ngrok, func host, webhook, and Planner sync startup failures.
+
+**Solution:**
+Replaced the ad hoc `basicConfig` bootstrap in `start_all_services.py` with the existing `src/logging_setup.py` helper so the Remote MCP supervisor now writes through the same capped file-backed logging path as the rest of the remote stack.
+
+**Testing:**
+- `python -m py_compile src/start_all_services.py`

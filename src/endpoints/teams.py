@@ -1,14 +1,89 @@
 import json
-import requests
+from typing import Any
+
 import azure.functions as func
+import requests
 
 from endpoints.common import (
     GRAPH_API_ENDPOINT,
-    get_access_token,
     _get_agent_user_id,
     _get_token_and_base_for_me,
     build_json_headers,
+    get_access_token,
 )
+
+
+def _safe_get_json(req: func.HttpRequest) -> dict[str, Any]:
+    try:
+        raw = req.get_json()
+    except ValueError:
+        return {}
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("Request body must be a JSON object")
+    return dict(raw)
+
+
+def _normalize_teams_content_type(value: object) -> str:
+    if isinstance(value, str) and value.strip().lower() == "html":
+        return "html"
+    return "text"
+
+
+def _normalize_chat_message_importance(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("importance must be one of: normal, high, urgent")
+    normalized = value.strip().lower()
+    if normalized not in {"normal", "high", "urgent"}:
+        raise ValueError("importance must be one of: normal, high, urgent")
+    return normalized
+
+
+def _normalize_chat_collection(
+    raw_value: object,
+    field_name: str,
+) -> list[dict[str, Any]] | None:
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, list):
+        raise ValueError(f"{field_name} must be a list of objects")
+
+    normalized: list[dict[str, Any]] = []
+    for item in raw_value:
+        if not isinstance(item, dict):
+            raise ValueError(f"{field_name} must be a list of objects")
+        normalized.append(dict(item))
+    return normalized
+
+
+def _build_chat_message_payload(req_body: dict[str, Any]) -> dict[str, Any]:
+    message = req_body.get("message")
+    if not isinstance(message, str) or not message.strip():
+        raise ValueError("Missing required field: message")
+
+    payload: dict[str, Any] = {
+        "body": {
+            "content": message,
+            "contentType": _normalize_teams_content_type(req_body.get("contentType")),
+        }
+    }
+
+    importance = _normalize_chat_message_importance(req_body.get("importance"))
+    if importance is not None:
+        payload["importance"] = importance
+
+    mentions = _normalize_chat_collection(req_body.get("mentions"), "mentions")
+    if mentions:
+        payload["mentions"] = mentions
+
+    attachments = _normalize_chat_collection(req_body.get("attachments"), "attachments")
+    if attachments:
+        payload["attachments"] = attachments
+
+    return payload
 
 
 def list_teams_http(req: func.HttpRequest) -> func.HttpResponse:
@@ -130,15 +205,18 @@ def list_chats_http(req: func.HttpRequest) -> func.HttpResponse:
 def post_chat_message_http(req: func.HttpRequest) -> func.HttpResponse:
     """Post a message to a Teams chat. Delegated token required."""
     try:
-        req_body = req.get_json()
+        req_body = _safe_get_json(req)
         if not req_body:
             return func.HttpResponse("Request body required", status_code=400)
 
         chat_id = req_body.get("chatId")
-        message = req_body.get("message")
         reply_to = req_body.get("replyToId")
-        if not all([chat_id, message]):
-            return func.HttpResponse("Missing required fields: chatId, message", status_code=400)
+        if not isinstance(chat_id, str) or not chat_id.strip():
+            return func.HttpResponse("Missing required field: chatId", status_code=400)
+        try:
+            data = _build_chat_message_payload(req_body)
+        except ValueError as exc:
+            return func.HttpResponse(str(exc), status_code=400)
 
         delegated, _ = _get_token_and_base_for_me("ChatMessage.Send")
         token = delegated
@@ -153,7 +231,6 @@ def post_chat_message_http(req: func.HttpRequest) -> func.HttpResponse:
             )
 
         headers = build_json_headers(token)
-        data = {"body": {"content": message}}
         if reply_to:
             url = f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages/{reply_to}/replies"
         else:

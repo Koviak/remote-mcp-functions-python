@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json as json_lib
 import os
 import sys
@@ -62,6 +63,11 @@ async def test_chat_global_resource_without_leading_slash_routes_to_teams_chat()
     assert event["chat_id"] == "19:test-chat-id@thread.v2"
     assert event["message_id"] == "1772208559540"
     assert event["change_type"] == "created"
+    expected_conversation_id = (
+        "CVteams_"
+        + hashlib.sha256(b"19:test-chat-id@thread.v2").hexdigest()[:16]
+    )
+    assert event["conversation_id"] == expected_conversation_id
 
 
 @pytest.mark.asyncio
