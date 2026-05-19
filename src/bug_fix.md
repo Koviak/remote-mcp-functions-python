@@ -1,5 +1,40 @@
 Bug Fix Log
 
+## 2026-05-19 04:20:03 -05:00
+
+### Problem
+- Fresh tmux startup for the remote MCP service launched `start_all_services.py`,
+  but Azure Functions Core Tools printed:
+  - `Could not find a Python version. 3.10.x, 3.11.x, 3.12.x, 3.13.x, or 3.14.x is recommended, and used in Azure Functions.`
+- The Function App readiness probe never became healthy, so remote startup
+  failed and the launcher cleaned up ngrok and the Function App process.
+
+### Root Cause
+- `build_function_host_env()` correctly set `FUNCTIONS_PYTHON_EXE`,
+  `languageWorkers:*`, and `PYTHONEXECUTABLE` to the Conda interpreter, and the
+  startup preflight proved that interpreter could import Azure modules.
+- Azure Functions Core Tools still performs its own Python discovery from
+  `PATH`. The child environment did not prepend the selected worker
+  interpreter's directory to `PATH`, so Core Tools could fail before honoring the
+  explicit worker settings.
+
+### Solution
+- Updated `src/start_all_services.py`:
+  - When the resolved worker Python exists, prepend its parent directory to the
+    child `PATH` exactly once.
+  - Preserve the existing fail-loud module import preflight and worker env keys.
+- Updated `src/Tests/test_start_all_services_runtime.py`:
+  - Added a regression asserting the worker Python directory is first on the
+    child `PATH`.
+
+### Verification
+- Red focused test failed before the implementation change because `PATH` still
+  began with `/usr/bin`.
+- `conda run -n Annika_2.1 python -m pytest Tests/test_start_all_services_runtime.py -q --tb=short -p no:cacheprovider` passed.
+- `conda run -n Annika_2.1 ruff check start_all_services.py Tests/test_start_all_services_runtime.py --select F401,F821,E501 --output-format concise` passed.
+- `conda run -n Annika_2.1 python -m py_compile start_all_services.py Tests/test_start_all_services_runtime.py` passed.
+- Live restart verification pending.
+
 ## 2026-03-31 21:20:28 -05:00
 
 ### Problem

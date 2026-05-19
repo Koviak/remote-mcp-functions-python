@@ -107,6 +107,17 @@ def build_function_host_env(
     env["languageWorkers:python:defaultExecutablePath"] = resolved_python
     env["languageWorkers__python__defaultExecutablePath"] = resolved_python
     env["PYTHONEXECUTABLE"] = resolved_python
+    resolved_python_path = Path(resolved_python)
+    if resolved_python_path.exists():
+        python_dir = str(resolved_python_path.parent)
+        current_path = env.get("PATH", "")
+        path_parts = current_path.split(os.pathsep) if current_path else []
+        if python_dir not in path_parts:
+            env["PATH"] = (
+                python_dir + os.pathsep + current_path
+                if current_path
+                else python_dir
+            )
     if not str(env.get("AzureWebJobsStorage", "")).strip():
         env["AzureWebJobsStorage"] = "UseDevelopmentStorage=true"
     env.setdefault("GRAPH_RENEW_LOOP_OWNER", GRAPH_RENEW_LOOP_OWNER_DEFAULT)

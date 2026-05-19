@@ -69,6 +69,23 @@ def test_build_function_host_env_falls_back_from_unusable_env_path() -> None:
     assert env["PYTHONEXECUTABLE"] == sys.executable
 
 
+def test_build_function_host_env_prepends_worker_python_dir_to_path(
+    tmp_path: Path,
+) -> None:
+    python_dir = tmp_path / "env" / "bin"
+    python_dir.mkdir(parents=True)
+    python_executable = python_dir / "python"
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    env = build_function_host_env(
+        base_env={"PATH": "/usr/bin"},
+        python_executable=str(python_executable),
+    )
+
+    assert env["FUNCTIONS_PYTHON_EXE"] == str(python_executable)
+    assert env["PATH"].split(os.pathsep)[0] == str(python_dir)
+
+
 def test_build_function_host_env_defaults_storage_to_azurite() -> None:
     env = build_function_host_env(base_env={"AzureWebJobsStorage": ""})
 
