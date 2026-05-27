@@ -4,6 +4,7 @@ Comprehensive startup script for all services.
 Starts ngrok, Function App, sets up webhooks, and runs Planner sync service.
 """
 import asyncio
+import json
 import logging
 import os
 import signal
@@ -31,6 +32,14 @@ setup_logging(add_console=True)
 logger = logging.getLogger(__name__)
 
 GRAPH_RENEW_LOOP_OWNER_DEFAULT = "start_all_services"
+FUNCTION_HOST_RUNTIME_SETTING_KEYS = (
+    "FUNCTIONS_PYTHON_EXE",
+    "languageWorkers:python:defaultExecutablePath",
+    "languageWorkers__python__defaultExecutablePath",
+    "AzureFunctionsJobHost__languageWorkers__python__defaultExecutablePath",
+    "PYTHONEXECUTABLE",
+    "AzureWebJobsStorage",
+)
 
 
 def python_can_import_modules(
@@ -106,6 +115,9 @@ def build_function_host_env(
     env["FUNCTIONS_PYTHON_EXE"] = resolved_python
     env["languageWorkers:python:defaultExecutablePath"] = resolved_python
     env["languageWorkers__python__defaultExecutablePath"] = resolved_python
+    env[
+        "AzureFunctionsJobHost__languageWorkers__python__defaultExecutablePath"
+    ] = resolved_python
     env["PYTHONEXECUTABLE"] = resolved_python
     resolved_python_path = Path(resolved_python)
     if resolved_python_path.exists():
@@ -122,6 +134,73 @@ def build_function_host_env(
         env["AzureWebJobsStorage"] = "UseDevelopmentStorage=true"
     env.setdefault("GRAPH_RENEW_LOOP_OWNER", GRAPH_RENEW_LOOP_OWNER_DEFAULT)
     return env
+
+
+def sync_function_host_local_settings(
+    base_dir: Path,
+    child_env: dict[str, str],
+) -> bool:
+    """Sync host-local runtime keys into local.settings.json.
+
+    Azure Functions Core Tools reads local.settings.json during startup and can
+    reintroduce a stale Windows Python path after the child environment has
+    already been normalized. Only non-secret runtime bootstrap keys are updated;
+    existing credentials and service settings are preserved.
+    """
+    settings_path = base_dir / "local.settings.json"
+    if not settings_path.exists():
+        return False
+
+    try:
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning(
+            "Could not read local.settings.json for runtime sync: %s",
+            exc,
+        )
+        return False
+
+    values = data.setdefault("Values", {})
+    desired_values = {
+        "FUNCTIONS_PYTHON_EXE": child_env["FUNCTIONS_PYTHON_EXE"],
+        "languageWorkers:python:defaultExecutablePath": child_env[
+            "languageWorkers:python:defaultExecutablePath"
+        ],
+        "languageWorkers__python__defaultExecutablePath": child_env[
+            "languageWorkers__python__defaultExecutablePath"
+        ],
+        "AzureFunctionsJobHost__languageWorkers__python__defaultExecutablePath": (
+            child_env[
+                "AzureFunctionsJobHost__languageWorkers__python__defaultExecutablePath"
+            ]
+        ),
+        "PYTHONEXECUTABLE": child_env["PYTHONEXECUTABLE"],
+        "AzureWebJobsStorage": child_env.get(
+            "AzureWebJobsStorage",
+            "UseDevelopmentStorage=true",
+        ),
+    }
+
+    changed = False
+    for key, desired_value in desired_values.items():
+        if values.get(key) != desired_value:
+            values[key] = desired_value
+            changed = True
+
+    if not changed:
+        return False
+
+    temp_path = settings_path.with_suffix(".json.tmp")
+    temp_path.write_text(
+        json.dumps(data, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temp_path.replace(settings_path)
+    logger.info(
+        "Updated local.settings.json runtime keys for current host: %s",
+        ", ".join(FUNCTION_HOST_RUNTIME_SETTING_KEYS),
+    )
+    return True
 
 
 class ServiceManager:
@@ -476,6 +555,7 @@ class ServiceManager:
         func_cwd = str(self.base_dir)
         # Ensure host uses current interpreter and binds to all interfaces.
         child_env = build_function_host_env()
+        sync_function_host_local_settings(self.base_dir, child_env)
         worker_python = child_env.get(
             "languageWorkers__python__defaultExecutablePath",
             sys.executable,

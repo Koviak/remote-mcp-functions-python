@@ -1365,6 +1365,7 @@ Changes
 
 Verification
 - `conda run -n Annika_2.1 python -m pytest Tests/test_webhook_teams_chat_routing.py Tests/test_teams_contract_endpoints.py Tests/test_chat_subscription_dedupe.py -q`
+
 ## 2026-04-01 - Bootstrap Remote MCP supervisor through the repo logging setup
 
 **Files Modified:** `src/start_all_services.py`
@@ -1377,3 +1378,33 @@ Replaced the ad hoc `basicConfig` bootstrap in `start_all_services.py` with the 
 
 **Testing:**
 - `python -m py_compile src/start_all_services.py`
+
+## 2026-05-27 06:15 CDT - Fixed Linux Function host restart path drift
+
+Problem
+- RSI restart validation repeatedly wedged on the remote MCP launcher even
+  though `FUNCTIONS_PYTHON_EXE` was normalized in the child environment.
+- Azure Functions Core Tools was still reading stale Windows Python worker keys
+  from `local.settings.json`, causing `func start` to report that no supported
+  Python version could be found.
+
+Changes
+- `src/start_all_services.py`
+  - Added `sync_function_host_local_settings()` to update only non-secret
+    runtime bootstrap keys in `local.settings.json` before spawning `func`.
+  - Preserves credentials and service configuration while syncing
+    `FUNCTIONS_PYTHON_EXE`, all language-worker path keys including the
+    host-prefixed override, `PYTHONEXECUTABLE`, and `AzureWebJobsStorage` to
+    the resolved host-compatible values.
+- `src/Tests/test_start_all_services_runtime.py`
+  - Added regression coverage proving the local settings sync preserves
+    unrelated secret values and is idempotent.
+  - Relaxed the local settings path assertion so Linux-compatible paths are
+    valid.
+
+Verification
+- Side-port smoke on `7072` proved the host starts when the runtime keys are
+  Linux-compatible.
+- `conda run -n Annika_2.1 python -m py_compile start_all_services.py Tests/test_start_all_services_runtime.py`
+- `conda run -n Annika_2.1 python -m pytest Tests/test_start_all_services_runtime.py -q`
+- Live restart on port `7071` returned `{"status": "ready"}`.

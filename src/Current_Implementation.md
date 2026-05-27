@@ -32,6 +32,9 @@ Current behavior:
   `languageWorkers__python__defaultExecutablePath`, and `PYTHONEXECUTABLE`
 - prepends the selected Python worker directory to `PATH` so Azure Functions
   Core Tools can complete its own Python discovery
+- synchronizes only the non-secret Python worker/runtime keys in
+  `local.settings.json` before spawning `func`, preventing stale Windows
+  interpreter paths from overriding the Linux child environment
 - defaults blank `AzureWebJobsStorage` to `UseDevelopmentStorage=true`
 - sets `GRAPH_RENEW_LOOP_OWNER=start_all_services` unless already configured
 
