@@ -216,6 +216,8 @@ class ServiceManager:
         self.webhook_url = None
         self.chat_subscription_manager = chat_subscription_manager
         self.graph_subscription_manager = GraphSubscriptionManager()
+        self.func_process_group_id = None
+        self.ngrok_process_group_id = None
 
     def _append_dir_to_path(self, directory: Path) -> None:
         """Ensure the given directory is on PATH for child processes."""
@@ -443,8 +445,10 @@ class ServiceManager:
                 self.ngrok_process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
                 )
+                self.ngrok_process_group_id = self.ngrok_process.pid
             
             # Wait for ngrok to start
             for i in range(15):  # Give it more time
@@ -585,7 +589,9 @@ class ServiceManager:
                 cmd,
                 cwd=func_cwd,
                 env=child_env,
+                start_new_session=True,
             )
+            self.func_process_group_id = self.func_process.pid
         
         logger.info("Function App process started")
 
@@ -821,16 +827,43 @@ class ServiceManager:
         except Exception:
             return None
 
+    def _get_process_group_id(self, pid: int) -> Optional[int]:
+        """Return the process group ID for a local process on POSIX."""
+        if sys.platform == "win32":
+            return None
+        try:
+            return os.getpgid(pid)
+        except Exception:
+            return None
+
+    def _signal_process_group(
+        self,
+        process_group_id: Optional[int],
+        signal_number: int,
+    ) -> bool:
+        """Signal an owned POSIX process group."""
+        if sys.platform == "win32" or process_group_id is None:
+            return False
+        try:
+            os.killpg(process_group_id, signal_number)
+            return True
+        except ProcessLookupError:
+            return True
+        except Exception:
+            return False
+
     async def _ensure_port_closed(
         self,
         port: int,
         expected_pid: Optional[int] = None,
+        expected_process_group_id: Optional[int] = None,
         timeout_seconds: float = 5.0,
     ):
         """Ensure the given port is closed.
 
         If the port remains busy and expected_pid is provided, attempt to stop
-        that specific process only. Never kill an unrelated process.
+        that specific process, or an owned child in the expected process group.
+        Never kill an unrelated process.
         """
         import time
 
@@ -861,6 +894,20 @@ class ServiceManager:
                     os.kill(pid, signal.SIGTERM)
             except Exception:
                 pass
+        elif (
+            pid is not None
+            and expected_process_group_id is not None
+            and self._get_process_group_id(pid) == expected_process_group_id
+        ):
+            if self._signal_process_group(
+                expected_process_group_id,
+                signal.SIGTERM,
+            ):
+                logger.info(
+                    "Closed port %s by signaling owned process group %s.",
+                    port,
+                    expected_process_group_id,
+                )
         elif pid is not None and expected_pid is not None and pid != expected_pid:
             logger.warning(
                 "Port %s is held by PID %s, "
@@ -868,6 +915,13 @@ class ServiceManager:
                 port,
                 pid,
                 expected_pid,
+            )
+        elif pid is not None:
+            logger.warning(
+                "Port %s is held by PID %s with no owned process match. "
+                "Skipping force kill.",
+                port,
+                pid,
             )
 
     async def stop_all(self):
@@ -914,14 +968,22 @@ class ServiceManager:
                     # created with CREATE_NEW_PROCESS_GROUP
                     self.ngrok_process.send_signal(signal.CTRL_BREAK_EVENT)
                 else:
-                    self.ngrok_process.terminate()
+                    if not self._signal_process_group(
+                        self.ngrok_process_group_id,
+                        signal.SIGTERM,
+                    ):
+                        self.ngrok_process.terminate()
 
                 try:
                     self.ngrok_process.wait(timeout=5)
                     logger.info("ngrok stopped.")
                 except subprocess.TimeoutExpired:
                     logger.warning("ngrok did not stop in time; killing...")
-                    self.ngrok_process.kill()
+                    if not self._signal_process_group(
+                        self.ngrok_process_group_id,
+                        signal.SIGKILL,
+                    ):
+                        self.ngrok_process.kill()
                     self.ngrok_process.wait()
             except Exception as e:
                 logger.error("Error stopping ngrok: %s", e)
@@ -934,14 +996,22 @@ class ServiceManager:
                     # Prefer CTRL_BREAK_EVENT for child process group
                     self.func_process.send_signal(signal.CTRL_BREAK_EVENT)
                 else:
-                    self.func_process.terminate()
+                    if not self._signal_process_group(
+                        self.func_process_group_id,
+                        signal.SIGTERM,
+                    ):
+                        self.func_process.terminate()
 
                 try:
                     self.func_process.wait(timeout=10)
                     logger.info("Function App stopped.")
                 except subprocess.TimeoutExpired:
                     logger.warning("Function App did not stop in time; killing...")
-                    self.func_process.kill()
+                    if not self._signal_process_group(
+                        self.func_process_group_id,
+                        signal.SIGKILL,
+                    ):
+                        self.func_process.kill()
                     self.func_process.wait()
             except Exception as e:
                 logger.error("Error stopping Function App: %s", e)
@@ -951,11 +1021,13 @@ class ServiceManager:
             await self._ensure_port_closed(
                 7071,
                 expected_pid=self.func_process.pid if self.func_process else None,
+                expected_process_group_id=self.func_process_group_id,
                 timeout_seconds=6.0,
             )
             await self._ensure_port_closed(
                 4040,
                 expected_pid=self.ngrok_process.pid if self.ngrok_process else None,
+                expected_process_group_id=self.ngrok_process_group_id,
                 timeout_seconds=3.0,
             )
         except Exception:

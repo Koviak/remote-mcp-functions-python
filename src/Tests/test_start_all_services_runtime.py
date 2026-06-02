@@ -1,8 +1,11 @@
 import os
+import signal
 import sys
 import importlib
 import json
 from pathlib import Path
+
+import pytest
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -216,3 +219,109 @@ def test_resolve_func_prefers_native_path_binary_on_non_windows(
     resolved = manager._resolve_func()
 
     assert resolved == str(native_func)
+
+
+def test_start_function_app_owns_posix_process_group(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    if sys.platform == "win32":
+        return
+
+    manager = start_all_services.ServiceManager()
+    manager.base_dir = tmp_path
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(manager, "_resolve_func", lambda: "/usr/bin/func")
+    monkeypatch.setattr(
+        start_all_services,
+        "sync_function_host_local_settings",
+        lambda base_dir, child_env: False,
+    )
+    monkeypatch.setattr(
+        start_all_services,
+        "python_can_import_modules",
+        lambda python_executable, modules: (True, ""),
+    )
+
+    popen_call = {}
+
+    class FakePopen:
+        pid = 2468
+
+        def __init__(self, cmd, **kwargs):
+            popen_call["cmd"] = cmd
+            popen_call["kwargs"] = kwargs
+
+    monkeypatch.setattr(start_all_services.subprocess, "Popen", FakePopen)
+
+    manager.start_function_app()
+
+    assert popen_call["cmd"] == ["/usr/bin/func", "start", "--port", "7071"]
+    assert popen_call["kwargs"]["start_new_session"] is True
+    assert manager.func_process_group_id == 2468
+
+
+@pytest.mark.asyncio
+async def test_ensure_port_closed_signals_owned_child_process_group(
+    monkeypatch,
+) -> None:
+    if sys.platform == "win32":
+        return
+
+    manager = start_all_services.ServiceManager()
+
+    async def fake_get_pid_on_port(port: int) -> int:
+        return 2469
+
+    calls = []
+    monkeypatch.setattr(manager, "_get_pid_on_port", fake_get_pid_on_port)
+    monkeypatch.setattr(manager, "_get_process_group_id", lambda pid: 1357)
+    monkeypatch.setattr(
+        manager,
+        "_signal_process_group",
+        lambda process_group_id, signal_number: (
+            calls.append((process_group_id, signal_number)) or True
+        ),
+    )
+
+    await manager._ensure_port_closed(
+        7071,
+        expected_pid=2468,
+        expected_process_group_id=1357,
+        timeout_seconds=0.0,
+    )
+
+    assert calls == [(1357, signal.SIGTERM)]
+
+
+@pytest.mark.asyncio
+async def test_ensure_port_closed_skips_unowned_child_process_group(
+    monkeypatch,
+) -> None:
+    if sys.platform == "win32":
+        return
+
+    manager = start_all_services.ServiceManager()
+
+    async def fake_get_pid_on_port(port: int) -> int:
+        return 2469
+
+    calls = []
+    monkeypatch.setattr(manager, "_get_pid_on_port", fake_get_pid_on_port)
+    monkeypatch.setattr(manager, "_get_process_group_id", lambda pid: 9999)
+    monkeypatch.setattr(
+        manager,
+        "_signal_process_group",
+        lambda process_group_id, signal_number: (
+            calls.append((process_group_id, signal_number)) or True
+        ),
+    )
+
+    await manager._ensure_port_closed(
+        7071,
+        expected_pid=2468,
+        expected_process_group_id=1357,
+        timeout_seconds=0.0,
+    )
+
+    assert calls == []

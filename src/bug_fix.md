@@ -1,5 +1,53 @@
 Bug Fix Log
 
+## 2026-06-02 05:28:16 -05:00
+
+### Problem
+- RSI restart validation for `remote_mcp` failed while restarting
+  `start_all_services.py`.
+- Azure Functions Core Tools sometimes left the `7071` listener owned by a
+  child PID, while cleanup only trusted the immediate `func` PID.
+- The launcher logged a PID mismatch and skipped force cleanup, leaving restart
+  validation dependent on stale process state.
+
+### Root Cause
+- On Linux, `start_all_services.py` launched `func` and ngrok without owned
+  process groups.
+- Azure Functions Core Tools can spawn the actual listener below the tracked
+  process, so `self.func_process.pid` is not always the port owner.
+- The safety check correctly avoided killing an unrelated PID, but had no way
+  to identify an owned child process.
+
+### Solution
+- Updated `src/start_all_services.py`:
+  - Starts `func` and ngrok in new POSIX process groups.
+  - Tracks process-group IDs for owned child process cleanup.
+  - Extends port cleanup to signal a PID when it belongs to the expected
+    process group while still refusing unrelated processes.
+- Updated `src/Tests/test_start_all_services_runtime.py`:
+  - Added regression coverage for POSIX `start_new_session=True`.
+  - Added regression coverage for owned child-PID cleanup on a busy port.
+  - Added a guard proving unrelated process groups are not signaled.
+
+### Verification
+- `conda run -n Annika_2.1 python -m pytest Tests/test_start_all_services_runtime.py -q --tb=short -p no:cacheprovider`
+  passed with `12 passed`.
+- `conda run -n Annika_2.1 python -m py_compile start_all_services.py Tests/test_start_all_services_runtime.py`
+  passed.
+- `conda run -n Annika_2.1 ruff check start_all_services.py Tests/test_start_all_services_runtime.py --select F401,F821,E501 --output-format concise`
+  passed.
+- Live restart validation:
+  - Foreground patched startup reached `/api/health/ready` and `/api/hello`.
+  - SIGTERM cleanup stopped `start_all_services.py`, ngrok, and Azure
+    Functions, and freed ports `4040` and `7071`.
+  - Respawned the documented `annika:remote` tmux pane with the patched
+    startup command.
+  - After a stability hold beyond the previous `NoScriptHost` failure window,
+    `/api/health/ready` still returned `{"status": "ready", ...}` and
+    `/api/hello` returned `Hello I am MCPTool! (HTTP endpoint)`.
+  - RSI advanced to iteration 70 with latest restart `healthy` and blocker
+    `none`.
+
 ## 2026-05-19 04:20:03 -05:00
 
 ### Problem
