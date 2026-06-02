@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 GRAPH_RENEW_LOOP_OWNER_DEFAULT = "start_all_services"
 FUNCTION_HOST_RUNTIME_SETTING_KEYS = (
+    "FUNCTIONS_WORKER_RUNTIME",
     "FUNCTIONS_PYTHON_EXE",
     "languageWorkers:python:defaultExecutablePath",
     "languageWorkers__python__defaultExecutablePath",
@@ -110,6 +111,7 @@ def build_function_host_env(
         )
     )
     env.setdefault("ASPNETCORE_URLS", "http://0.0.0.0:7071")
+    env["FUNCTIONS_WORKER_RUNTIME"] = "python"
     # Core Tools resolves Python using this exact key name first.
     # Keep both forms for compatibility across config readers.
     env["FUNCTIONS_PYTHON_EXE"] = resolved_python
@@ -162,6 +164,7 @@ def sync_function_host_local_settings(
 
     values = data.setdefault("Values", {})
     desired_values = {
+        "FUNCTIONS_WORKER_RUNTIME": child_env["FUNCTIONS_WORKER_RUNTIME"],
         "FUNCTIONS_PYTHON_EXE": child_env["FUNCTIONS_PYTHON_EXE"],
         "languageWorkers:python:defaultExecutablePath": child_env[
             "languageWorkers:python:defaultExecutablePath"
@@ -576,7 +579,7 @@ class ServiceManager:
             )
         logger.info("Using Functions Python worker: %s", worker_python)
 
-        cmd = [func_path, "start", "--port", "7071"]
+        cmd = [func_path, "start", "--python", "--port", "7071"]
         if sys.platform == "win32":
             self.func_process = subprocess.Popen(
                 cmd,

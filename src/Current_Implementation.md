@@ -29,7 +29,8 @@ Current behavior:
 - resolves `FUNCTIONS_PYTHON_EXE` against the current host
 - falls back to `sys.executable` when the configured interpreter is unusable
 - sets `FUNCTIONS_PYTHON_EXE`, `languageWorkers:python:defaultExecutablePath`,
-  `languageWorkers__python__defaultExecutablePath`, and `PYTHONEXECUTABLE`
+  `languageWorkers__python__defaultExecutablePath`, `FUNCTIONS_WORKER_RUNTIME`,
+  and `PYTHONEXECUTABLE`
 - prepends the selected Python worker directory to `PATH` so Azure Functions
   Core Tools can complete its own Python discovery
 - synchronizes only the non-secret Python worker/runtime keys in
@@ -44,10 +45,10 @@ Remote startup waits on:
 - `http://localhost:7071/api/health/ready`
 - fallback `http://localhost:7071/api/hello`
 
-The Annika tmux remote pane runs:
+The Annika tmux remote pane runs the Python Functions host path:
 
 ```bash
-env PYTHONUNBUFFERED=1 FUNCTIONS_PYTHON_EXE=/home/joshua-koviak/miniforge3/envs/Annika_2.1/bin/python FUNC_PATH=/home/joshua-koviak/.nvm/versions/node/v24.14.1/bin/func NGROK_EXE=/home/joshua-koviak/.nvm/versions/node/v24.14.1/bin/ngrok AzureWebJobsStorage=UseDevelopmentStorage=true /home/joshua-koviak/miniforge3/envs/Annika_2.1/bin/python start_all_services.py --verbose
+env PYTHONUNBUFFERED=1 FUNCTIONS_WORKER_RUNTIME=python FUNCTIONS_PYTHON_EXE=/home/joshua-koviak/miniforge3/envs/Annika_2.1/bin/python FUNC_PATH=/home/joshua-koviak/.nvm/versions/node/v24.14.1/bin/func NGROK_EXE=/home/joshua-koviak/.nvm/versions/node/v24.14.1/bin/ngrok AzureWebJobsStorage=UseDevelopmentStorage=true /home/joshua-koviak/miniforge3/envs/Annika_2.1/bin/python start_all_services.py --verbose
 ```
 
 ## Observability

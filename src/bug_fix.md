@@ -1456,3 +1456,39 @@ Verification
 - `conda run -n Annika_2.1 python -m py_compile start_all_services.py Tests/test_start_all_services_runtime.py`
 - `conda run -n Annika_2.1 python -m pytest Tests/test_start_all_services_runtime.py -q`
 - Live restart on port `7071` returned `{"status": "ready"}`.
+
+## 2026-06-02 07:17 CDT - Restored Linux Function host Python runtime discovery
+
+**Files Modified:**
+- `src/start_all_services.py`
+- `src/Tests/test_start_all_services_runtime.py`
+- `src/Current_Implementation.md`
+- `src/bug_fix.md`
+
+**Problem:**
+RSI restart validation spawned Remote MCP, but Azure Functions Core Tools
+reported that no supported Python version could be found and never bound
+`7071`, causing the required-scope `remote_mcp` restart gate to fail.
+
+**Root Cause:**
+The child process pinned the Python executable paths but did not explicitly
+export `FUNCTIONS_WORKER_RUNTIME=python` in the environment passed to Core
+Tools. Core Tools' Python discovery is more reliable when the runtime marker is
+present before local settings are loaded; without it, the host could still miss
+the Python worker despite the executable path sync.
+
+**Solution:**
+Set `FUNCTIONS_WORKER_RUNTIME=python` in the generated child environment,
+sync that runtime key into `local.settings.json`, and launch Core Tools through
+the documented `func start --python --port 7071` path.
+
+**Testing:**
+- Side-port smoke before patch: `func start --python --port 7072` and
+  `func start --port 7073` both reached `/api/health/ready` when
+  `FUNCTIONS_WORKER_RUNTIME=python` was present in the child environment.
+- `Annika_2.1` `py_compile` passed for `start_all_services.py` and
+  `Tests/test_start_all_services_runtime.py`.
+- `Annika_2.1` focused pytest passed:
+  `12 passed in 0.25s`.
+- Live patched startup reached `/api/health/ready` on port `7071`;
+  detached validation process remained running after readiness.

@@ -33,6 +33,7 @@ def test_build_function_host_env_defaults_to_current_interpreter(monkeypatch) ->
         env["languageWorkers:python:defaultExecutablePath"]
         == sys.executable
     )
+    assert env["FUNCTIONS_WORKER_RUNTIME"] == "python"
     assert (
         env[
             "AzureFunctionsJobHost__languageWorkers__python__defaultExecutablePath"
@@ -64,6 +65,7 @@ def test_build_function_host_env_honors_explicit_override() -> None:
         ]
         == custom_python
     )
+    assert env["FUNCTIONS_WORKER_RUNTIME"] == "python"
     assert env["PYTHONEXECUTABLE"] == custom_python
     assert env["ASPNETCORE_URLS"] == "http://0.0.0.0:7071"
 
@@ -90,6 +92,7 @@ def test_build_function_host_env_falls_back_from_unusable_env_path() -> None:
         ]
         == sys.executable
     )
+    assert env["FUNCTIONS_WORKER_RUNTIME"] == "python"
     assert env["PYTHONEXECUTABLE"] == sys.executable
 
 
@@ -151,6 +154,7 @@ def test_sync_function_host_local_settings_updates_only_runtime_keys(
                 "Values": {
                     "AZURE_CLIENT_SECRET": "keep-secret",
                     "AzureWebJobsStorage": "",
+                    "FUNCTIONS_WORKER_RUNTIME": "",
                     "FUNCTIONS_PYTHON_EXE": r"C:\old\python.exe",
                     "languageWorkers:python:defaultExecutablePath": (
                         r"C:\old\python.exe"
@@ -179,6 +183,7 @@ def test_sync_function_host_local_settings_updates_only_runtime_keys(
     values = json.loads(settings_path.read_text(encoding="utf-8"))["Values"]
     assert values["AZURE_CLIENT_SECRET"] == "keep-secret"
     assert values["AzureWebJobsStorage"] == "UseDevelopmentStorage=true"
+    assert values["FUNCTIONS_WORKER_RUNTIME"] == "python"
     assert values["FUNCTIONS_PYTHON_EXE"] == python_path
     assert values["languageWorkers:python:defaultExecutablePath"] == python_path
     assert (
@@ -256,7 +261,13 @@ def test_start_function_app_owns_posix_process_group(
 
     manager.start_function_app()
 
-    assert popen_call["cmd"] == ["/usr/bin/func", "start", "--port", "7071"]
+    assert popen_call["cmd"] == [
+        "/usr/bin/func",
+        "start",
+        "--python",
+        "--port",
+        "7071",
+    ]
     assert popen_call["kwargs"]["start_new_session"] is True
     assert manager.func_process_group_id == 2468
 
