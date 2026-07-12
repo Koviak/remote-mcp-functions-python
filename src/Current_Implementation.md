@@ -1,6 +1,6 @@
 # Remote MCP Functions - Current Implementation
 
-**Last Updated:** 2026-05-19
+**Last Updated:** 2026-07-12
 **Module Path:** `src/`
 
 ## Purpose
@@ -56,3 +56,19 @@ env PYTHONUNBUFFERED=1 FUNCTIONS_WORKER_RUNTIME=python FUNCTIONS_PYTHON_EXE=/hom
 Startup logs go to the tmux remote console and `logs/mcp_server.log`.
 Graph/token/sync state is persisted through Redis-backed managers; new code
 should continue using those helpers rather than direct Redis clients.
+
+## Teams Chat Read and Delivery
+
+`GET /api/chats/{chat_id}/messages` maps to Graph
+`GET /chats/{chat-id}/messages`. The handler validates the route parameter,
+uses delegated `Chat.Read Chat.ReadWrite` authority when available, retains the
+existing application-token fallback, forwards only `$top`, `$orderby`, and
+`$filter`, and returns the Graph JSON response.
+
+`POST /api/me/chats/messages` accepts the flat Annika proxy contract. A normal
+message maps to Graph `POST /chats/{chatId}/messages`. When `replyToId` is
+present, the handler maps the immutable source message to
+`POST /chats/{chatId}/messages/replyWithQuote`, sends it in `messageIds`, and
+returns the Graph JSON response as provider-delivery evidence. The legacy
+compatibility handler and modular `endpoints/teams.py` implementation share
+this contract.

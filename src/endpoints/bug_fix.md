@@ -1,3 +1,52 @@
+## 2026-07-12 - Register the missing chat-message list route
+
+### Problem
+- Annika advertised `GET /api/chats/{chat_id}/messages`, but the Azure
+  Functions app had neither a registered route nor a modular handler.
+- Live chat discovery worked while every subsequent message read returned a
+  local 404, blocking exact Teams conversation replay.
+
+### Solution
+- Added `list_chat_messages_http` in `endpoints/teams.py` and registered
+  `GET chats/{chat_id}/messages` in `http_endpoints.py`.
+- The handler validates `chat_id`, uses the existing delegated/app token
+  authority, forwards only supported Graph query parameters, and returns the
+  Graph JSON response.
+
+### Verification
+- A real-provider regression reproduced the 404 before the fix and passed
+  after restarting only the remote bridge.
+- Focused remote Teams contract tests passed; changed Python files compiled and
+  passed the scoped Ruff gates.
+- Microsoft Graph v1.0 documentation was checked before implementation.
+
+---
+
+## 2026-07-12 - Fix Microsoft Graph chat quote-reply endpoint
+
+### Problem
+- `post_chat_message_http` treated `replyToId` as
+  `/chats/{chatId}/messages/{messageId}/replies`.
+- That URL shape is not the Microsoft Graph chat reply contract and broke
+  exact-origin Annika status/completion replies.
+
+### Solution
+- Updated the modular and legacy-compatible handlers to call
+  `POST /chats/{chatId}/messages/replyWithQuote`.
+- The source message is sent in `messageIds` and the outbound chat message is
+  sent under `replyMessage`.
+- Successful quote replies return the provider JSON body so callers retain the
+  Graph message ID as delivery evidence.
+
+### Verification
+- `conda run -n Annika_2.1 python -m pytest src/Tests/test_teams_contract_endpoints.py -q --tb=short -p no:cacheprovider` selected contract tests: 2 passed.
+- Full Ruff passed for the modular endpoint/test; the legacy compatibility
+  module passed the focused F821 undefined-name gate (it retains unrelated
+  pre-existing style findings).
+- Python compilation of all three changed files passed.
+
+---
+
 ## 2026-02-17 - Mail endpoint contract expansion for Outlook agent operations
 
 ### Problem

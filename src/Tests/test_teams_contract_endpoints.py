@@ -86,3 +86,50 @@ def test_post_chat_message_http_preserves_rich_message_payload(monkeypatch):
     assert captured["json"]["importance"] == "high"
     assert captured["json"]["attachments"][0]["contentType"] == "reference"
     assert captured["json"]["mentions"][0]["mentionText"] == "Joshua"
+
+
+def test_post_chat_message_http_uses_graph_reply_with_quote_contract(monkeypatch):
+    captured = {}
+
+    def _fake_post(url, headers=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        return _FakeResponse(status_code=201, text='{"id":"reply-msg-1"}')
+
+    monkeypatch.setattr(
+        ep_teams,
+        "_get_token_and_base_for_me",
+        lambda _scope: ("delegated-token", "/me"),
+    )
+    monkeypatch.setattr(ep_teams.requests, "post", _fake_post)
+
+    response = ep_teams.post_chat_message_http(
+        _fake_request(
+            body={
+                "chatId": "19:test-chat-id@thread.v2",
+                "replyToId": "source-message-123",
+                "message": "RSI repair finished and replay passed.",
+                "contentType": "text",
+                "importance": "normal",
+            }
+        )
+    )
+
+    assert response.status_code == 201
+    assert captured["url"] == (
+        "https://graph.microsoft.com/v1.0/chats/"
+        "19:test-chat-id@thread.v2/messages/replyWithQuote"
+    )
+    assert captured["json"] == {
+        "messageIds": ["source-message-123"],
+        "replyMessage": {
+            "body": {
+                "content": "RSI repair finished and replay passed.",
+                "contentType": "text",
+            },
+            "importance": "normal",
+        },
+    }
+    assert response.get_body().decode("utf-8") == '{"id":"reply-msg-1"}'

@@ -202,6 +202,56 @@ def list_chats_http(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(f"Error: {str(e)}", status_code=500)
 
 
+def list_chat_messages_http(req: func.HttpRequest) -> func.HttpResponse:
+    """List messages from one chat through the supported Graph v1.0 route."""
+
+    try:
+        chat_id = req.route_params.get("chat_id")
+        if not isinstance(chat_id, str) or not chat_id.strip():
+            return func.HttpResponse(
+                "Missing chat_id in URL path",
+                status_code=400,
+            )
+
+        delegated, _ = _get_token_and_base_for_me("Chat.Read Chat.ReadWrite")
+        token = delegated or get_access_token()
+        if not token:
+            return func.HttpResponse(
+                json.dumps(
+                    {
+                        "error": "auth_unavailable",
+                        "message": "Microsoft Graph chat read token unavailable",
+                    }
+                ),
+                status_code=503,
+                mimetype="application/json",
+            )
+
+        query_params = {
+            name: req.params[name]
+            for name in ("$top", "$orderby", "$filter")
+            if req.params.get(name) not in (None, "")
+        }
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/chats/{chat_id.strip()}/messages",
+            headers=build_json_headers(token),
+            params=query_params or None,
+            timeout=10,
+        )
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json",
+            )
+        return func.HttpResponse(
+            f"Error: {response.status_code} - {response.text}",
+            status_code=response.status_code,
+        )
+    except Exception as e:  # pragma: no cover - network errors
+        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
+
+
 def post_chat_message_http(req: func.HttpRequest) -> func.HttpResponse:
     """Post a message to a Teams chat. Delegated token required."""
     try:
@@ -232,12 +282,30 @@ def post_chat_message_http(req: func.HttpRequest) -> func.HttpResponse:
 
         headers = build_json_headers(token)
         if reply_to:
-            url = f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages/{reply_to}/replies"
+            if not isinstance(reply_to, str) or not reply_to.strip():
+                return func.HttpResponse(
+                    "replyToId must be a non-empty string",
+                    status_code=400,
+                )
+            url = f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages/replyWithQuote"
+            data = {
+                "messageIds": [reply_to.strip()],
+                "replyMessage": data,
+            }
         else:
             url = f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages"
         response = requests.post(url, headers=headers, json=data, timeout=10)
         if response.status_code in (200, 201):
-            return func.HttpResponse(f"Message posted successfully to chat {chat_id}", status_code=201)
+            if reply_to:
+                return func.HttpResponse(
+                    response.text,
+                    status_code=201,
+                    mimetype="application/json",
+                )
+            return func.HttpResponse(
+                f"Message posted successfully to chat {chat_id}",
+                status_code=201,
+            )
         return func.HttpResponse(
             f"Error: {response.status_code} - {response.text}", status_code=response.status_code
         )

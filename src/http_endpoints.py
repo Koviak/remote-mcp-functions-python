@@ -2141,6 +2141,8 @@ def register_http_endpoints(function_app):
     app.route(route="teams/messages", methods=["POST"])(
         ep_teams.post_channel_message_http)
     app.route(route="me/chats", methods=["GET"])(ep_teams.list_chats_http)
+    app.route(route="chats/{chat_id}/messages", methods=["GET"])(
+        ep_teams.list_chat_messages_http)
     app.route(route="me/chats/messages", methods=["POST"])(
         ep_teams.post_chat_message_http)
     
@@ -3696,16 +3698,28 @@ def post_chat_message_http(req: func.HttpRequest) -> func.HttpResponse:
         data = {"body": {"content": message}}
 
         if reply_to:
-            url = (
-                f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages/"
-                f"{reply_to}/replies"
-            )
+            if not isinstance(reply_to, str) or not reply_to.strip():
+                return func.HttpResponse(
+                    "replyToId must be a non-empty string",
+                    status_code=400,
+                )
+            url = f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages/replyWithQuote"
+            data = {
+                "messageIds": [reply_to.strip()],
+                "replyMessage": data,
+            }
         else:
             url = f"{GRAPH_API_ENDPOINT}/chats/{chat_id}/messages"
 
         response = requests.post(url, headers=headers, json=data, timeout=10)
 
         if response.status_code in (200, 201):
+            if reply_to:
+                return func.HttpResponse(
+                    response.text,
+                    status_code=201,
+                    mimetype="application/json",
+                )
             return func.HttpResponse(
                 f"Message posted successfully to chat {chat_id}",
                 status_code=201,
