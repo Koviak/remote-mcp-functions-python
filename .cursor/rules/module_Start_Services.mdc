@@ -12,7 +12,7 @@ alwaysApply: false
 ## Module Overview
 - **Purpose**: Coordinate local development services for Remote MCP (ngrok tunnel, Azure Functions host, webhook setup, Planner sync, chat subscriptions) with orderly startup/shutdown.
 - **Entry Points**: `src/start_all_services.py`, `src/startup_local_services.py`.
-- **Key Interfaces**: `ServiceManager.start_local_services()`, `ServiceManager.stop_all()`, `start_local_services()` (async wrapper), CLI execution via `python start_all_services.py`.
+- **Key Interfaces**: `ServiceManager.start_all()`, `ServiceManager.supervise_function_app()`, `ServiceManager.stop_all()`, `start_local_services()` (async wrapper), CLI execution via `python start_all_services.py`.
 
 ## Complete File Inventory
 ### Core Files
@@ -25,7 +25,7 @@ alwaysApply: false
 - **[setup_teams_subscriptions.py](mdc:src/setup_teams_subscriptions.py)**: Additional helper for chat subscriptions.
 
 ### Test Files
-- No direct automated tests; rely on integration tests (`test_phase2_*`) and manual verification scripts.
+- **[test_start_all_services_runtime.py](mdc:src/Tests/test_start_all_services_runtime.py)**: Launcher environment, process-group ownership, cleanup safety, child-exit supervision, and recovery retry contracts.
 
 ## Function Trace Mapping
 ### Comprehensive startup workflow
@@ -40,6 +40,12 @@ ServiceManager.start_all()
 ├── start_chat_subscription_manager() -> ensures chat subs active
 ├── monitor background tasks (health, renewal)
 └── Handles graceful shutdown via stop_all()
+
+main()
+├── start_all() -> establishes initial readiness
+├── supervise_function_app() -> event-driven wait on required child exit
+│   └── _recover_function_app() -> exact-group cleanup + capped replacement backoff
+└── shutdown_event -> cancel supervisor before stop_all()
 
 startup_local_services.start_all_services()
 ├── Load local.settings.json to hydrate env vars
@@ -66,6 +72,11 @@ stop_all()
 - **Functions**: `stop_all`, `_ensure_port_closed`
 - **Rule Reference**: Use `CREATE_NEW_PROCESS_GROUP` + `CTRL_BREAK_EVENT` on Windows; fallback to terminate/kill cross-platform.
 
+### Required-Child Supervision
+- **Files**: `start_all_services.py`
+- **Functions**: `supervise_function_app`, `_recover_function_app`, `_cleanup_function_app_generation`
+- **Rule Reference**: Treat parent-alive/required-child-dead as a recoverable failure class. Block on the owned child exit event, terminate only its recorded process group, verify a surviving listener belongs to that group before force-kill, retry with capped backoff until readiness, and emit structured lifecycle evidence under detector `remote_mcp.function_host_exit_supervisor.v1`.
+
 ## Module Dependencies
 ### Internal Dependencies
 - Webhook module for `initialize_webhook_handler`.
@@ -80,6 +91,7 @@ stop_all()
 
 ## Health Check Functions
 - `wait_for_function_app()` hitting `/api/health/ready` (Function App module).
+- `supervise_function_app()` awaiting the owned Core Tools process and restoring it after an unexpected exit.
 - Logging messages detailing each stage (start, health, shutdown).
 - For monitoring, rely on redis keys from dependent modules (`annika:sync:health`, `annika:chat_subscriptions:*`).
 

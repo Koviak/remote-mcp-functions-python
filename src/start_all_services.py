@@ -7,12 +7,13 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Optional
-import shutil
 
 import httpx
 
@@ -32,6 +33,12 @@ setup_logging(add_console=True)
 logger = logging.getLogger(__name__)
 
 GRAPH_RENEW_LOOP_OWNER_DEFAULT = "start_all_services"
+FUNCTION_HOST_RESTART_BACKOFF_SECONDS = (0.0, 2.0, 5.0, 15.0, 30.0, 60.0)
+FUNCTION_HOST_FAILURE_CLASS = "parent_alive_required_child_dead"
+FUNCTION_HOST_SUPERVISOR_DETECTOR_ID = (
+    "remote_mcp.function_host_exit_supervisor.v1"
+)
+FUNCTION_HOST_SUPERVISOR_SCHEMA_VERSION = 1
 FUNCTION_HOST_RUNTIME_SETTING_KEYS = (
     "FUNCTIONS_WORKER_RUNTIME",
     "FUNCTIONS_PYTHON_EXE",
@@ -221,6 +228,8 @@ class ServiceManager:
         self.graph_subscription_manager = GraphSubscriptionManager()
         self.func_process_group_id = None
         self.ngrok_process_group_id = None
+        self.function_host_recovery_count = 0
+        self._active_function_host_recovery_operation_id = None
 
     def _append_dir_to_path(self, directory: Path) -> None:
         """Ensure the given directory is on PATH for child processes."""
@@ -927,6 +936,307 @@ class ServiceManager:
                 pid,
             )
 
+    def _begin_function_host_recovery(self) -> str:
+        self.function_host_recovery_count += 1
+        operation_id = (
+            "remote_mcp.function_host_recovery:"
+            f"{os.getpid()}:{self.function_host_recovery_count}"
+        )
+        self._active_function_host_recovery_operation_id = operation_id
+        return operation_id
+
+    def _emit_function_host_supervisor_event(
+        self,
+        *,
+        operation_id: str,
+        lifecycle_state: str,
+        outcome_status: str,
+        reason_code: str,
+        process=None,
+        process_group_id: int | None = None,
+        exit_code: int | None = None,
+        attempt: int = 0,
+        exception_class: str | None = None,
+    ) -> None:
+        payload = {
+            "schema_version": FUNCTION_HOST_SUPERVISOR_SCHEMA_VERSION,
+            "event": "remote_mcp_function_host_supervision",
+            "detector_id": FUNCTION_HOST_SUPERVISOR_DETECTOR_ID,
+            "operation_id": operation_id,
+            "lifecycle_state": lifecycle_state,
+            "outcome_status": outcome_status,
+            "reason_code": reason_code,
+            "failure_class": FUNCTION_HOST_FAILURE_CLASS,
+            "affected_pid": getattr(process, "pid", None),
+            "process_group_id": process_group_id,
+            "exit_code": exit_code,
+            "attempt": attempt,
+            "exception_class": exception_class,
+            "recorded_at": datetime.now(UTC).isoformat(),
+        }
+        logger.info(
+            "[REMOTE_MCP:FUNCTION_HOST_SUPERVISOR] %s",
+            json.dumps(payload, sort_keys=True),
+        )
+
+    async def _wait_for_recovery_backoff(
+        self,
+        seconds: float,
+        shutdown_event: asyncio.Event,
+    ) -> bool:
+        """Return True when shutdown wins the event-driven recovery backoff."""
+        if shutdown_event.is_set():
+            return True
+        if seconds <= 0:
+            return False
+        sleep_task = asyncio.create_task(asyncio.sleep(seconds))
+        shutdown_task = asyncio.create_task(shutdown_event.wait())
+        done, pending = await asyncio.wait(
+            {sleep_task, shutdown_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        return shutdown_task in done
+
+    async def _cleanup_function_app_generation(
+        self,
+        process,
+        process_group_id: int | None,
+    ) -> None:
+        """Reap one owned Function host generation before replacement."""
+        if process is None:
+            return
+        try:
+            if sys.platform == "win32":
+                if process.poll() is None:
+                    process.send_signal(signal.CTRL_BREAK_EVENT)
+            elif not self._signal_process_group(
+                process_group_id,
+                signal.SIGTERM,
+            ) and process.poll() is None:
+                process.terminate()
+        except Exception as exc:
+            operation_id = (
+                self._active_function_host_recovery_operation_id
+                or self._begin_function_host_recovery()
+            )
+            self._emit_function_host_supervisor_event(
+                operation_id=operation_id,
+                lifecycle_state="repairing",
+                outcome_status="retrying",
+                reason_code="function_host_cleanup_signal_exception",
+                process=process,
+                process_group_id=process_group_id,
+                exit_code=getattr(process, "returncode", None),
+                exception_class=type(exc).__name__,
+            )
+        await self._ensure_port_closed(
+            7071,
+            expected_pid=getattr(process, "pid", None),
+            expected_process_group_id=process_group_id,
+            timeout_seconds=6.0,
+        )
+        remaining_listener_pid = await self._get_pid_on_port(7071)
+        listener_is_owned = (
+            remaining_listener_pid is not None
+            and process_group_id is not None
+            and self._get_process_group_id(remaining_listener_pid)
+            == process_group_id
+        )
+        if listener_is_owned:
+            operation_id = (
+                self._active_function_host_recovery_operation_id
+                or self._begin_function_host_recovery()
+            )
+            self._emit_function_host_supervisor_event(
+                operation_id=operation_id,
+                lifecycle_state="repairing",
+                outcome_status="retrying",
+                reason_code="function_host_owned_group_force_kill",
+                process=process,
+                process_group_id=process_group_id,
+                exit_code=getattr(process, "returncode", None),
+            )
+            if self._signal_process_group(process_group_id, signal.SIGKILL):
+                await self._ensure_port_closed(
+                    7071,
+                    expected_pid=getattr(process, "pid", None),
+                    expected_process_group_id=process_group_id,
+                    timeout_seconds=3.0,
+                )
+        if self.func_process is process:
+            self.func_process = None
+            self.func_process_group_id = None
+
+    async def _recover_function_app(
+        self,
+        *,
+        failed_process,
+        failed_process_group_id: int | None,
+        exit_code: int | None,
+        shutdown_event: asyncio.Event,
+    ) -> bool:
+        """Reap and replace an unexpectedly exited Function host until ready."""
+        operation_id = (
+            self._active_function_host_recovery_operation_id
+            or self._begin_function_host_recovery()
+        )
+        await self._cleanup_function_app_generation(
+            failed_process,
+            failed_process_group_id,
+        )
+        attempt = 0
+        while not shutdown_event.is_set():
+            attempt += 1
+            backoff_index = min(
+                attempt - 1,
+                len(FUNCTION_HOST_RESTART_BACKOFF_SECONDS) - 1,
+            )
+            if await self._wait_for_recovery_backoff(
+                FUNCTION_HOST_RESTART_BACKOFF_SECONDS[backoff_index],
+                shutdown_event,
+            ):
+                return False
+            self._emit_function_host_supervisor_event(
+                operation_id=operation_id,
+                lifecycle_state="repairing",
+                outcome_status="pending",
+                reason_code="function_host_restart_attempt",
+                process=failed_process,
+                process_group_id=failed_process_group_id,
+                exit_code=exit_code,
+                attempt=attempt,
+            )
+            replacement = None
+            replacement_group_id = None
+            try:
+                self.start_function_app()
+                replacement = self.func_process
+                replacement_group_id = self.func_process_group_id
+                ready = await self.wait_for_function_app()
+                replacement_alive = (
+                    replacement is not None and replacement.poll() is None
+                )
+                if ready and replacement_alive:
+                    self._emit_function_host_supervisor_event(
+                        operation_id=operation_id,
+                        lifecycle_state="completed",
+                        outcome_status="success",
+                        reason_code="function_host_recovered",
+                        process=replacement,
+                        process_group_id=replacement_group_id,
+                        exit_code=exit_code,
+                        attempt=attempt,
+                    )
+                    self._active_function_host_recovery_operation_id = None
+                    return True
+                reason_code = (
+                    "replacement_process_exited"
+                    if not replacement_alive
+                    else "replacement_readiness_failed"
+                )
+                self._emit_function_host_supervisor_event(
+                    operation_id=operation_id,
+                    lifecycle_state="repairing",
+                    outcome_status="retrying",
+                    reason_code=reason_code,
+                    process=replacement,
+                    process_group_id=replacement_group_id,
+                    exit_code=(
+                        replacement.poll() if replacement is not None else None
+                    ),
+                    attempt=attempt,
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self._emit_function_host_supervisor_event(
+                    operation_id=operation_id,
+                    lifecycle_state="repairing",
+                    outcome_status="retrying",
+                    reason_code="function_host_restart_exception",
+                    process=replacement or failed_process,
+                    process_group_id=(
+                        replacement_group_id or failed_process_group_id
+                    ),
+                    exit_code=exit_code,
+                    attempt=attempt,
+                    exception_class=type(exc).__name__,
+                )
+            if replacement is not None:
+                await self._cleanup_function_app_generation(
+                    replacement,
+                    replacement_group_id,
+                )
+        return False
+
+    async def supervise_function_app(
+        self,
+        shutdown_event: asyncio.Event,
+    ) -> None:
+        """Block on child exits and autonomously restore the Function host."""
+        while not shutdown_event.is_set():
+            process = self.func_process
+            process_group_id = self.func_process_group_id
+            if process is None:
+                operation_id = self._begin_function_host_recovery()
+                self._emit_function_host_supervisor_event(
+                    operation_id=operation_id,
+                    lifecycle_state="detected",
+                    outcome_status="failure",
+                    reason_code="function_host_process_missing",
+                )
+                await self._recover_function_app(
+                    failed_process=None,
+                    failed_process_group_id=None,
+                    exit_code=None,
+                    shutdown_event=shutdown_event,
+                )
+                continue
+            try:
+                exit_code = await asyncio.to_thread(process.wait)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                operation_id = self._begin_function_host_recovery()
+                self._emit_function_host_supervisor_event(
+                    operation_id=operation_id,
+                    lifecycle_state="detected",
+                    outcome_status="failure",
+                    reason_code="function_host_wait_exception",
+                    process=process,
+                    process_group_id=process_group_id,
+                    exception_class=type(exc).__name__,
+                )
+                await self._recover_function_app(
+                    failed_process=process,
+                    failed_process_group_id=process_group_id,
+                    exit_code=None,
+                    shutdown_event=shutdown_event,
+                )
+                continue
+            if shutdown_event.is_set():
+                return
+            operation_id = self._begin_function_host_recovery()
+            self._emit_function_host_supervisor_event(
+                operation_id=operation_id,
+                lifecycle_state="detected",
+                outcome_status="failure",
+                reason_code="function_host_unexpected_exit",
+                process=process,
+                process_group_id=process_group_id,
+                exit_code=exit_code,
+            )
+            await self._recover_function_app(
+                failed_process=process,
+                failed_process_group_id=process_group_id,
+                exit_code=exit_code,
+                shutdown_event=shutdown_event,
+            )
+
     async def stop_all(self):
         """Stop all services gracefully and free occupied ports."""
         if self.shutdown_in_progress:
@@ -1072,6 +1382,12 @@ async def main() -> int:
             logger.info("All services are running.")
             logger.info("Press Ctrl+C to stop all services")
             logger.info("=" * 50 + "\n")
+
+            function_host_supervisor = asyncio.create_task(
+                manager.supervise_function_app(shutdown_event),
+                name="remote-mcp-function-host-supervisor",
+            )
+            manager.background_tasks.append(function_host_supervisor)
 
             # Keep running until shutdown signal
             await shutdown_event.wait()

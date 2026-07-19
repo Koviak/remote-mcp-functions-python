@@ -1,6 +1,6 @@
 # Remote MCP Functions - Current Implementation
 
-**Last Updated:** 2026-07-12
+**Last Updated:** 2026-07-18
 **Module Path:** `src/`
 
 ## Purpose
@@ -13,7 +13,7 @@ Graph webhooks, token services, and Planner/contact sync services.
 
 | Component | Entry Point | Behavior |
 | --- | --- | --- |
-| Service launcher | `start_all_services.py` | Starts ngrok, launches Azure Functions Core Tools, waits for readiness, sets up webhooks, and starts sync background services. |
+| Service launcher | `start_all_services.py` | Starts ngrok, launches Azure Functions Core Tools, waits for readiness, supervises the owned Functions process, repairs unexpected child exits, sets up webhooks, and starts sync background services. |
 | Function app | `function_app.py` | Registers Azure Functions HTTP triggers and background service hooks. |
 | Local bootstrap | `startup_local_services.py` | Lightweight startup path for local service initialization. |
 | Token cache | `mcp_redis_config.py` | Redis-backed token and configuration helpers. |
@@ -45,6 +45,28 @@ Remote startup waits on:
 - `http://localhost:7071/api/health/ready`
 - fallback `http://localhost:7071/api/hello`
 
+## Function Host Supervision
+
+After startup succeeds, `ServiceManager.supervise_function_app(...)` blocks on
+the owned Azure Functions Core Tools process rather than waiting only on the
+parent launcher's shutdown event. An unexpected child exit is classified as
+`parent_alive_required_child_dead` and starts an event-driven repair operation.
+
+The repair path:
+- terminates the exact owned process group and waits for port 7071 to close
+- verifies any surviving listener still belongs to that group before escalating
+  to `SIGKILL`; unrelated listeners are never force-killed
+- starts a replacement with capped backoff and repeats until the existing
+  readiness gate passes or the parent receives shutdown
+- retains the same launcher process so Graph, Planner, contact, and subscription
+  background ownership does not need a full wrapper recycle
+
+Structured lifecycle records use detector
+`remote_mcp.function_host_exit_supervisor.v1`, a process-unique operation ID,
+reason codes, affected PID/process group, exit code, attempt, exception class,
+and UTC timestamp. RSI can therefore harvest detection, cleanup escalation,
+retry, and recovery as one operation.
+
 The Annika tmux remote pane runs the Python Functions host path:
 
 ```bash
@@ -53,7 +75,9 @@ env PYTHONUNBUFFERED=1 FUNCTIONS_WORKER_RUNTIME=python FUNCTIONS_PYTHON_EXE=/hom
 
 ## Observability
 
-Startup logs go to the tmux remote console and `logs/mcp_server.log`.
+Startup logs go to the managed remote stream and `logs/mcp_server.log`.
+Function-host supervisor records are emitted as JSON after the stable
+`[REMOTE_MCP:FUNCTION_HOST_SUPERVISOR]` marker.
 Graph/token/sync state is persisted through Redis-backed managers; new code
 should continue using those helpers rather than direct Redis clients.
 

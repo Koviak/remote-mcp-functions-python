@@ -1,8 +1,9 @@
+import asyncio
+import importlib
+import json
 import os
 import signal
 import sys
-import importlib
-import json
 from pathlib import Path
 
 import pytest
@@ -336,3 +337,176 @@ async def test_ensure_port_closed_skips_unowned_child_process_group(
     )
 
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_function_host_supervisor_recovers_unexpected_child_exit(
+    monkeypatch,
+    caplog,
+) -> None:
+    manager = start_all_services.ServiceManager()
+    shutdown_event = asyncio.Event()
+    recovery_calls = []
+
+    class FailedProcess:
+        pid = 2468
+
+        def wait(self):
+            return 17
+
+    failed_process = FailedProcess()
+    manager.func_process = failed_process
+    manager.func_process_group_id = 2468
+
+    async def fake_recover(**kwargs):
+        recovery_calls.append(kwargs)
+        shutdown_event.set()
+        return True
+
+    monkeypatch.setattr(manager, "_recover_function_app", fake_recover)
+
+    await manager.supervise_function_app(shutdown_event)
+
+    assert recovery_calls == [
+        {
+            "failed_process": failed_process,
+            "failed_process_group_id": 2468,
+            "exit_code": 17,
+            "shutdown_event": shutdown_event,
+        }
+    ]
+    assert "remote_mcp.function_host_exit_supervisor.v1" in caplog.text
+    assert "parent_alive_required_child_dead" in caplog.text
+    assert "function_host_unexpected_exit" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_function_host_recovery_reaps_and_retries_until_ready(
+    monkeypatch,
+) -> None:
+    manager = start_all_services.ServiceManager()
+    shutdown_event = asyncio.Event()
+    cleanup_calls = []
+    started_pids = iter((3001, 3002))
+    readiness = iter((False, True))
+
+    class Process:
+        def __init__(self, pid, returncode=None):
+            self.pid = pid
+            self.returncode = returncode
+
+        def poll(self):
+            return self.returncode
+
+    failed_process = Process(2468, returncode=17)
+
+    async def fake_cleanup(process, process_group_id):
+        cleanup_calls.append((process.pid, process_group_id))
+
+    def fake_start():
+        pid = next(started_pids)
+        manager.func_process = Process(pid)
+        manager.func_process_group_id = pid
+
+    async def fake_wait_for_ready():
+        return next(readiness)
+
+    async def no_backoff(_seconds, _shutdown_event):
+        return False
+
+    monkeypatch.setattr(manager, "_cleanup_function_app_generation", fake_cleanup)
+    monkeypatch.setattr(manager, "start_function_app", fake_start)
+    monkeypatch.setattr(manager, "wait_for_function_app", fake_wait_for_ready)
+    monkeypatch.setattr(manager, "_wait_for_recovery_backoff", no_backoff)
+
+    recovered = await manager._recover_function_app(
+        failed_process=failed_process,
+        failed_process_group_id=2468,
+        exit_code=17,
+        shutdown_event=shutdown_event,
+    )
+
+    assert recovered is True
+    assert cleanup_calls == [(2468, 2468), (3001, 3001)]
+    assert manager.func_process.pid == 3002
+
+
+@pytest.mark.asyncio
+async def test_function_host_cleanup_force_kills_surviving_owned_group(
+    monkeypatch,
+) -> None:
+    manager = start_all_services.ServiceManager()
+    signal_calls = []
+    port_close_calls = []
+
+    class FailedProcess:
+        pid = 2468
+
+        def poll(self):
+            return 17
+
+    failed_process = FailedProcess()
+    manager.func_process = failed_process
+    manager.func_process_group_id = 2468
+    manager._active_function_host_recovery_operation_id = "recovery:test"
+
+    def fake_signal(process_group_id, signal_number):
+        signal_calls.append((process_group_id, signal_number))
+        return True
+
+    async def fake_ensure_port_closed(*args, **kwargs):
+        port_close_calls.append((args, kwargs))
+
+    async def fake_get_pid_on_port(port):
+        assert port == 7071
+        return 2470
+
+    monkeypatch.setattr(manager, "_signal_process_group", fake_signal)
+    monkeypatch.setattr(manager, "_ensure_port_closed", fake_ensure_port_closed)
+    monkeypatch.setattr(manager, "_get_pid_on_port", fake_get_pid_on_port)
+    monkeypatch.setattr(manager, "_get_process_group_id", lambda _pid: 2468)
+
+    await manager._cleanup_function_app_generation(failed_process, 2468)
+
+    assert signal_calls == [
+        (2468, signal.SIGTERM),
+        (2468, signal.SIGKILL),
+    ]
+    assert len(port_close_calls) == 2
+    assert manager.func_process is None
+    assert manager.func_process_group_id is None
+
+
+@pytest.mark.asyncio
+async def test_function_host_cleanup_does_not_force_kill_unrelated_listener(
+    monkeypatch,
+) -> None:
+    manager = start_all_services.ServiceManager()
+    signal_calls = []
+
+    class FailedProcess:
+        pid = 2468
+
+        def poll(self):
+            return 17
+
+    failed_process = FailedProcess()
+
+    def fake_signal(process_group_id, signal_number):
+        signal_calls.append((process_group_id, signal_number))
+        return True
+
+    async def fake_ensure_port_closed(*_args, **_kwargs):
+        return None
+
+    async def fake_get_pid_on_port(_port):
+        return 9001
+
+    monkeypatch.setattr(manager, "_signal_process_group", fake_signal)
+    monkeypatch.setattr(manager, "_ensure_port_closed", fake_ensure_port_closed)
+    monkeypatch.setattr(manager, "_get_pid_on_port", fake_get_pid_on_port)
+    monkeypatch.setattr(manager, "_get_process_group_id", lambda _pid: 9001)
+
+    await manager._cleanup_function_app_generation(failed_process, 2468)
+
+    assert signal_calls == [(2468, signal.SIGTERM)]
