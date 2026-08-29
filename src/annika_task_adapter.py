@@ -317,7 +317,10 @@ class AnnikaTaskAdapter:
                                     break
                         except Exception:
                             pass
-                except Exception:
+                except Exception as exc:
+                    logger.debug(
+                        "Bucket metadata hydration failed for bucket %s: %s", bucket_id, exc
+                    )
                     bucket_name = None
             if bucket_name is None:
                 try:

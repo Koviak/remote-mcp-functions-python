@@ -147,8 +147,8 @@ async def monitor_webhooks():
     finally:
         try:
             await redis_client.aclose()
-        except:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to close Redis client cleanly: %s", exc)
 
 
 async def show_recent_activity():

@@ -795,17 +795,17 @@ class WebhookDrivenPlannerSync:
                             # Small sleep to avoid tight loop on same entry
                             await asyncio.sleep(0.1)
                             continue
-                    except Exception:
+                    except Exception as exc:
+                        logger.debug("Failed to parse next_retry for op %s: %s", identity, exc)
                         # Ignore parsing errors and treat as due now
-                        pass
 
                 # Dedup processed identities across restarts
                 processed_key = self._processed_set_key()
                 try:
                     if identity and await self.redis_client.sismember(processed_key, identity):
                         continue
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Dedup check failed for %s: %s", identity, exc)
 
                 success = False
                 error_detail = None
@@ -1752,8 +1752,10 @@ class WebhookDrivenPlannerSync:
                             await self._adopt_subscription_from_notification(
                                 notification_data
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug(
+                                "Failed to adopt subscription from webhook notification: %s", exc
+                            )
                         await self._handle_webhook_notification(notification_data)
                         webhook_name = self._resolve_webhook_name(
                             notification_data.get("clientState"),
@@ -1766,8 +1768,10 @@ class WebhookDrivenPlannerSync:
                                     last_event=datetime.utcnow().isoformat(),
                                     status="active",
                                 )
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.debug(
+                                    "Failed to write webhook status for %s: %s", webhook_name, exc
+                                )
                             if webhook_name.startswith('planner'):
                                 self._apply_polling_strategy()
                         # For Planner task resources, trigger immediate detection
@@ -1775,8 +1779,11 @@ class WebhookDrivenPlannerSync:
                             resource = notification_data.get("resource", "")
                             if "/planner/tasks" in resource:
                                 await self._detect_and_queue_changes()
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.error(
+                                "Failed to trigger change detection for webhook notification: %s",
+                                exc,
+                            )
 
                 except Exception as e:
                     logger.error(f"Error processing webhook notification: {e}")
@@ -2314,8 +2321,10 @@ class WebhookDrivenPlannerSync:
                         # Remove both forward and reverse mappings and Annika task record
                         try:
                             await self.redis_client.delete(f"annika:tasks:{annika_id}")
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug(
+                                "Failed to delete Annika task record %s: %s", annika_id, exc
+                            )
                         await self._remove_mapping(annika_id, planner_id)
                 if cursor == 0:
                     break
@@ -3100,8 +3109,8 @@ class WebhookDrivenPlannerSync:
                         return key.replace(PLANNER_ID_MAP_PREFIX, "")
                 if cursor == 0:
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Forward-map scan failed for planner_id %s: %s", planner_id, exc)
         return None
 
     async def _store_etag(self, planner_id: str, etag: str):
@@ -3549,8 +3558,12 @@ class WebhookDrivenPlannerSync:
                             maybe_external,
                         )
                         return await self._update_planner_task(maybe_external, annika_task)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Existing-task lookup failed for external_id %s; proceeding to create: %s",
+                        maybe_external,
+                        exc,
+                    )
 
             # Set plan ID
             plan_id = await self._determine_plan_for_task(annika_task)
