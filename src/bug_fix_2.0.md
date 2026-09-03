@@ -1,3 +1,11 @@
+## Bug-Fix Index
+
+| ID | Timestamp | Component | Tags | Lines |
+|----|-----------|-----------|------|-------|
+| [BUG-2026-09-03-001](#bug-2026-09-03-001) | 2026-09-03T16:50:45-05:00 | remote-mcp-functions-python/src/endpoints/teams.py | [P1][FIX][MCP][TEST] | +306 -0 |
+| legacy | - | - | - | 4 entries grandfathered |
+
+---
 # Remote MCP Functions Bug Fix Log 2.0
 
 ## 2026-07-12 - Restore Teams chat read and exact-reply contracts
@@ -73,3 +81,41 @@ same wrapper alive, emitted detected/force-kill/restart/recovered events under
 one operation, replaced the leader and listener on attempt one, and restored
 HTTP 200 readiness. Annika strict census then reported 15/15 required services,
 11 producing, four idle-by-design, and zero stale components.
+
+---
+
+### 2026-09-03T16:50:45-05:00 BUG-2026-09-03-001 [P1][FIX][MCP][TEST]
+
+#### Problem
+| Problem | Severity | Component |
+|---------|----------|-----------|
+| `Agent_Tools/office_teams_chat/_common.py` ENDPOINT_MAPPING (L35-75) advertised 18 chat tools, but the Azure Functions app registered only three chat routes (GET me/chats, GET chats/{chat_id}/messages, POST me/chats/messages). `get_chat` and `list_chat_members` therefore returned 404 for every chat id, and the Teams Chat Agent rationalized this in a live Teams group chat (M060) as a per-chat "local Graph shim bug" rather than a permanent, server-side contract gap. State unchanged since commit 3cceedb (2026-07-12). | P1 | remote-mcp-functions-python/src/endpoints/teams.py |
+
+#### Root-Cause
+| Root-Cause | Root-Cause-ID |
+|------------|---------------|
+| The server-side handlers were never written when ENDPOINT_MAPPING was authored to advertise them: `endpoints/teams.py` contained only `list_teams_http`, `list_channels_http`, `post_channel_message_http`, `list_chats_http`, `list_chat_messages_http` and `post_chat_message_http`. This is the identical class the 2026-07-12 `bug_fix_2.0.md` entry fixed for `list_chat_messages` -- a mapped-but-unregistered route -- and no detector was added then, so it recurred silently for two more routes. | mapped_but_unregistered_route |
+
+#### Fix-Summary
+| Fix-Summary | Files-Modified | Lines-Changed |
+|-------------|----------------|---------------|
+| Added `endpoints/teams.py::get_chat_http` (Graph GET /chats/{chat-id}, `$expand=members` by default, caller may override `$expand` and add `$select`) and `endpoints/teams.py::list_chat_members_http` (Graph GET /chats/{chat-id}/members, forwards `$top`/`$select`). Both mirror `list_chat_messages_http` exactly: delegated `_get_token_and_base_for_me("Chat.Read Chat.ReadWrite")` with the existing application-token fallback, 400 "Missing chat_id in URL path", 503 `auth_unavailable` JSON, and `Error: {status_code} - {text}` passthrough carrying Graph's own status, on the same 10s timeout. Registered as GET chats/{chat_id} and GET chats/{chat_id}/members at `http_endpoints.py:2150` and `:2152`, with a new route-table comment at `:2143-2147` mapping all five chat routes to their tool names. | src/endpoints/teams.py, src/http_endpoints.py, src/Tests/test_teams_contract_endpoints.py | +306 -0 |
+
+#### Verification
+| Test-File | Result | Notes |
+|-----------|--------|-------|
+| src/Tests/test_teams_contract_endpoints.py | PASS | RED 10 failed / 2 passed before the handlers existed; GREEN 12 passed after (10 new tests). Regression sweep `timeout 900 python -m pytest src/Tests/test_teams_contract_endpoints.py src/Tests/test_http_delegated.py src/Tests/test_chat_tools.py src/Tests/test_webhook_teams_chat_routing.py -q --no-header -p no:cacheprovider` -> 17 passed. ruff (E501,F,E,I,UP,A) and py_compile clean. NOT RESTART-VERIFIED: live Graph proof requires `sudo systemctl restart annika-remote-mcp.service`, which this pass did not perform; after that restart the expected result is `{"status": "success", ...}` from both `get_chat` (id, chatType oneOnOne, topic, expanded members array) and `list_chat_members` (value array with the two aadUserConversationMember entries 27eefddd and 5ac3e02f). A 404 after restart would then mean a genuine Graph chat-not-found rather than a missing route, subject to the open `_common.py:260` handoff that currently masks that distinction. |
+
+#### Impact
+| Signal-Tags | Signal-Count |
+|-------------|--------------|
+| get_chat,list_chat_members,chat_read_route_registration | 3 |
+
+#### References
+| Link | Description |
+|------|-------------|
+| src/bug_fix_2.0.md 2026-07-12 entry | Prior instance of the same class, fixed for `list_chat_messages` without adding a detector. |
+| src/endpoints/teams.py | Class: `mapped_but_unregistered_route` -- ENDPOINT_MAPPING advertises a Graph proxy route the Azure Functions app never registers, so the tool returns 404 for every input and callers misread a permanent contract gap as per-chat data trouble. |
+| src/http_endpoints.py:2140-2156 | Sweep: audited every chat route ENDPOINT_MAPPING claims against `register_http_endpoints`. Three were served (me/chats, chats/{chat_id}/messages, me/chats/messages); the two missing ones (chats/{chat_id}, chats/{chat_id}/members) are now registered. No advertised chat read route remains unregistered. |
+| src/Tests/test_teams_contract_endpoints.py::test_chat_read_routes_are_registered_in_the_functions_app | Detector: registers `register_http_endpoints` against a route-capturing app and fails if any ENDPOINT_MAPPING-advertised chat read route is ever unregistered again. |
+| src/http_endpoints.py:2143-2147 | Prevention: the route-table comment maps all five chat routes to their tool names at the registration site, and the route-registration detector runs with the ordinary contract suite so the next recurrence fails in pytest instead of in a live Teams chat. |

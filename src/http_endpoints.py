@@ -2140,7 +2140,17 @@ def register_http_endpoints(function_app):
         ep_teams.list_channels_http)
     app.route(route="teams/messages", methods=["POST"])(
         ep_teams.post_channel_message_http)
+    # Chat read surface consumed by Annika's office_teams_chat ENDPOINT_MAPPING:
+    #   GET  /api/me/chats                     -> list_chats
+    #   GET  /api/chats/{chat_id}              -> get_chat        (?$expand=members)
+    #   GET  /api/chats/{chat_id}/members      -> list_chat_members
+    #   GET  /api/chats/{chat_id}/messages     -> list_chat_messages
+    #   POST /api/me/chats/messages            -> send_chat_message / reply_chat_message
     app.route(route="me/chats", methods=["GET"])(ep_teams.list_chats_http)
+    app.route(route="chats/{chat_id}", methods=["GET"])(
+        ep_teams.get_chat_http)
+    app.route(route="chats/{chat_id}/members", methods=["GET"])(
+        ep_teams.list_chat_members_http)
     app.route(route="chats/{chat_id}/messages", methods=["GET"])(
         ep_teams.list_chat_messages_http)
     app.route(route="me/chats/messages", methods=["POST"])(

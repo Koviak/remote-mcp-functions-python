@@ -1,6 +1,6 @@
 # Remote MCP Functions - Current Implementation
 
-**Last Updated:** 2026-07-18
+**Last Updated:** 2026-09-03
 **Module Path:** `src/`
 
 ## Purpose
@@ -83,16 +83,62 @@ should continue using those helpers rather than direct Redis clients.
 
 ## Teams Chat Read and Delivery
 
-`GET /api/chats/{chat_id}/messages` maps to Graph
-`GET /chats/{chat-id}/messages`. The handler validates the route parameter,
-uses delegated `Chat.Read Chat.ReadWrite` authority when available, retains the
-existing application-token fallback, forwards only `$top`, `$orderby`, and
-`$filter`, and returns the Graph JSON response.
+Annika's `Agent_Tools/office_teams_chat/_common.py` ENDPOINT_MAPPING is the
+client half of this contract; `register_http_endpoints` in `http_endpoints.py`
+is the server half. Five chat routes are registered, and the route table is
+documented in a comment at the registration site
+(`http_endpoints.py:2143-2147`) so the two halves can be compared by reading:
+
+| Route | Graph call | Tool name |
+| --- | --- | --- |
+| `GET /api/me/chats` | `GET /me/chats` | `list_chats` |
+| `GET /api/chats/{chat_id}` | `GET /chats/{chat-id}` | `get_chat` |
+| `GET /api/chats/{chat_id}/members` | `GET /chats/{chat-id}/members` | `list_chat_members` |
+| `GET /api/chats/{chat_id}/messages` | `GET /chats/{chat-id}/messages` | `list_chat_messages` |
+| `POST /api/me/chats/messages` | `POST /chats/{chatId}/messages` or `.../replyWithQuote` | `send_chat_message` / `reply_chat_message` |
+
+All four read handlers live in `endpoints/teams.py` and share one shape: the
+route parameter is validated first, delegated `Chat.Read Chat.ReadWrite`
+authority is acquired through `_get_token_and_base_for_me(...)` with the
+existing application-token fallback, only Graph-supported query parameters are
+forwarded, the Graph JSON body is returned unchanged on 200, and any other
+Graph status is passed through as `Error: {status_code} - {text}` so the caller
+sees Graph's own status rather than a synthesized one. A missing route
+parameter returns 400 `Missing chat_id in URL path`; an unavailable token
+returns 503 with an `auth_unavailable` JSON body. Each Graph request uses a
+10 second timeout.
+
+Route-specific behavior:
+
+- `get_chat_http` sets `$expand=members` by default, so one call answers both
+  "which chat is this" and "who is in it". A caller-supplied `$expand`
+  overrides the default, and `$select` may be added to narrow the payload.
+- `list_chat_members_http` forwards `$top` and `$select` only.
+- `list_chat_messages_http` forwards `$top`, `$orderby`, and `$filter` only.
 
 `POST /api/me/chats/messages` accepts the flat Annika proxy contract. A normal
 message maps to Graph `POST /chats/{chatId}/messages`. When `replyToId` is
 present, the handler maps the immutable source message to
 `POST /chats/{chatId}/messages/replyWithQuote`, sends it in `messageIds`, and
 returns the Graph JSON response as provider-delivery evidence. The legacy
-compatibility handler and modular `endpoints/teams.py` implementation share
+compatibility handler and the modular `endpoints/teams.py` implementation share
 this contract.
+
+### Route-registration detector
+
+An advertised-but-unregistered chat route is a recurring failure class in this
+module: it presents to the caller as a per-chat 404, which reads like missing
+data rather than a missing server route. It was fixed once for
+`list_chat_messages` (2026-07-12) and recurred for `get_chat` and
+`list_chat_members` until 2026-09-03.
+
+`src/Tests/test_teams_contract_endpoints.py::test_chat_read_routes_are_registered_in_the_functions_app`
+is the standing detector. It calls `register_http_endpoints` against a
+route-capturing stand-in app and asserts that the chat read routes are actually
+served. If a future ENDPOINT_MAPPING entry ever advertises a chat read route
+the Functions app does not register, this test fails in the ordinary contract
+suite instead of surfacing as a live 404 in a Teams conversation.
+
+Route changes here are only live after the Functions host is restarted
+(`sudo systemctl restart annika-remote-mcp.service`); until then a 404 from a
+newly added route means the old host is still serving.

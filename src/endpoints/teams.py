@@ -202,6 +202,112 @@ def list_chats_http(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(f"Error: {str(e)}", status_code=500)
 
 
+def get_chat_http(req: func.HttpRequest) -> func.HttpResponse:
+    """Get one chat through the supported Graph v1.0 route.
+
+    Members are expanded by default so a single call answers both
+    "which chat is this" and "who is in it"; the caller may override with
+    an explicit $expand and may narrow the payload with $select.
+    """
+
+    try:
+        chat_id = req.route_params.get("chat_id")
+        if not isinstance(chat_id, str) or not chat_id.strip():
+            return func.HttpResponse(
+                "Missing chat_id in URL path",
+                status_code=400,
+            )
+
+        delegated, _ = _get_token_and_base_for_me("Chat.Read Chat.ReadWrite")
+        token = delegated or get_access_token()
+        if not token:
+            return func.HttpResponse(
+                json.dumps(
+                    {
+                        "error": "auth_unavailable",
+                        "message": "Microsoft Graph chat read token unavailable",
+                    }
+                ),
+                status_code=503,
+                mimetype="application/json",
+            )
+
+        query_params = {
+            name: req.params[name]
+            for name in ("$expand", "$select")
+            if req.params.get(name) not in (None, "")
+        }
+        query_params.setdefault("$expand", "members")
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/chats/{chat_id.strip()}",
+            headers=build_json_headers(token),
+            params=query_params,
+            timeout=10,
+        )
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json",
+            )
+        return func.HttpResponse(
+            f"Error: {response.status_code} - {response.text}",
+            status_code=response.status_code,
+        )
+    except Exception as e:  # pragma: no cover - network errors
+        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
+
+
+def list_chat_members_http(req: func.HttpRequest) -> func.HttpResponse:
+    """List the members of one chat through the supported Graph v1.0 route."""
+
+    try:
+        chat_id = req.route_params.get("chat_id")
+        if not isinstance(chat_id, str) or not chat_id.strip():
+            return func.HttpResponse(
+                "Missing chat_id in URL path",
+                status_code=400,
+            )
+
+        delegated, _ = _get_token_and_base_for_me("Chat.Read Chat.ReadWrite")
+        token = delegated or get_access_token()
+        if not token:
+            return func.HttpResponse(
+                json.dumps(
+                    {
+                        "error": "auth_unavailable",
+                        "message": "Microsoft Graph chat read token unavailable",
+                    }
+                ),
+                status_code=503,
+                mimetype="application/json",
+            )
+
+        query_params = {
+            name: req.params[name]
+            for name in ("$top", "$select")
+            if req.params.get(name) not in (None, "")
+        }
+        response = requests.get(
+            f"{GRAPH_API_ENDPOINT}/chats/{chat_id.strip()}/members",
+            headers=build_json_headers(token),
+            params=query_params or None,
+            timeout=10,
+        )
+        if response.status_code == 200:
+            return func.HttpResponse(
+                response.text,
+                status_code=200,
+                mimetype="application/json",
+            )
+        return func.HttpResponse(
+            f"Error: {response.status_code} - {response.text}",
+            status_code=response.status_code,
+        )
+    except Exception as e:  # pragma: no cover - network errors
+        return func.HttpResponse(f"Error: {str(e)}", status_code=500)
+
+
 def list_chat_messages_http(req: func.HttpRequest) -> func.HttpResponse:
     """List messages from one chat through the supported Graph v1.0 route."""
 
